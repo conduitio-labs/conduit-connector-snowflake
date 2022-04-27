@@ -13,6 +13,8 @@ linters-settings:
     ignore-tests: true
   goheader:
     template-path: '.golangci.goheader.template'
+  lll:
+    line-length: 120
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
@@ -38,7 +40,7 @@ linters:
     - gocritic
     - gocyclo
     # - cyclop # not interested in package complexities at the moment
-    # - godot
+    - godot
     - gofmt
     # - gofumpt
     - goheader
@@ -54,13 +56,13 @@ linters:
     # - ifshort
     - ineffassign
     # - importas
-    # - lll
+    - lll
     # - misspell
     - makezero
     # - nakedret
     # - nilerr
     # - nilnil
-    # - nlreturn
+    - nlreturn
     - noctx
     - nolintlint
     # - paralleltest
