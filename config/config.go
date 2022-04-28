@@ -14,11 +14,19 @@
 
 package config
 
+import (
+	"errors"
+	"strconv"
+)
+
 const (
 	KeyConnection string = "connection"
 	KeyTable      string = "table"
 	KeyColumns    string = "columns"
 	KeyKey        string = "key"
+	KeyLimit      string = "limit"
+
+	DefaultLimit = 1000
 )
 
 // Config represents configuration needed for Snowflake.
@@ -27,6 +35,7 @@ type Config struct {
 	Table      string `validate:"required,max=255"`
 	Columns    string
 	Key        string `validate:"required,max=251"`
+	Limit      int    `validate:"max=10000"`
 }
 
 // Parse attempts to parse plugins.Config into a Config struct.
@@ -37,6 +46,19 @@ func Parse(cfg map[string]string) (Config, error) {
 		Columns:    cfg[KeyColumns],
 		Key:        cfg[KeyKey],
 	}
+
+	if cfg[KeyLimit] == "" {
+		config.Limit = DefaultLimit
+
+		return config, config.Validate()
+	}
+
+	limit, err := strconv.Atoi(cfg[KeyLimit])
+	if err != nil {
+		return Config{}, errors.New(`"limit" config value must be int`)
+	}
+
+	config.Limit = limit
 
 	return config, config.Validate()
 }
