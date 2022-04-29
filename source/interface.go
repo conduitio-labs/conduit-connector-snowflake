@@ -15,15 +15,20 @@
 package source
 
 import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"context"
 
-	"github.com/conduitio/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-// Source connector.
-type Source struct {
-	sdk.UnimplementedSource
-	config     config.Config
-	iterator   Iterator
-	repository Repository
+// Iterator interface.
+type Iterator interface {
+	HasNext(ctx context.Context) bool
+	Next(ctx context.Context) (sdk.Record, error)
+	Stop()
+}
+
+// Repository interface.
+type Repository interface {
+	GetData(ctx context.Context, table string, fields []string, offset int) ([]map[string]interface{}, error)
+	Close() error
 }
