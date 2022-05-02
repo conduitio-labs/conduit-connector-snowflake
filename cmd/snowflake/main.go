@@ -14,6 +14,13 @@
 
 package main
 
-func main() {
+import (
+	sdk "github.com/conduitio/conduit-connector-sdk"
 
+	snowflake "github.com/conduitio/conduit-connector-snowflake"
+	"github.com/conduitio/conduit-connector-snowflake/source"
+)
+
+func main() {
+	sdk.Serve(snowflake.Specification, source.New, nil)
 }

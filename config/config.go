@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 type Config struct {
 	Connection string `validate:"required"`
 	Table      string `validate:"required,max=255"`
-	Columns    string
+	Columns    []string
 	Key        string `validate:"required,max=251"`
 	Limit      int    `validate:"max=10000"`
 }
@@ -43,8 +44,11 @@ func Parse(cfg map[string]string) (Config, error) {
 	config := Config{
 		Connection: cfg[KeyConnection],
 		Table:      cfg[KeyTable],
-		Columns:    cfg[KeyColumns],
 		Key:        cfg[KeyKey],
+	}
+
+	if colsRaw := cfg[KeyColumns]; colsRaw != "" {
+		config.Columns = strings.Split(colsRaw, ",")
 	}
 
 	if cfg[KeyLimit] == "" {

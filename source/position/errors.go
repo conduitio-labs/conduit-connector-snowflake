@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package source
+package position
 
 import (
-	"context"
-
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"errors"
 )
 
-// Iterator interface.
-type Iterator interface {
-	HasNext(ctx context.Context) (bool, error)
-	Next(ctx context.Context) (sdk.Record, error)
-	Stop() error
-}
+var (
+	ErrFieldInvalidElement = errors.New("invalid element type")
+	ErrFieldInvalidOffset  = errors.New("invalid offset type")
+)

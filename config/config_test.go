@@ -32,14 +32,12 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				"connection": "user:password@my_organization-my_account/mydb",
 				"table":      "customer",
-				"columns":    "",
 				"key":        "id",
 				"limit":      "100",
 			},
 			want: Config{
 				Connection: "user:password@my_organization-my_account/mydb",
 				Table:      "customer",
-				Columns:    "",
 				Key:        "id",
 				Limit:      100,
 			},
