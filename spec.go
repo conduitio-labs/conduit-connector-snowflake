@@ -50,6 +50,11 @@ func Specification() sdk.Specification {
 				Required:    true,
 				Description: "Column name that records should use for their `Key` fields.",
 			},
+			config.KeyLimit: {
+				Default:     "1000",
+				Required:    false,
+				Description: "Maximum count rows for one butch",
+			},
 		},
 	}
 }

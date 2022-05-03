@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package source
+package iterator
 
 import (
 	"context"
-
-	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-// Iterator interface.
-type Iterator interface {
-	HasNext(ctx context.Context) (bool, error)
-	Next(ctx context.Context) (sdk.Record, error)
-	Stop() error
+// Repository interface.
+type Repository interface {
+	GetData(ctx context.Context, table string, fields []string, offset int) ([]map[string]interface{}, error)
+	Close() error
 }

@@ -75,9 +75,9 @@ func (s Snowflake) GetData(
 
 	result := make([]map[string]interface{}, 0)
 
-	for rows.Next() {
-		colValues := make([]interface{}, 0, len(columns))
+	colValues := make([]interface{}, len(columns))
 
+	for rows.Next() {
 		row := make(map[string]interface{}, len(columns))
 
 		for i := range colValues {
