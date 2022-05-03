@@ -32,14 +32,14 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				"connection": "user:password@my_organization-my_account/mydb",
 				"table":      "customer",
-				"columns":    "",
 				"key":        "id",
+				"limit":      "100",
 			},
 			want: Config{
 				Connection: "user:password@my_organization-my_account/mydb",
 				Table:      "customer",
-				Columns:    "",
 				Key:        "id",
+				Limit:      100,
 			},
 			wantErr:     false,
 			expectedErr: "",
@@ -50,6 +50,7 @@ func TestParse(t *testing.T) {
 				"table":   "customer",
 				"columns": "",
 				"key":     "id",
+				"limit":   "100",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -61,6 +62,7 @@ func TestParse(t *testing.T) {
 				"connection": "user:password@my_organization-my_account/mydb",
 				"columns":    "",
 				"key":        "id",
+				"limit":      "100",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -72,6 +74,7 @@ func TestParse(t *testing.T) {
 				"connection": "user:password@my_organization-my_account/mydb",
 				"table":      "customer",
 				"columns":    "",
+				"limit":      "100",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -93,6 +96,19 @@ func TestParse(t *testing.T) {
 			wantErr:     true,
 			expectedErr: `"table" config value is too long`,
 		},
+		{
+			name: "wrong limit",
+			cfg: map[string]string{
+				"connection": "user:password@my_organization-my_account/mydb",
+				"table":      "customer",
+				"columns":    "",
+				"limit":      "test",
+				"key":        "id",
+			},
+			want:        Config{},
+			wantErr:     true,
+			expectedErr: `"limit" config value must be int`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -110,9 +126,11 @@ func TestParse(t *testing.T) {
 
 					return
 				}
+
+				return
 			}
 
-			if err == nil && !reflect.DeepEqual(got, tt.want) {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parse = %v, want %v", got, tt.want)
 			}
 		})

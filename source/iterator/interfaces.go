@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package iterator
 
 import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
-
-	snowflake "github.com/conduitio/conduit-connector-snowflake"
-	"github.com/conduitio/conduit-connector-snowflake/source"
+	"context"
 )
 
-func main() {
-	sdk.Serve(snowflake.Specification, source.New, nil)
+// Repository interface.
+type Repository interface {
+	GetData(ctx context.Context, table string, fields []string, offset int) ([]map[string]interface{}, error)
+	Close() error
 }

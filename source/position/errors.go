@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package position
 
 import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
-
-	snowflake "github.com/conduitio/conduit-connector-snowflake"
-	"github.com/conduitio/conduit-connector-snowflake/source"
+	"errors"
 )
 
-func main() {
-	sdk.Serve(snowflake.Specification, source.New, nil)
-}
+var (
+	ErrFieldInvalidElement = errors.New("invalid element type")
+	ErrFieldInvalidOffset  = errors.New("invalid offset type")
+)
