@@ -9,6 +9,7 @@ snowflake connector.
 
 - [Go](https://go.dev/) 1.18
 - (optional) [golangci-lint](https://github.com/golangci/golangci-lint) 1.45.2
+- (optional) [mock](https://github.com/golang/mock) 1.6.0
 
 ### Configuration
 
@@ -21,3 +22,11 @@ The config passed to `Configure` can contain the following fields.
 | `columns`    | Comma separated list of column names that should be included in each Record's payload.                                                                 | no       | "id,name,age"                                   |
 | `key`        | Column name that records should use for their `Key` fields.                                                                                            | yes      | "id"                                            |
 | `limit`      | Count of records in one butch. By default is 1000.                                                                                                     | no       | "100"                                           |
+
+### How to build it
+
+Run `make build`.
+
+### Testing
+
+Run `make test`.

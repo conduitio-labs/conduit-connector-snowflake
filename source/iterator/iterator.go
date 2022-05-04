@@ -21,13 +21,12 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	"github.com/conduitio/conduit-connector-snowflake/repository"
 	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 // Iterator to iterate snowflake objects.
 type Iterator struct {
-	snowflake repository.Snowflake
+	snowflake Repository
 	position  position.Position
 
 	table   string
@@ -43,7 +42,7 @@ type Iterator struct {
 
 // New iterator.
 func New(
-	snowflake repository.Snowflake,
+	snowflake Repository,
 	position position.Position,
 	table string,
 	columns []string,

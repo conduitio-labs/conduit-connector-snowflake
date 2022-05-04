@@ -10,3 +10,7 @@ test:
 
 lint:
 	$(GOLINT) run --timeout=5m -c .golangci.yml
+
+mockgen:
+	mockgen -package mock -source source/interface.go -destination source/mock/source.go
+	mockgen -package mock -source source/iterator/interface.go -destination source/iterator/mock/iterator.go

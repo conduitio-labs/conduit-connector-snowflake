@@ -20,6 +20,6 @@ import (
 
 // Repository interface.
 type Repository interface {
-	GetData(ctx context.Context, table string, fields []string, offset int) ([]map[string]interface{}, error)
+	GetData(ctx context.Context, table string, fields []string, offset, limit int) ([]map[string]interface{}, error)
 	Close() error
 }
