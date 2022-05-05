@@ -30,3 +30,15 @@ Run `make build`.
 ### Testing
 
 Run `make test`.
+
+### Snowflake Source
+
+The Snowflake Source Connector connects to a snowflake with the provided configurations, using
+`connection`, `table`,`columns`, `key`, `limit` using snowflake driver. Then will call `Configure` to parse the
+configurations. After that, the `Open` method is called to start the connection from the provided position get the
+data from snowflake db using limit and offset. The `Read` return next record. The `Ack` method 
+check if is record with the position was recorded. The `Teardown` do gracefully shutdown.
+
+### Position
+
+Position has fields: `element`, `offset`.

@@ -24,7 +24,6 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/conduitio/conduit-connector-snowflake/source/iterator/mock"
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 func TestIterator_HasNext(t *testing.T) {
@@ -39,7 +38,7 @@ func TestIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, position.Position{}, "test", nil, "key", 0, 0, 10, res)
+		i := New(rp, "test", nil, "key", 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -63,7 +62,7 @@ func TestIterator_HasNext(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, nil)
 
-		i := New(rp, position.Position{}, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "key", 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -87,7 +86,7 @@ func TestIterator_HasNext(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, errors.New("some error"))
 
-		i := New(rp, position.Position{}, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "key", 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -110,7 +109,7 @@ func TestIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, position.Position{}, "test", nil, "key", 0, 0, 10, res)
+		i := New(rp, "test", nil, "key", 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -132,7 +131,7 @@ func TestIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, position.Position{}, "test", nil, "missing_key", 0, 0, 10, res)
+		i := New(rp, "test", nil, "missing_key", 0, 0, 10, res)
 
 		_, err := i.Next(ctx)
 		if err == nil {
@@ -153,7 +152,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := New(rp, position.Position{}, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "key", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err != nil {
@@ -171,11 +170,34 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := New(rp, position.Position{}, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "key", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err == nil {
 			t.Errorf("wanr error")
+		}
+	})
+}
+
+func TestIterator_Ack(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		i := New(nil, "test", nil, "key", 2, 0, 10, nil)
+
+		pos := sdk.Position("1.0")
+
+		err := i.Ack(pos)
+		if err != nil {
+			t.Errorf("ack \"%s\"", err.Error())
+		}
+	})
+	t.Run("failed", func(t *testing.T) {
+		i := New(nil, "test", nil, "key", 2, 0, 10, nil)
+
+		pos := sdk.Position("1.1")
+
+		err := i.Ack(pos)
+		if err == nil {
+			t.Errorf("want error")
 		}
 	})
 }
