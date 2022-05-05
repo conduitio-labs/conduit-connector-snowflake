@@ -17,6 +17,7 @@ package iterator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -24,10 +25,18 @@ import (
 	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
+const (
+	// metadata related.
+	metadataTable  = "table"
+	metadataAction = "action"
+
+	// action names.
+	actionInsert = "insert"
+)
+
 // Iterator to iterate snowflake objects.
 type Iterator struct {
 	snowflake Repository
-	position  position.Position
 
 	table   string
 	columns []string
@@ -43,7 +52,6 @@ type Iterator struct {
 // New iterator.
 func New(
 	snowflake Repository,
-	position position.Position,
 	table string,
 	columns []string,
 	key string,
@@ -54,7 +62,6 @@ func New(
 ) *Iterator {
 	return &Iterator{
 		snowflake: snowflake,
-		position:  position,
 		table:     table,
 		columns:   columns,
 		key:       key,
@@ -73,7 +80,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	if i.index == i.limit {
+	if i.index >= i.limit {
 		i.offset += i.limit
 		i.index = 0
 	}
@@ -113,7 +120,8 @@ func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
 	return sdk.Record{
 		Position: pos.FormatSDKPosition(),
 		Metadata: map[string]string{
-			"table": i.table,
+			metadataTable:  i.table,
+			metadataAction: actionInsert,
 		},
 		CreatedAt: time.Now(),
 		Key: sdk.StructuredData{
@@ -126,4 +134,18 @@ func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
 // Stop shutdown iterator.
 func (i *Iterator) Stop() error {
 	return i.snowflake.Close()
+}
+
+// Ack check if record with position was recorded.
+func (i *Iterator) Ack(rp sdk.Position) error {
+	p, err := position.ParseSDKPosition(rp)
+	if err != nil {
+		return fmt.Errorf("parse sdk position: %v", err)
+	}
+
+	if p.Offset > i.offset || (p.Offset == i.offset && p.Element > i.index) {
+		return fmt.Errorf("record was not recorded: element %d, offset %d", p.Element, p.Offset)
+	}
+
+	return nil
 }
