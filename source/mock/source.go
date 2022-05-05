@@ -35,6 +35,20 @@ func (m *MockIterator) EXPECT() *MockIteratorMockRecorder {
 	return m.recorder
 }
 
+// Ack mocks base method.
+func (m *MockIterator) Ack(rp sdk.Position) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ack", rp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Ack indicates an expected call of Ack.
+func (mr *MockIteratorMockRecorder) Ack(rp interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*MockIterator)(nil).Ack), rp)
+}
+
 // HasNext mocks base method.
 func (m *MockIterator) HasNext(ctx context.Context) (bool, error) {
 	m.ctrl.T.Helper()

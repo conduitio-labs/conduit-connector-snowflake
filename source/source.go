@@ -74,7 +74,7 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 		return fmt.Errorf("get data: %v", err)
 	}
 
-	s.iterator = iterator.New(snowflake, p, s.config.Table,
+	s.iterator = iterator.New(snowflake, s.config.Table,
 		s.config.Columns, s.config.Key, index, p.Offset, s.config.Limit, data)
 
 	return nil
@@ -113,8 +113,7 @@ func (s *Source) Teardown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Source) Ack(ctx context.Context, position sdk.Position) error {
-	sdk.Logger(ctx).Debug().Str("position", string(position)).Msg("got ack")
-
-	return nil
+// Ack check if record with position was recorded.
+func (s *Source) Ack(ctx context.Context, p sdk.Position) error {
+	return s.iterator.Ack(p)
 }
