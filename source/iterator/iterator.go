@@ -16,8 +16,9 @@ package iterator
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -99,21 +100,26 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 // Next get new record.
 func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
+	var (
+		payload sdk.RawData
+		err     error
+	)
+
 	pos := position.Position{
 		Element: i.index,
 		Offset:  i.offset,
 	}
 
-	payload := make(sdk.StructuredData)
-	for k, v := range i.data[i.index] {
-		payload[k] = v
+	payload, err = json.Marshal(i.data[i.index])
+	if err != nil {
+		return sdk.Record{}, fmt.Errorf("marshal error : %v", err)
 	}
 
-	if _, ok := i.data[i.index][i.key]; !ok {
-		return sdk.Record{}, errors.New("key is not exist")
+	if _, ok := i.data[i.index][strings.ToUpper(i.key)]; !ok {
+		return sdk.Record{}, ErrKeyIsNotExist
 	}
 
-	key := i.data[i.index][i.key]
+	key := i.data[i.index][strings.ToUpper(i.key)]
 
 	i.index++
 
