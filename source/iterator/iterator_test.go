@@ -16,6 +16,7 @@ package iterator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -32,13 +33,13 @@ func TestIterator_HasNext(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "1", "NAME": "foo"},
+			{"ID": "2", "NAME": "bar"},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "key", 0, 0, 10, res)
+		i := New(rp, "test", nil, "id", 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -55,14 +56,14 @@ func TestIterator_HasNext(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "1", "NAME": "foo"},
+			{"ID": "2", "NAME": "bar"},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, nil)
 
-		i := New(rp, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "id", 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -79,14 +80,14 @@ func TestIterator_HasNext(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "1", "NAME": "foo"},
+			{"ID": "2", "NAME": "bar"},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, errors.New("some error"))
 
-		i := New(rp, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "id", 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -97,27 +98,71 @@ func TestIterator_HasNext(t *testing.T) {
 
 func TestIterator_Next(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
+		var (
+			p   sdk.RawData
+			key sdk.StructuredData
+		)
+
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "1", "NAME": "foo"},
+			{"ID": "2", "NAME": "bar"},
 		}
 
-		r := sdk.StructuredData{"key": "value", "key_1": "value_1"}
+		p, _ = json.Marshal(map[string]interface{}{"ID": "1", "NAME": "foo"})
+		key = map[string]interface{}{"id": "1"}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "key", 0, 0, 10, res)
+		i := New(rp, "test", nil, "id", 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
 			t.Errorf("has next error = \"%s\"", err.Error())
 		}
 
-		if !reflect.DeepEqual(rec.Payload, r) {
-			t.Errorf("got = %v, want %v", rec.Payload, r)
+		if !reflect.DeepEqual(rec.Payload, p) {
+			t.Errorf("got = %v, want %v", rec.Payload, p)
+		}
+
+		if !reflect.DeepEqual(rec.Key, key) {
+			t.Errorf("got = %v, want %v", rec.Key, key)
+		}
+	})
+	t.Run("success next record", func(t *testing.T) {
+		var (
+			p   sdk.RawData
+			key sdk.StructuredData
+		)
+
+		ctrl := gomock.NewController(t)
+		ctx := context.Background()
+
+		res := []map[string]interface{}{
+			{"ID": "1", "NAME": "foo"},
+			{"ID": "2", "NAME": "bar"},
+		}
+
+		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "bar"})
+		key = map[string]interface{}{"id": "2"}
+
+		rp := mock.NewMockRepository(ctrl)
+
+		i := New(rp, "test", nil, "id", 1, 0, 10, res)
+
+		rec, err := i.Next(ctx)
+		if err != nil {
+			t.Errorf("has next error = \"%s\"", err.Error())
+		}
+
+		if !reflect.DeepEqual(rec.Payload, p) {
+			t.Errorf("got = %v, want %v", rec.Payload, p)
+		}
+
+		if !reflect.DeepEqual(rec.Key, key) {
+			t.Errorf("got = %v, want %v", rec.Key, key)
 		}
 	})
 	t.Run("error", func(t *testing.T) {
@@ -152,7 +197,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := New(rp, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "id", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err != nil {
@@ -170,7 +215,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := New(rp, "test", nil, "key", 2, 0, 10, res)
+		i := New(rp, "test", nil, "id", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err == nil {
@@ -181,7 +226,7 @@ func TestIterator_Stop(t *testing.T) {
 
 func TestIterator_Ack(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		i := New(nil, "test", nil, "key", 2, 0, 10, nil)
+		i := New(nil, "test", nil, "id", 2, 0, 10, nil)
 
 		pos := sdk.Position("1.0")
 
@@ -191,7 +236,7 @@ func TestIterator_Ack(t *testing.T) {
 		}
 	})
 	t.Run("failed", func(t *testing.T) {
-		i := New(nil, "test", nil, "key", 2, 0, 10, nil)
+		i := New(nil, "test", nil, "id", 2, 0, 10, nil)
 
 		pos := sdk.Position("1.1")
 
