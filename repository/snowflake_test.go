@@ -54,8 +54,8 @@ func Test_buildQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := buildQuery(tt.table, tt.fields, tt.offset, tt.limit); got != tt.want {
-				t.Errorf("buildQuery() = %v, want %v", got, tt.want)
+			if got := buildGetDataQuery(tt.table, tt.fields, tt.offset, tt.limit); got != tt.want {
+				t.Errorf("buildGetDataQuery() = %v, want %v", got, tt.want)
 			}
 		})
 	}

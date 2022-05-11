@@ -24,6 +24,14 @@ import (
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
 )
 
+const (
+	MetadataColumnAction = "METADATA$ACTION"
+	MetadataColumnUpdate = "METADATA$ISUPDATE"
+	MetadataColumnRow    = "METADATA$ROW_ID"
+)
+
+var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnRow}
+
 // Snowflake repository.
 type Snowflake struct {
 	conn *sql.Conn
@@ -61,7 +69,7 @@ func (s Snowflake) GetData(
 	fields []string,
 	offset, limit int,
 ) ([]map[string]interface{}, error) {
-	rows, err := s.conn.QueryContext(ctx, buildQuery(table, fields, offset, limit))
+	rows, err := s.conn.QueryContext(ctx, buildGetDataQuery(table, fields, offset, limit))
 	if err != nil {
 		return nil, fmt.Errorf("run query: %v", err)
 	}
@@ -98,7 +106,57 @@ func (s Snowflake) GetData(
 	return result, nil
 }
 
-func buildQuery(table string, fields []string, offset, limit int) string {
+// CreateStream create stream.
+func (s Snowflake) CreateStream(ctx context.Context, stream, table string) error {
+	_, err := s.conn.ExecContext(ctx, buildCreateStreamQuery(stream, table))
+
+	return err
+}
+
+// GetStreamData get rows from stream.
+func (s Snowflake) GetStreamData(
+	ctx context.Context,
+	stream string,
+	fields []string,
+) ([]map[string]interface{}, error) {
+	rows, err := s.conn.QueryContext(ctx, buildGetStreamData(stream, fields))
+	if err != nil {
+		return nil, fmt.Errorf("run query: %v", err)
+	}
+
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("get columns: %v", err)
+	}
+
+	result := make([]map[string]interface{}, 0)
+
+	colValues := make([]interface{}, len(columns))
+
+	for rows.Next() {
+		row := make(map[string]interface{}, len(columns))
+
+		for i := range colValues {
+			colValues[i] = new(interface{})
+		}
+
+		if er := rows.Scan(colValues...); er != nil {
+			return nil, fmt.Errorf("scan: %v", err)
+		}
+
+		for i, col := range columns {
+			row[col] = *colValues[i].(*interface{})
+		}
+
+		result = append(result, row)
+	}
+
+	return result, nil
+}
+
+func buildGetDataQuery(table string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 
 	if fields == nil {
@@ -112,4 +170,24 @@ func buildQuery(table string, fields []string, offset, limit int) string {
 	sb.Limit(limit)
 
 	return sb.String()
+}
+
+func buildGetStreamData(stream string, fields []string) string {
+	sb := sqlbuilder.NewSelectBuilder()
+	if fields == nil {
+		sb.Select("*")
+	} else {
+		fields = append(fields, MetadataFields...)
+		sb.Select(fields...)
+	}
+	sb.From(stream)
+
+	return sb.String()
+}
+
+func buildCreateStreamQuery(stream, table string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf("CREATE OR REPLACE STREAM %s on table %s", stream, table))
+	s, _ := sb.Build()
+
+	return s
 }

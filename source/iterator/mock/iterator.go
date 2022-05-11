@@ -48,6 +48,20 @@ func (mr *MockRepositoryMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRepository)(nil).Close))
 }
 
+// CreateStream mocks base method.
+func (m *MockRepository) CreateStream(ctx context.Context, stream, table string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateStream", ctx, stream, table)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateStream indicates an expected call of CreateStream.
+func (mr *MockRepositoryMockRecorder) CreateStream(ctx, stream, table interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockRepository)(nil).CreateStream), ctx, stream, table)
+}
+
 // GetData mocks base method.
 func (m *MockRepository) GetData(ctx context.Context, table string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
 	m.ctrl.T.Helper()
@@ -61,4 +75,19 @@ func (m *MockRepository) GetData(ctx context.Context, table string, fields []str
 func (mr *MockRepositoryMockRecorder) GetData(ctx, table, fields, offset, limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, fields, offset, limit)
+}
+
+// GetStreamData mocks base method.
+func (m *MockRepository) GetStreamData(ctx context.Context, stream string, fields []string) ([]map[string]interface{}, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStreamData", ctx, stream, fields)
+	ret0, _ := ret[0].([]map[string]interface{})
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStreamData indicates an expected call of GetStreamData.
+func (mr *MockRepositoryMockRecorder) GetStreamData(ctx, stream, fields interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStreamData", reflect.TypeOf((*MockRepository)(nil).GetStreamData), ctx, stream, fields)
 }

@@ -36,7 +36,7 @@ type Config struct {
 	Table      string `validate:"required,max=255"`
 	Columns    []string
 	Key        string `validate:"required,max=251"`
-	Limit      int    `validate:"max=10000"`
+	Limit      int    `validate:"gte=1,lte=100000"`
 }
 
 // Parse attempts to parse plugins.Config into a Config struct.
@@ -63,6 +63,11 @@ func Parse(cfg map[string]string) (Config, error) {
 	}
 
 	config.Limit = limit
+
+	// Columns in snowflake is uppercase.
+	if cfg[KeyKey] != "" {
+		config.Key = strings.ToUpper(config.Key)
+	}
 
 	return config, config.Validate()
 }
