@@ -63,18 +63,18 @@ func (mr *MockRepositoryMockRecorder) CreateStream(ctx, stream, table interface{
 }
 
 // GetData mocks base method.
-func (m *MockRepository) GetData(ctx context.Context, table string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
+func (m *MockRepository) GetData(ctx context.Context, table, key string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetData", ctx, table, fields, offset, limit)
+	ret := m.ctrl.Call(m, "GetData", ctx, table, key, fields, offset, limit)
 	ret0, _ := ret[0].([]map[string]interface{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetData indicates an expected call of GetData.
-func (mr *MockRepositoryMockRecorder) GetData(ctx, table, fields, offset, limit interface{}) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) GetData(ctx, table, key, fields, offset, limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, fields, offset, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, key, fields, offset, limit)
 }
 
 // GetStreamData mocks base method.

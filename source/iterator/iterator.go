@@ -113,7 +113,7 @@ func setupSnapshotIterator(
 		index = p.Element + 1
 	}
 
-	data, err := snowflake.GetData(ctx, table, columns, p.Offset, limit)
+	data, err := snowflake.GetData(ctx, table, key, columns, p.Offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get data: %v", err)
 	}
@@ -175,7 +175,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.snapshotIterator != nil {
 		hasNext, err := i.snapshotIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("snapshot has next %v", err)
+			return false, fmt.Errorf("snapshot iterator has next: %v", err)
 		}
 
 		if hasNext {
@@ -196,7 +196,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 		hasNext, err = i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("cdc has next: %v", err)
+			return false, fmt.Errorf("cdc iterator has next: %v", err)
 		}
 
 		return hasNext, nil
@@ -205,7 +205,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.cdcIterator != nil {
 		hasNext, err := i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("cdc has next: %v", err)
+			return false, fmt.Errorf("cdc iterator has next: %v", err)
 		}
 
 		return hasNext, nil

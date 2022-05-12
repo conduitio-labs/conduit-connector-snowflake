@@ -22,6 +22,7 @@ func Test_buildQuery(t *testing.T) {
 	tests := []struct {
 		name   string
 		table  string
+		key    string
 		fields []string
 		offset int
 		limit  int
@@ -29,32 +30,35 @@ func Test_buildQuery(t *testing.T) {
 	}{
 		{
 			name:   "select all",
+			key:    "ID",
 			table:  "test",
 			fields: nil,
 			offset: 0,
 			limit:  100,
-			want:   "SELECT * FROM test LIMIT 100 OFFSET 0",
+			want:   "SELECT * FROM test ORDER BY ID LIMIT 100 OFFSET 0",
 		},
 		{
 			name:   "select fields",
+			key:    "ID",
 			table:  "test",
 			fields: []string{"id", "name"},
 			offset: 0,
 			limit:  100,
-			want:   "SELECT id, name FROM test LIMIT 100 OFFSET 0",
+			want:   "SELECT id, name FROM test ORDER BY ID LIMIT 100 OFFSET 0",
 		},
 		{
 			name:   "change offset",
+			key:    "ID",
 			table:  "test",
 			fields: []string{"id", "name"},
 			offset: 1,
 			limit:  100,
-			want:   "SELECT id, name FROM test LIMIT 100 OFFSET 1",
+			want:   "SELECT id, name FROM test ORDER BY ID LIMIT 100 OFFSET 1",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := buildGetDataQuery(tt.table, tt.fields, tt.offset, tt.limit); got != tt.want {
+			if got := buildGetDataQuery(tt.table, tt.key, tt.fields, tt.offset, tt.limit); got != tt.want {
 				t.Errorf("buildGetDataQuery() = %v, want %v", got, tt.want)
 			}
 		})

@@ -39,7 +39,7 @@ func TestIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "id", 0, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -61,9 +61,9 @@ func TestIterator_HasNext(t *testing.T) {
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, nil)
+		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, nil)
 
-		i := NewSnapshotIterator(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -85,9 +85,9 @@ func TestIterator_HasNext(t *testing.T) {
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, errors.New("some error"))
+		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, errors.New("some error"))
 
-		i := NewSnapshotIterator(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {

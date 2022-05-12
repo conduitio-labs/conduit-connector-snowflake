@@ -76,7 +76,7 @@ func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 		i.index = 0
 	}
 
-	i.data, err = i.snowflake.GetData(ctx, i.table, i.columns, i.offset, i.limit)
+	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.limit)
 	if err != nil {
 		return false, err
 	}

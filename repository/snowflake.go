@@ -65,11 +65,11 @@ func (s Snowflake) Close() error {
 // GetData get rows with columns offset from table.
 func (s Snowflake) GetData(
 	ctx context.Context,
-	table string,
+	table, key string,
 	fields []string,
 	offset, limit int,
 ) ([]map[string]interface{}, error) {
-	rows, err := s.conn.QueryContext(ctx, buildGetDataQuery(table, fields, offset, limit))
+	rows, err := s.conn.QueryContext(ctx, buildGetDataQuery(table, key, fields, offset, limit))
 	if err != nil {
 		return nil, fmt.Errorf("run query: %v", err)
 	}
@@ -156,7 +156,7 @@ func (s Snowflake) GetStreamData(
 	return result, nil
 }
 
-func buildGetDataQuery(table string, fields []string, offset, limit int) string {
+func buildGetDataQuery(table, key string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 
 	if fields == nil {
@@ -166,6 +166,7 @@ func buildGetDataQuery(table string, fields []string, offset, limit int) string 
 	}
 
 	sb.From(table)
+	sb.OrderBy(key)
 	sb.Offset(offset)
 	sb.Limit(limit)
 

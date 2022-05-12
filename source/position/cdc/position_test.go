@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot
+package cdc
 
 import (
 	"fmt"
@@ -34,25 +34,32 @@ func TestParseSDKPosition(t *testing.T) {
 	}{
 		{
 			name: "valid sdk position",
-			in:   sdk.Position("s.20.1"),
+			in:   sdk.Position("c.1.1.2"),
 			want: Position{
-				Type:    position.TypeSnapshot,
-				Element: 20,
-				Offset:  1,
+				Type:          position.TypeCDC,
+				InsertElement: 1,
+				UpdateElement: 1,
+				DeleteElement: 2,
 			},
 		},
 		{
 			name:    "wrong the number of position elements",
-			in:      sdk.Position("s.20"),
+			in:      sdk.Position("c.1"),
 			wantErr: true,
 			expectedErr: fmt.Sprintf("the number of position elements must be equal to %d, now it is 2",
 				reflect.TypeOf(Position{}).NumField()),
 		},
 		{
 			name:        "wrong element type",
-			in:          sdk.Position("s.test.3"),
+			in:          sdk.Position("c.test.3.4"),
 			wantErr:     true,
 			expectedErr: position.ErrFieldInvalidElement.Error(),
+		},
+		{
+			name:        "wrong type",
+			in:          sdk.Position("d.test.3.4"),
+			wantErr:     true,
+			expectedErr: position.ErrInvalidType.Error(),
 		},
 	}
 
@@ -77,42 +84,6 @@ func TestParseSDKPosition(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parse = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFormatSDKPosition(t *testing.T) {
-	tests := []struct {
-		name       string
-		pos        Position
-		wantSDKPos sdk.Position
-	}{
-		{
-			name: "valid sdk position",
-			pos: Position{
-				Type:    position.TypeSnapshot,
-				Element: 20,
-				Offset:  1,
-			},
-			wantSDKPos: sdk.Position("s.20.1"),
-		},
-		{
-			name: "valid sdk position",
-			pos: Position{
-				Type:    position.TypeSnapshot,
-				Element: 35,
-				Offset:  10,
-			},
-			wantSDKPos: sdk.Position("s.35.10"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.pos.FormatSDKPosition()
-			if !reflect.DeepEqual(got, tt.wantSDKPos) {
-				t.Errorf("parse = %v, want %v", got, tt.wantSDKPos)
 			}
 		})
 	}
