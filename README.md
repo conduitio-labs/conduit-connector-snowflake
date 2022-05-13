@@ -44,13 +44,13 @@ Snapshot iterator start works first, if snapshot iterator `hasNext` method retur
 
 Snapshot iterator get data from `table` using `limit` and offset.
 
-### CDC Iterator
+#### CDC Iterator
 
 CDC iterator use stream for get data (more information about streams https://docs.snowflake.com/en/user-guide/streams-intro.html) 
 When cdc iterator start works, it <b>creates</b> stream with name `conduit_{table}`. Iterator read full stream table filter data by 
 insert, updates, delete elements and save indexes for each group.
 
-### Limitations.
+#### Limitations.
 
 CDC iterator couldn't catch delete, update information about elements which was created after stream creation.
 
