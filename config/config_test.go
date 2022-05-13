@@ -38,7 +38,7 @@ func TestParse(t *testing.T) {
 			want: Config{
 				Connection: "user:password@my_organization-my_account/mydb",
 				Table:      "customer",
-				Key:        "id",
+				Key:        "ID",
 				Limit:      100,
 			},
 			wantErr:     false,
@@ -103,7 +103,7 @@ func TestParse(t *testing.T) {
 				"table":      "customer",
 				"columns":    "",
 				"limit":      "test",
-				"key":        "id",
+				"key":        "ID",
 			},
 			want:        Config{},
 			wantErr:     true,
