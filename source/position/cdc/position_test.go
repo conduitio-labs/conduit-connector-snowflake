@@ -88,3 +88,41 @@ func TestParseSDKPosition(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatSDKPosition(t *testing.T) {
+	tests := []struct {
+		name       string
+		pos        Position
+		wantSDKPos sdk.Position
+	}{
+		{
+			name: "sdk position",
+			pos: Position{
+				Type:          position.TypeCDC,
+				InsertElement: 1,
+				UpdateElement: 1,
+				DeleteElement: 2,
+			},
+			wantSDKPos: sdk.Position("c.1.1.2"),
+		},
+		{
+			name: "sdk position",
+			pos: Position{
+				Type:          position.TypeCDC,
+				InsertElement: 30,
+				UpdateElement: 25,
+				DeleteElement: 2,
+			},
+			wantSDKPos: sdk.Position("c.30.25.2"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.pos.FormatSDKPosition()
+			if !reflect.DeepEqual(got, tt.wantSDKPos) {
+				t.Errorf("parse = %v, want %v", got, tt.wantSDKPos)
+			}
+		})
+	}
+}

@@ -89,7 +89,7 @@ func TestFormatSDKPosition(t *testing.T) {
 		wantSDKPos sdk.Position
 	}{
 		{
-			name: "valid sdk position",
+			name: "sdk position",
 			pos: Position{
 				Type:    position.TypeSnapshot,
 				Element: 20,
@@ -98,7 +98,7 @@ func TestFormatSDKPosition(t *testing.T) {
 			wantSDKPos: sdk.Position("s.20.1"),
 		},
 		{
-			name: "valid sdk position",
+			name: "sdk position",
 			pos: Position{
 				Type:    position.TypeSnapshot,
 				Element: 35,
