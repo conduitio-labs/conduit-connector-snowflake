@@ -21,9 +21,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
 	"github.com/conduitio/conduit-connector-snowflake/config"
-	"github.com/conduitio/conduit-connector-snowflake/repository"
 	"github.com/conduitio/conduit-connector-snowflake/source/iterator"
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 // Source connector.
@@ -53,29 +51,13 @@ func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error 
 
 // Open prepare the plugin to start sending records from the given position.
 func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
-	var index int
-
-	p, err := position.ParseSDKPosition(rp)
+	it, err := iterator.New(ctx, s.config.Connection, s.config.Table,
+		s.config.Key, s.config.Columns, s.config.Limit, rp)
 	if err != nil {
-		return fmt.Errorf("parse sdk position: %v", err)
+		return fmt.Errorf("create iterator: %v", err)
 	}
 
-	if p.Element != 0 {
-		index = p.Element + 1
-	}
-
-	snowflake, err := repository.Create(ctx, s.config.Connection)
-	if err != nil {
-		return fmt.Errorf("create snowflake repository: %v", err)
-	}
-
-	data, err := snowflake.GetData(ctx, s.config.Table, s.config.Columns, p.Offset, s.config.Limit)
-	if err != nil {
-		return fmt.Errorf("get data: %v", err)
-	}
-
-	s.iterator = iterator.New(snowflake, s.config.Table,
-		s.config.Columns, s.config.Key, index, p.Offset, s.config.Limit, data)
+	s.iterator = it
 
 	return nil
 }
@@ -106,8 +88,6 @@ func (s *Source) Teardown(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-
-		s.iterator = nil
 	}
 
 	return nil

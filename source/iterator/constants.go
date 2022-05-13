@@ -14,12 +14,17 @@
 
 package iterator
 
-import (
-	"errors"
+type action string
+
+const (
+	// metadata related.
+	metadataTable  = "table"
+	metadataAction = "action"
+
+	// action names.
+	actionInsert action = "insert"
+	actionDelete action = "delete"
+	actionUpdate action = "update"
 )
 
-var (
-	ErrKeyIsNotExist = errors.New("key is not exist")
-	ErrUnknownAction = errors.New("unknown action")
-	ErrInvalidSetup  = errors.New("invalid setup")
-)
+var actionList = []action{actionInsert, actionUpdate, actionDelete}

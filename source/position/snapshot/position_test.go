@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package position
+package snapshot
 
 import (
 	"fmt"
@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+
+	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 func TestParseSDKPosition(t *testing.T) {
@@ -32,24 +34,25 @@ func TestParseSDKPosition(t *testing.T) {
 	}{
 		{
 			name: "valid sdk position",
-			in:   sdk.Position("20.1"),
+			in:   sdk.Position("s.20.1"),
 			want: Position{
+				Type:    position.TypeSnapshot,
 				Element: 20,
 				Offset:  1,
 			},
 		},
 		{
 			name:    "wrong the number of position elements",
-			in:      sdk.Position("20"),
+			in:      sdk.Position("s.20"),
 			wantErr: true,
-			expectedErr: fmt.Sprintf("the number of position elements must be equal to %d, now it is 1",
+			expectedErr: fmt.Sprintf("the number of position elements must be equal to %d, now it is 2",
 				reflect.TypeOf(Position{}).NumField()),
 		},
 		{
 			name:        "wrong element type",
-			in:          sdk.Position("test.3"),
+			in:          sdk.Position("s.test.3"),
 			wantErr:     true,
-			expectedErr: ErrFieldInvalidElement.Error(),
+			expectedErr: position.ErrFieldInvalidElement.Error(),
 		},
 	}
 
@@ -80,18 +83,37 @@ func TestParseSDKPosition(t *testing.T) {
 }
 
 func TestFormatSDKPosition(t *testing.T) {
-	underTestPosition := Position{
-		Element: 1,
-		Offset:  20,
+	tests := []struct {
+		name       string
+		pos        Position
+		wantSDKPos sdk.Position
+	}{
+		{
+			name: "sdk position",
+			pos: Position{
+				Type:    position.TypeSnapshot,
+				Element: 20,
+				Offset:  1,
+			},
+			wantSDKPos: sdk.Position("s.20.1"),
+		},
+		{
+			name: "sdk position",
+			pos: Position{
+				Type:    position.TypeSnapshot,
+				Element: 35,
+				Offset:  10,
+			},
+			wantSDKPos: sdk.Position("s.35.10"),
+		},
 	}
 
-	want := sdk.Position("1.20")
-
-	t.Run("format valid sdk position", func(t *testing.T) {
-		got := underTestPosition.FormatSDKPosition()
-
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("parse = %v, want %v", got, want)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.pos.FormatSDKPosition()
+			if !reflect.DeepEqual(got, tt.wantSDKPos) {
+				t.Errorf("parse = %v, want %v", got, tt.wantSDKPos)
+			}
+		})
+	}
 }

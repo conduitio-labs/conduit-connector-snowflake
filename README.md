@@ -15,13 +15,13 @@ snowflake connector.
 
 The config passed to `Configure` can contain the following fields.
 
-| name         | description                                                                                                                                            | required | example                                         |
-|--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------|
-| `connection` | Snowflake connection string.<br/>Please use formats:<br/> user:password@my_organization-my_account/mydb <br/> username[:password]@hostname:port/dbname | yes      | "user:password@my_organization-my_account/mydb" |
-| `table`      | The table name in snowflake db.                                                                                                                        | yes      | "users"                                         |
-| `columns`    | Comma separated list of column names that should be included in each Record's payload.                                                                 | no       | "id,name,age"                                   |
-| `key`        | Column name that records should use for their `Key` fields.                                                                                            | yes      | "id"                                            |
-| `limit`      | Count of records in one butch. By default is 1000.                                                                                                     | no       | "100"                                           |
+| name         | description                                                                                                                                                                                                                                     | required | example                                                |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
+| `connection` | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
+| `table`      | The table name in snowflake db.                                                                                                                                                                                                                 | yes      | "users"                                                |
+| `columns`    | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                 | no       | "id,name,age"                                          |
+| `key`        | Column name that records should use for their `Key` fields.                                                                                                                                                                                     | yes      | "id"                                                   |
+| `limit`      | Count of records in one butch. By default is 1000.                                                                                                                                                                                              | no       | "100"                                                  |
 
 ### How to build it
 
@@ -36,9 +36,21 @@ Run `make test`.
 The Snowflake Source Connector connects to a snowflake with the provided configurations, using
 `connection`, `table`,`columns`, `key`, `limit` using snowflake driver. Then will call `Configure` to parse the
 configurations. After that, the `Open` method is called to start the connection from the provided position get the
-data from snowflake db using limit and offset. The `Read` return next record. The `Ack` method 
+data from snowflake db. The `Read` return next record. The `Ack` method 
 check if is record with the position was recorded. The `Teardown` do gracefully shutdown.
+Snapshot iterator start works first, if snapshot iterator `hasNext` method return false start works CDC iterator. 
 
-### Position
+#### Snapshot Iterator
 
-Position has fields: `element`, `offset`.
+Snapshot iterator get data from `table` using `limit` and offset.
+
+### CDC Iterator
+
+CDC iterator use stream for get data (more information about streams https://docs.snowflake.com/en/user-guide/streams-intro.html) 
+When cdc iterator start works, it <b>creates</b> stream with name `conduit_{table}`. Iterator read full stream table filter data by 
+insert, updates, delete elements and save indexes for each group.
+
+### Limitations.
+
+CDC iterator couldn't catch delete, update information about elements which was created after stream creation.
+

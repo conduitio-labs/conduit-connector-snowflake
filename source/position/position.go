@@ -15,50 +15,30 @@
 package position
 
 import (
-	"fmt"
-	"reflect"
-	"strconv"
 	"strings"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-// Position represents Snowflake position.
-type Position struct {
-	Element int
-	Offset  int
-}
+// Type describe position type.
+type Type string
 
-// ParseSDKPosition parses SDK position and returns Position.
-func ParseSDKPosition(p sdk.Position) (Position, error) {
-	if p == nil {
-		return Position{}, nil
-	}
+const (
+	TypeSnapshot = "s"
+	TypeCDC      = "c"
+)
 
+// GetType get position type.
+func GetType(p sdk.Position) (Type, error) {
 	parts := strings.Split(string(p), ".")
 
-	if len(parts) != reflect.TypeOf(Position{}).NumField() {
-		return Position{}, fmt.Errorf("the number of position elements must be equal to %d, now it is %d",
-			reflect.TypeOf(Position{}).NumField(), len(parts))
+	if parts[0] == TypeSnapshot {
+		return TypeSnapshot, nil
 	}
 
-	element, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return Position{}, ErrFieldInvalidElement
+	if parts[0] == TypeCDC {
+		return TypeCDC, nil
 	}
 
-	offset, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return Position{}, ErrFieldInvalidOffset
-	}
-
-	return Position{
-		Element: element,
-		Offset:  offset,
-	}, nil
-}
-
-// FormatSDKPosition formats and returns sdk.Position.
-func (p Position) FormatSDKPosition() sdk.Position {
-	return sdk.Position(fmt.Sprintf("%d.%d", p.Element, p.Offset))
+	return "", ErrInvalidType
 }

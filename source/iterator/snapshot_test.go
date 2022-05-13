@@ -39,7 +39,7 @@ func TestIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "id", 0, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -61,9 +61,9 @@ func TestIterator_HasNext(t *testing.T) {
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, nil)
+		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, nil)
 
-		i := New(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -85,9 +85,9 @@ func TestIterator_HasNext(t *testing.T) {
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", nil, 0, 10).Return(res, errors.New("some error"))
+		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, errors.New("some error"))
 
-		i := New(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -112,11 +112,11 @@ func TestIterator_Next(t *testing.T) {
 		}
 
 		p, _ = json.Marshal(map[string]interface{}{"ID": "1", "NAME": "foo"})
-		key = map[string]interface{}{"id": "1"}
+		key = map[string]interface{}{"ID": "1"}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "id", 0, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -146,11 +146,11 @@ func TestIterator_Next(t *testing.T) {
 		}
 
 		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "bar"})
-		key = map[string]interface{}{"id": "2"}
+		key = map[string]interface{}{"ID": "2"}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "id", 1, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 1, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -176,7 +176,7 @@ func TestIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := New(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
 
 		_, err := i.Next(ctx)
 		if err == nil {
@@ -197,7 +197,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := New(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err != nil {
@@ -215,20 +215,20 @@ func TestIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := New(rp, "test", nil, "id", 2, 0, 10, res)
+		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		err := i.Stop()
 		if err == nil {
-			t.Errorf("wanr error")
+			t.Errorf("want error")
 		}
 	})
 }
 
 func TestIterator_Ack(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		i := New(nil, "test", nil, "id", 2, 0, 10, nil)
+		i := NewSnapshotIterator(nil, "test", nil, "id", 2, 0, 10, nil)
 
-		pos := sdk.Position("1.0")
+		pos := sdk.Position("s.1.0")
 
 		err := i.Ack(pos)
 		if err != nil {
@@ -236,9 +236,9 @@ func TestIterator_Ack(t *testing.T) {
 		}
 	})
 	t.Run("failed", func(t *testing.T) {
-		i := New(nil, "test", nil, "id", 2, 0, 10, nil)
+		i := NewSnapshotIterator(nil, "test", nil, "ID", 2, 0, 10, nil)
 
-		pos := sdk.Position("1.1")
+		pos := sdk.Position("s.1.1")
 
 		err := i.Ack(pos)
 		if err == nil {
