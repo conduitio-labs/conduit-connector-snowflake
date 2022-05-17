@@ -22,7 +22,7 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	"github.com/conduitio/conduit-connector-snowflake/source/position/snapshot"
+	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 // SnapshotIterator to iterate snowflake objects.
@@ -95,7 +95,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 		err     error
 	)
 
-	pos := snapshot.NewPosition(i.index, i.offset)
+	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset)
 
 	payload, err = json.Marshal(i.data[i.index])
 	if err != nil {
@@ -131,7 +131,7 @@ func (i *SnapshotIterator) Stop() error {
 
 // Ack check if record with position was recorded.
 func (i *SnapshotIterator) Ack(rp sdk.Position) error {
-	p, err := snapshot.ParseSDKPosition(rp)
+	p, err := position.ParseSDKPosition(rp)
 	if err != nil {
 		return fmt.Errorf("parse sdk position: %v", err)
 	}

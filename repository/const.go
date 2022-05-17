@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iterator
+package repository
 
-import (
-	"errors"
-)
+const (
+	MetadataColumnAction = "METADATA$ACTION"
+	MetadataColumnUpdate = "METADATA$ISUPDATE"
+	MetadataColumnRow    = "METADATA$ROW_ID"
+	MetadataColumnTime   = "METADATA$TS"
 
-var (
-	ErrKeyIsNotExist = errors.New("key is not exist")
-	ErrUnknownAction = errors.New("unknown actionType")
-	ErrInvalidSetup  = errors.New("invalid setup")
+	queryCreateStream        = `CREATE OR REPLACE STREAM %s on table %s`
+	queryCreateTrackingTable = `CREATE OR REPLACE TABLE %s LIKE %s`
+	queryAddTimestampColumn  = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
+	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s STRING`
+	queryAddBooleanColumn    = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
+	queryInsertInto          = `INSERT INTO %s %s`
 )

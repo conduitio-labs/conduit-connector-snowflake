@@ -14,17 +14,23 @@
 
 package iterator
 
-type action string
+type actionType string
 
 const (
+	Conduit = "conduit"
+
+	insertValue = "INSERT"
+	deleteValue = "DELETE"
+
 	// metadata related.
 	metadataTable  = "table"
 	metadataAction = "action"
 
-	// action names.
-	actionInsert action = "insert"
-	actionDelete action = "delete"
-	actionUpdate action = "update"
-)
+	// actionType names.
+	actionInsert actionType = "insertValue"
+	actionDelete actionType = "delete"
+	actionUpdate actionType = "update"
 
-var actionList = []action{actionInsert, actionUpdate, actionDelete}
+	// names format.
+	nameFormat = "%s_%s_%s"
+)

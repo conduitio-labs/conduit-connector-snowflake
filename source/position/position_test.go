@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot
+package position
 
 import (
 	"fmt"
@@ -20,8 +20,6 @@ import (
 	"testing"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
-
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 func TestParseSDKPosition(t *testing.T) {
@@ -33,12 +31,21 @@ func TestParseSDKPosition(t *testing.T) {
 		expectedErr string
 	}{
 		{
-			name: "valid sdk position",
+			name: "valid snapshot sdk position",
 			in:   sdk.Position("s.20.1"),
 			want: Position{
-				Type:    position.TypeSnapshot,
-				Element: 20,
-				Offset:  1,
+				IteratorType: TypeSnapshot,
+				Element:      20,
+				Offset:       1,
+			},
+		},
+		{
+			name: "valid cdc sdk position",
+			in:   sdk.Position("c.99.103"),
+			want: Position{
+				IteratorType: TypeCDC,
+				Element:      99,
+				Offset:       103,
 			},
 		},
 		{
@@ -49,10 +56,10 @@ func TestParseSDKPosition(t *testing.T) {
 				reflect.TypeOf(Position{}).NumField()),
 		},
 		{
-			name:        "wrong element type",
+			name:        "wrong element IteratorType",
 			in:          sdk.Position("s.test.3"),
 			wantErr:     true,
-			expectedErr: position.ErrFieldInvalidElement.Error(),
+			expectedErr: ErrFieldInvalidElement.Error(),
 		},
 	}
 
@@ -89,22 +96,22 @@ func TestFormatSDKPosition(t *testing.T) {
 		wantSDKPos sdk.Position
 	}{
 		{
-			name: "sdk position",
+			name: "sdk snapshot position",
 			pos: Position{
-				Type:    position.TypeSnapshot,
-				Element: 20,
-				Offset:  1,
+				IteratorType: TypeSnapshot,
+				Element:      20,
+				Offset:       1,
 			},
 			wantSDKPos: sdk.Position("s.20.1"),
 		},
 		{
-			name: "sdk position",
+			name: "sdk cdc position",
 			pos: Position{
-				Type:    position.TypeSnapshot,
-				Element: 35,
-				Offset:  10,
+				IteratorType: TypeCDC,
+				Element:      35,
+				Offset:       10,
 			},
-			wantSDKPos: sdk.Position("s.35.10"),
+			wantSDKPos: sdk.Position("c.35.10"),
 		},
 	}
 
