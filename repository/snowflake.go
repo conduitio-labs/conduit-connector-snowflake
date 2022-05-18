@@ -109,29 +109,40 @@ func (s Snowflake) CreateStream(ctx context.Context, stream, table string) error
 
 // CreateTrackingTable create stream.
 func (s Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
-	_, err := s.conn.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	_, err = tx.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
 	if err != nil {
 		return fmt.Errorf("create tracking table: %v", err)
 	}
 
-	_, err = s.conn.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnAction))
+	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnAction))
 	if err != nil {
 		return fmt.Errorf("add metadata action column: %v", err)
 	}
 
-	_, err = s.conn.ExecContext(ctx, buildAddBoolColumn(trackingTable, MetadataColumnUpdate))
+	_, err = tx.ExecContext(ctx, buildAddBoolColumn(trackingTable, MetadataColumnUpdate))
 	if err != nil {
 		return fmt.Errorf("add metadata update column: %v", err)
 	}
 
-	_, err = s.conn.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnRow))
+	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnRow))
 	if err != nil {
 		return fmt.Errorf("add metadata row column: %v", err)
 	}
 
-	_, err = s.conn.ExecContext(ctx, buildAddTimestampColumn(trackingTable, MetadataColumnTime))
+	_, err = tx.ExecContext(ctx, buildAddTimestampColumn(trackingTable, MetadataColumnTime))
 	if err != nil {
 		return fmt.Errorf("add metadata timestamp column: %v", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
 	}
 
 	return err

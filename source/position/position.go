@@ -27,6 +27,10 @@ import (
 type IteratorType string
 
 const (
+	indexType = iota
+	indexElement
+	indexOffset
+
 	TypeSnapshot = "s"
 	TypeCDC      = "c"
 )
@@ -59,7 +63,7 @@ func ParseSDKPosition(p sdk.Position) (Position, error) {
 			reflect.TypeOf(Position{}).NumField(), len(parts))
 	}
 
-	switch parts[0] {
+	switch parts[indexType] {
 	case TypeSnapshot:
 		iteratorType = TypeSnapshot
 	case TypeCDC:
@@ -68,12 +72,12 @@ func ParseSDKPosition(p sdk.Position) (Position, error) {
 		return Position{}, ErrInvalidType
 	}
 
-	element, err := strconv.Atoi(parts[1])
+	element, err := strconv.Atoi(parts[indexElement])
 	if err != nil {
 		return Position{}, ErrFieldInvalidElement
 	}
 
-	offset, err := strconv.Atoi(parts[2])
+	offset, err := strconv.Atoi(parts[indexOffset])
 	if err != nil {
 		return Position{}, ErrFieldInvalidOffset
 	}
