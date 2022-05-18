@@ -18,17 +18,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
 	"github.com/conduitio/conduit-connector-snowflake/repository"
-	p "github.com/conduitio/conduit-connector-snowflake/source/position/cdc"
-)
-
-const (
-	Conduit = "conduit"
+	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 // CDCIterator to iterate snowflake objects.
@@ -39,97 +34,107 @@ type CDCIterator struct {
 	columns []string
 	key     string
 
-	indexInsertElement int
-	indexUpdateElement int
-	indexDeleteElement int
+	index  int
+	offset int
+	limit  int
 
-	action action
-
-	insertData []map[string]interface{}
-	updateData []map[string]interface{}
-	deleteData []map[string]interface{}
+	data []map[string]interface{}
 }
 
 func NewCDCIterator(
 	snowflake Repository,
-	table, key string,
+	table string,
 	columns []string,
-	indexInsertElement int,
-	indexUpdateElement int,
-	indexDeleteElement int,
+	key string,
+	index int,
+	offset int,
+	limit int,
+	data []map[string]interface{},
 ) *CDCIterator {
 	return &CDCIterator{
-		snowflake:          snowflake,
-		table:              table,
-		columns:            columns,
-		key:                key,
-		indexInsertElement: indexInsertElement,
-		indexUpdateElement: indexUpdateElement,
-		indexDeleteElement: indexDeleteElement,
+		snowflake: snowflake,
+		table:     table,
+		columns:   columns,
+		key:       key,
+		index:     index,
+		offset:    offset,
+		limit:     limit,
+		data:      data,
 	}
 }
 
 // HasNext check ability to get next record.
 func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
-	if c.hasData() {
+	var err error
+
+	// Stream save two rows about update info:
+	// 1) where metadata actionType = delete and metadata update = true, this is deleting.
+	// 2) where metadata actionType = insertValue and update = true, this is exactly updating.
+	// Skip first part and work only with second to avoid duplicate info.
+	if c.index < len(c.data) && c.data[c.index][repository.MetadataColumnAction] == deleteValue &&
+		c.data[c.index][repository.MetadataColumnUpdate] == true {
+		c.index++
+
+		return c.HasNext(ctx)
+	}
+
+	if c.index < len(c.data) {
 		return true, nil
 	}
 
-	data, err := c.snowflake.GetStreamData(ctx, getStreamName(c.table), c.columns)
-	if err != nil {
-		return false, fmt.Errorf("get data: %v", err)
+	if c.index >= c.limit {
+		c.offset += c.limit
+		c.index = 0
 	}
 
-	c.filterData(data)
+	c.data, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
+		getTrackingTable(c.table), c.columns, c.offset, c.limit)
+	if err != nil {
+		return false, err
+	}
 
-	return c.hasData(), nil
+	if len(c.data) == 0 || len(c.data) == c.index {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // Next get new record.
 func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 	var (
 		payload sdk.RawData
-		data    map[string]interface{}
 		err     error
 	)
 
-	switch c.action {
-	case actionInsert:
-		data = c.insertData[c.indexInsertElement]
-		c.indexInsertElement++
-	case actionDelete:
-		data = c.deleteData[c.indexDeleteElement]
-		c.indexDeleteElement++
-	case actionUpdate:
-		data = c.updateData[c.indexUpdateElement]
-		c.indexUpdateElement++
-	default:
-		return sdk.Record{}, ErrUnknownAction
-	}
+	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
 
-	pos := p.NewPosition(c.indexInsertElement, c.indexUpdateElement, c.indexDeleteElement)
+	action := getAction(c.data[c.index])
 
 	// remove metadata columns.
-	delete(data, repository.MetadataColumnUpdate)
-	delete(data, repository.MetadataColumnAction)
-	delete(data, repository.MetadataColumnRow)
+	delete(c.data[c.index], repository.MetadataColumnUpdate)
+	delete(c.data[c.index], repository.MetadataColumnAction)
+	delete(c.data[c.index], repository.MetadataColumnRow)
+	delete(c.data[c.index], repository.MetadataColumnTime)
 
-	payload, err = json.Marshal(data)
+	payload, err = json.Marshal(c.data[c.index])
 	if err != nil {
 		return sdk.Record{}, fmt.Errorf("marshal error : %v", err)
 	}
 
-	if _, ok := data[c.key]; !ok {
+	if _, ok := c.data[c.index][c.key]; !ok {
 		return sdk.Record{}, ErrKeyIsNotExist
 	}
 
-	key := data[strings.ToUpper(c.key)]
+	key := c.data[c.index][c.key]
+
+	c.index++
 
 	return sdk.Record{
 		Position: pos.FormatSDKPosition(),
 		Metadata: map[string]string{
 			metadataTable:  c.table,
-			metadataAction: string(c.action),
+			metadataAction: string(action),
 		},
 		CreatedAt: time.Now(),
 		Key: sdk.StructuredData{
@@ -139,54 +144,6 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 	}, nil
 }
 
-func (c *CDCIterator) hasActionData(action action) bool {
-	if action == actionInsert && len(c.insertData) > c.indexInsertElement {
-		return true
-	}
-
-	if action == actionUpdate && len(c.updateData) > c.indexUpdateElement {
-		return true
-	}
-
-	if action == actionDelete && len(c.deleteData) > c.indexDeleteElement {
-		return true
-	}
-
-	return false
-}
-
-func (c *CDCIterator) filterData(data []map[string]interface{}) {
-	c.insertData = make([]map[string]interface{}, 0)
-	c.updateData = make([]map[string]interface{}, 0)
-	c.deleteData = make([]map[string]interface{}, 0)
-
-	for _, v := range data {
-		if v[repository.MetadataColumnAction] == "INSERT" && v[repository.MetadataColumnUpdate] == false {
-			c.insertData = append(c.insertData, v)
-		}
-
-		if v[repository.MetadataColumnAction] == "INSERT" && v[repository.MetadataColumnUpdate] == true {
-			c.updateData = append(c.updateData, v)
-		}
-
-		if v[repository.MetadataColumnAction] == "DELETE" && v[repository.MetadataColumnUpdate] == false {
-			c.deleteData = append(c.deleteData, v)
-		}
-	}
-}
-
-func (c *CDCIterator) hasData() bool {
-	for _, v := range actionList {
-		if c.hasActionData(v) {
-			c.action = v
-
-			return true
-		}
-	}
-
-	return false
-}
-
 // Stop shutdown iterator.
 func (c *CDCIterator) Stop() error {
 	return c.snowflake.Close()
@@ -194,9 +151,38 @@ func (c *CDCIterator) Stop() error {
 
 // Ack check if record with position was recorded.
 func (c *CDCIterator) Ack(rp sdk.Position) error {
+	p, err := position.ParseSDKPosition(rp)
+	if err != nil {
+		return fmt.Errorf("parse sdk position: %v", err)
+	}
+
+	if p.Offset > c.offset || (p.Offset == c.offset && p.Element > c.index) {
+		return fmt.Errorf("record was not recorded: element %d, offset %d", p.Element, p.Offset)
+	}
+
 	return nil
 }
 
 func getStreamName(table string) string {
-	return fmt.Sprintf("%s_%s", Conduit, table)
+	return fmt.Sprintf(nameFormat, Conduit, "stream", table)
+}
+
+func getTrackingTable(table string) string {
+	return fmt.Sprintf(nameFormat, Conduit, "tracking", table)
+}
+
+func getAction(data map[string]interface{}) actionType {
+	if data[repository.MetadataColumnAction] == insertValue && data[repository.MetadataColumnUpdate] == false {
+		return actionInsert
+	}
+
+	if data[repository.MetadataColumnAction] == insertValue && data[repository.MetadataColumnUpdate] == true {
+		return actionUpdate
+	}
+
+	if data[repository.MetadataColumnAction] == deleteValue && data[repository.MetadataColumnUpdate] == false {
+		return actionDelete
+	}
+
+	return ""
 }

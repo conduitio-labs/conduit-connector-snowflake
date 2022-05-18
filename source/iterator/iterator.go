@@ -22,8 +22,6 @@ import (
 
 	"github.com/conduitio/conduit-connector-snowflake/repository"
 	"github.com/conduitio/conduit-connector-snowflake/source/position"
-	"github.com/conduitio/conduit-connector-snowflake/source/position/cdc"
-	"github.com/conduitio/conduit-connector-snowflake/source/position/snapshot"
 )
 
 // Iterator combined iterator.
@@ -53,7 +51,7 @@ func New(
 	var (
 		snapshotIterator *SnapshotIterator
 		cdcIterator      *CDCIterator
-		posType          position.Type
+		posType          position.IteratorType
 	)
 
 	snowflake, err := repository.Create(ctx, conn)
@@ -77,7 +75,7 @@ func New(
 			return nil, fmt.Errorf("setup snapshot iterator: %v", err)
 		}
 	case position.TypeCDC:
-		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, false)
+		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, limit, false)
 		if err != nil {
 			return nil, fmt.Errorf("setup cdc iterator: %v", err)
 		}
@@ -91,6 +89,7 @@ func New(
 		columns:          columns,
 		key:              key,
 		pos:              pos,
+		limit:            limit,
 	}, nil
 }
 
@@ -104,7 +103,7 @@ func setupSnapshotIterator(
 ) (*SnapshotIterator, error) {
 	var index int
 
-	p, err := snapshot.ParseSDKPosition(pos)
+	p, err := position.ParseSDKPosition(pos)
 	if err != nil {
 		return nil, fmt.Errorf("parse sdk position: %v", err)
 	}
@@ -128,27 +127,18 @@ func setupCDCIterator(
 	pos sdk.Position,
 	table, key string,
 	columns []string,
+	limit int,
 	needCreateStream bool,
 ) (*CDCIterator, error) {
-	var (
-		indexInsert int
-		indexUpdate int
-		indexDelete int
-	)
+	var index int
 
-	p, err := cdc.ParseSDKPosition(pos)
+	p, err := position.ParseSDKPosition(pos)
 	if err != nil {
 		return nil, fmt.Errorf("parse sdk position: %v", err)
 	}
 
-	if p.InsertElement != 0 {
-		indexInsert = p.InsertElement + 1
-	}
-	if p.UpdateElement != 0 {
-		indexUpdate = p.UpdateElement + 1
-	}
-	if p.DeleteElement != 0 {
-		indexDelete = p.DeleteElement + 1
+	if p.Element != 0 {
+		index = p.Element + 1
 	}
 
 	if needCreateStream {
@@ -156,18 +146,20 @@ func setupCDCIterator(
 		if err != nil {
 			return nil, fmt.Errorf("create stream: %v", err)
 		}
+
+		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
+		if err != nil {
+			return nil, fmt.Errorf("create stream: %v", err)
+		}
 	}
 
-	data, err := snowflake.GetStreamData(ctx, getStreamName(table), columns)
+	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns, p.Offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get stream data: %v", err)
 	}
 
-	cdcIterator := NewCDCIterator(snowflake, table, key, columns, indexInsert, indexUpdate, indexDelete)
-
-	cdcIterator.filterData(data)
-
-	return cdcIterator, nil
+	return NewCDCIterator(snowflake, table,
+		columns, key, index, p.Offset, limit, data), nil
 }
 
 // HasNext check ability to get next record.
@@ -183,10 +175,10 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		}
 
 		// Setup cdc iterator.
-		pos := cdc.NewPosition(0, 0, 0)
+		pos := position.NewPosition(position.TypeCDC, 0, 0)
 
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			pos.FormatSDKPosition(), i.table, i.key, i.columns, true)
+			pos.FormatSDKPosition(), i.table, i.key, i.columns, i.limit, true)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %v", err)
 		}

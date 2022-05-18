@@ -24,13 +24,7 @@ import (
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
 )
 
-const (
-	MetadataColumnAction = "METADATA$ACTION"
-	MetadataColumnUpdate = "METADATA$ISUPDATE"
-	MetadataColumnRow    = "METADATA$ROW_ID"
-)
-
-var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnRow}
+var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
 // Snowflake repository.
 type Snowflake struct {
@@ -113,13 +107,68 @@ func (s Snowflake) CreateStream(ctx context.Context, stream, table string) error
 	return err
 }
 
-// GetStreamData get rows from stream.
-func (s Snowflake) GetStreamData(
+// CreateTrackingTable create stream.
+func (s Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	_, err = tx.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
+	if err != nil {
+		return fmt.Errorf("create tracking table: %v", err)
+	}
+
+	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnAction))
+	if err != nil {
+		return fmt.Errorf("add metadata action column: %v", err)
+	}
+
+	_, err = tx.ExecContext(ctx, buildAddBoolColumn(trackingTable, MetadataColumnUpdate))
+	if err != nil {
+		return fmt.Errorf("add metadata update column: %v", err)
+	}
+
+	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnRow))
+	if err != nil {
+		return fmt.Errorf("add metadata row column: %v", err)
+	}
+
+	_, err = tx.ExecContext(ctx, buildAddTimestampColumn(trackingTable, MetadataColumnTime))
+	if err != nil {
+		return fmt.Errorf("add metadata timestamp column: %v", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	return err
+}
+
+// GetTrackingData get data from tracking table.
+func (s Snowflake) GetTrackingData(
 	ctx context.Context,
-	stream string,
+	stream, trackingTable string,
 	fields []string,
+	offset, limit int,
 ) ([]map[string]interface{}, error) {
-	rows, err := s.conn.QueryContext(ctx, buildGetStreamData(stream, fields))
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	// Consume data.
+	_, err = tx.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
+	if err != nil {
+		return nil, fmt.Errorf("consume data: %v", err)
+	}
+
+	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
 	if err != nil {
 		return nil, fmt.Errorf("run query: %v", err)
 	}
@@ -153,6 +202,10 @@ func (s Snowflake) GetStreamData(
 		result = append(result, row)
 	}
 
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -173,7 +226,7 @@ func buildGetDataQuery(table, key string, fields []string, offset, limit int) st
 	return sb.String()
 }
 
-func buildGetStreamData(stream string, fields []string) string {
+func buildGetTrackingData(table string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 	if fields == nil {
 		sb.Select("*")
@@ -181,13 +234,62 @@ func buildGetStreamData(stream string, fields []string) string {
 		fields = append(fields, MetadataFields...)
 		sb.Select(fields...)
 	}
-	sb.From(stream)
+
+	sb.From(table)
+	sb.OrderBy(MetadataColumnTime)
+	sb.Offset(offset)
+	sb.Limit(limit)
 
 	return sb.String()
 }
 
+func buildConsumeDataQuery(trackingTable, stream string, fields []string) string {
+	selectSb := sqlbuilder.NewSelectBuilder()
+	if fields == nil {
+		selectSb.Select("*, current_timestamp()")
+	} else {
+		fields = append(fields, MetadataFields...)
+		fields = append(fields, "current_timestamp()")
+		selectSb.Select(fields...)
+	}
+	selectSb.From(stream)
+
+	sb := sqlbuilder.Build(fmt.Sprintf(queryInsertInto, trackingTable, selectSb.String()))
+	s, _ := sb.Build()
+
+	return s
+}
+
 func buildCreateStreamQuery(stream, table string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf("CREATE OR REPLACE STREAM %s on table %s", stream, table))
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateStream, stream, table))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildCreateTrackingTable(trackingTable, table string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTrackingTable, trackingTable, table))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildAddStringColumn(table, column string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryAddStringColumn, table, column))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildAddBoolColumn(table, column string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryAddBooleanColumn, table, column))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildAddTimestampColumn(table, column string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryAddTimestampColumn, table, column))
 	s, _ := sb.Build()
 
 	return s
