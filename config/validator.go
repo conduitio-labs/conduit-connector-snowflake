@@ -84,7 +84,7 @@ func registerTranslations(validate *validator.Validate, uniTranslator ut.Transla
 
 	// register a custom translation for the gt tag
 	err = validate.RegisterTranslation("gte", uniTranslator, func(ut ut.Translator) error {
-		return ut.Add("max", "\"{0}\" config value must be positive", true)
+		return ut.Add("gte", "\"{0}\" config value must be bigger", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		t, _ := ut.T("max", fe.Field())
 
@@ -96,7 +96,7 @@ func registerTranslations(validate *validator.Validate, uniTranslator ut.Transla
 
 	// register a custom translation for the gt tag
 	err = validate.RegisterTranslation("lte", uniTranslator, func(ut ut.Translator) error {
-		return ut.Add("max", "\"{0}\" config value is too long", true)
+		return ut.Add("lte", "\"{0}\" config value must be less", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		t, _ := ut.T("max", fe.Field())
 

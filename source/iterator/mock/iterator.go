@@ -62,6 +62,20 @@ func (mr *MockRepositoryMockRecorder) CreateStream(ctx, stream, table interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStream", reflect.TypeOf((*MockRepository)(nil).CreateStream), ctx, stream, table)
 }
 
+// CreateTrackingTable mocks base method.
+func (m *MockRepository) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTrackingTable", ctx, trackingTable, table)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateTrackingTable indicates an expected call of CreateTrackingTable.
+func (mr *MockRepositoryMockRecorder) CreateTrackingTable(ctx, trackingTable, table interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrackingTable", reflect.TypeOf((*MockRepository)(nil).CreateTrackingTable), ctx, trackingTable, table)
+}
+
 // GetData mocks base method.
 func (m *MockRepository) GetData(ctx context.Context, table, key string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
 	m.ctrl.T.Helper()
@@ -77,17 +91,17 @@ func (mr *MockRepositoryMockRecorder) GetData(ctx, table, key, fields, offset, l
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, key, fields, offset, limit)
 }
 
-// GetStreamData mocks base method.
-func (m *MockRepository) GetStreamData(ctx context.Context, stream string, fields []string) ([]map[string]interface{}, error) {
+// GetTrackingData mocks base method.
+func (m *MockRepository) GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStreamData", ctx, stream, fields)
+	ret := m.ctrl.Call(m, "GetTrackingData", ctx, stream, trackingTable, fields, offset, limit)
 	ret0, _ := ret[0].([]map[string]interface{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetStreamData indicates an expected call of GetStreamData.
-func (mr *MockRepositoryMockRecorder) GetStreamData(ctx, stream, fields interface{}) *gomock.Call {
+// GetTrackingData indicates an expected call of GetTrackingData.
+func (mr *MockRepositoryMockRecorder) GetTrackingData(ctx, stream, trackingTable, fields, offset, limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStreamData", reflect.TypeOf((*MockRepository)(nil).GetStreamData), ctx, stream, fields)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackingData", reflect.TypeOf((*MockRepository)(nil).GetTrackingData), ctx, stream, trackingTable, fields, offset, limit)
 }
