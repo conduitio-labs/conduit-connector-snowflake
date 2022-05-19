@@ -107,7 +107,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 		err     error
 	)
 
-	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
+	pos := position.NewPosition(position.TypeCDC, c.index, c.offset, 0)
 
 	action := getAction(c.data[c.index])
 

@@ -32,32 +32,32 @@ type Snowflake struct {
 }
 
 // Create storage.
-func Create(ctx context.Context, connectionData string) (Snowflake, error) {
+func Create(ctx context.Context, connectionData string) (*Snowflake, error) {
 	db, err := sql.Open("snowflake", connectionData)
 	if err != nil {
-		return Snowflake{}, fmt.Errorf("open db: %v", err)
+		return nil, fmt.Errorf("open db: %v", err)
 	}
 
 	err = db.PingContext(ctx)
 	if err != nil {
-		return Snowflake{}, fmt.Errorf("ping db: %v", err)
+		return nil, fmt.Errorf("ping db: %v", err)
 	}
 
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return Snowflake{}, fmt.Errorf("create conn: %v", err)
+		return nil, fmt.Errorf("create conn: %v", err)
 	}
 
-	return Snowflake{conn: conn}, nil
+	return &Snowflake{conn: conn}, nil
 }
 
 // Close conn.
-func (s Snowflake) Close() error {
+func (s *Snowflake) Close() error {
 	return s.conn.Close()
 }
 
 // GetData get rows with columns offset from table.
-func (s Snowflake) GetData(
+func (s *Snowflake) GetData(
 	ctx context.Context,
 	table, key string,
 	fields []string,
@@ -101,14 +101,14 @@ func (s Snowflake) GetData(
 }
 
 // CreateStream create stream.
-func (s Snowflake) CreateStream(ctx context.Context, stream, table string) error {
+func (s *Snowflake) CreateStream(ctx context.Context, stream, table string) error {
 	_, err := s.conn.ExecContext(ctx, buildCreateStreamQuery(stream, table))
 
 	return err
 }
 
 // CreateTrackingTable create stream.
-func (s Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
+func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -148,8 +148,27 @@ func (s Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table
 	return err
 }
 
+// GetTotalCount - get total count.
+func (s *Snowflake) GetTotalCount(ctx context.Context, table string) (int, error) {
+	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetTotal, table))
+	if err != nil {
+		return 0, err
+	}
+
+	var total int
+
+	for rows.Next() {
+		err = rows.Scan(&total)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return total, nil
+}
+
 // GetTrackingData get data from tracking table.
-func (s Snowflake) GetTrackingData(
+func (s *Snowflake) GetTrackingData(
 	ctx context.Context,
 	stream, trackingTable string,
 	fields []string,
