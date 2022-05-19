@@ -32,16 +32,17 @@ func TestParseSDKPosition(t *testing.T) {
 	}{
 		{
 			name: "valid snapshot sdk position",
-			in:   sdk.Position("s.20.1"),
+			in:   sdk.Position("s.20.1.120"),
 			want: Position{
-				IteratorType: TypeSnapshot,
-				Element:      20,
-				Offset:       1,
+				IteratorType:  TypeSnapshot,
+				Element:       20,
+				Offset:        1,
+				SnapshotTotal: 120,
 			},
 		},
 		{
 			name: "valid cdc sdk position",
-			in:   sdk.Position("c.99.103"),
+			in:   sdk.Position("c.99.103.0"),
 			want: Position{
 				IteratorType: TypeCDC,
 				Element:      99,
@@ -57,7 +58,7 @@ func TestParseSDKPosition(t *testing.T) {
 		},
 		{
 			name:        "wrong element IteratorType",
-			in:          sdk.Position("s.test.3"),
+			in:          sdk.Position("s.test.3.10"),
 			wantErr:     true,
 			expectedErr: ErrFieldInvalidElement.Error(),
 		},
@@ -98,11 +99,12 @@ func TestFormatSDKPosition(t *testing.T) {
 		{
 			name: "sdk snapshot position",
 			pos: Position{
-				IteratorType: TypeSnapshot,
-				Element:      20,
-				Offset:       1,
+				IteratorType:  TypeSnapshot,
+				Element:       20,
+				Offset:        1,
+				SnapshotTotal: 110,
 			},
-			wantSDKPos: sdk.Position("s.20.1"),
+			wantSDKPos: sdk.Position("s.20.1.110"),
 		},
 		{
 			name: "sdk cdc position",
@@ -111,7 +113,7 @@ func TestFormatSDKPosition(t *testing.T) {
 				Element:      35,
 				Offset:       10,
 			},
-			wantSDKPos: sdk.Position("c.35.10"),
+			wantSDKPos: sdk.Position("c.35.10.0"),
 		},
 	}
 

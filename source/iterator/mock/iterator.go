@@ -91,6 +91,21 @@ func (mr *MockRepositoryMockRecorder) GetData(ctx, table, key, fields, offset, l
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, key, fields, offset, limit)
 }
 
+// GetTotalCount mocks base method.
+func (m *MockRepository) GetTotalCount(ctx context.Context, table string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTotalCount", ctx, table)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTotalCount indicates an expected call of GetTotalCount.
+func (mr *MockRepositoryMockRecorder) GetTotalCount(ctx, table interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTotalCount", reflect.TypeOf((*MockRepository)(nil).GetTotalCount), ctx, table)
+}
+
 // GetTrackingData mocks base method.
 func (m *MockRepository) GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
 	m.ctrl.T.Helper()
