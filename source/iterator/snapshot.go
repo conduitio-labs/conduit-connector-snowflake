@@ -36,6 +36,7 @@ type SnapshotIterator struct {
 	index  int
 	offset int
 	limit  int
+	total  int
 
 	data []map[string]interface{}
 }
@@ -46,9 +47,7 @@ func NewSnapshotIterator(
 	table string,
 	columns []string,
 	key string,
-	index int,
-	offset int,
-	limit int,
+	index, offset, limit, total int,
 	data []map[string]interface{},
 ) *SnapshotIterator {
 	return &SnapshotIterator{
@@ -59,6 +58,7 @@ func NewSnapshotIterator(
 		index:     index,
 		offset:    offset,
 		limit:     limit,
+		total:     total,
 		data:      data,
 	}
 }
@@ -66,6 +66,10 @@ func NewSnapshotIterator(
 // HasNext check ability to get next record.
 func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	var err error
+
+	if i.total == i.index+i.offset {
+		return false, nil
+	}
 
 	if i.index < len(i.data) {
 		return true, nil
@@ -95,7 +99,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 		err     error
 	)
 
-	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset)
+	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset, i.total)
 
 	payload, err = json.Marshal(i.data[i.index])
 	if err != nil {

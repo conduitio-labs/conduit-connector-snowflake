@@ -30,22 +30,26 @@ const (
 	indexType = iota
 	indexElement
 	indexOffset
+	indexOffsetTotal
 
 	TypeSnapshot = "s"
 	TypeCDC      = "c"
+
+	posFormat = "%s.%d.%d.%d"
 )
 
 // Position represents Snowflake position.
 type Position struct {
 	IteratorType IteratorType
 
-	Element int
-	Offset  int
+	Element       int
+	Offset        int
+	SnapshotTotal int
 }
 
 // NewPosition create position.
-func NewPosition(iteratorType IteratorType, element int, offset int) *Position {
-	return &Position{IteratorType: iteratorType, Element: element, Offset: offset}
+func NewPosition(iteratorType IteratorType, element int, offset int, total int) *Position {
+	return &Position{IteratorType: iteratorType, Element: element, Offset: offset, SnapshotTotal: total}
 }
 
 // ParseSDKPosition parses SDK position and returns Position.
@@ -82,16 +86,22 @@ func ParseSDKPosition(p sdk.Position) (Position, error) {
 		return Position{}, ErrFieldInvalidOffset
 	}
 
+	total, err := strconv.Atoi(parts[indexOffsetTotal])
+	if err != nil {
+		return Position{}, ErrFieldInvalidOffset
+	}
+
 	return Position{
-		IteratorType: iteratorType,
-		Element:      element,
-		Offset:       offset,
+		IteratorType:  iteratorType,
+		Element:       element,
+		Offset:        offset,
+		SnapshotTotal: total,
 	}, nil
 }
 
 // FormatSDKPosition formats and returns sdk.Position.
 func (p Position) FormatSDKPosition() sdk.Position {
-	return sdk.Position(fmt.Sprintf("%s.%d.%d", p.IteratorType, p.Element, p.Offset))
+	return sdk.Position(fmt.Sprintf(posFormat, p.IteratorType, p.Element, p.Offset, p.SnapshotTotal))
 }
 
 // GetType get position type.

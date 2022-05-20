@@ -27,19 +27,19 @@ import (
 	"github.com/conduitio/conduit-connector-snowflake/source/iterator/mock"
 )
 
-func TestIterator_HasNext(t *testing.T) {
+func TestCDCIterator_HasNext(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -56,14 +56,15 @@ func TestIterator_HasNext(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, nil)
+		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
+			nil, 0, 10).Return(nil, nil)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -80,14 +81,15 @@ func TestIterator_HasNext(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, errors.New("some error"))
+		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
+			nil, 0, 10).Return(nil, errors.New("some error"))
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -96,7 +98,7 @@ func TestIterator_HasNext(t *testing.T) {
 	})
 }
 
-func TestIterator_Next(t *testing.T) {
+func TestCDCIterator_Next(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var (
 			p   sdk.RawData
@@ -107,16 +109,16 @@ func TestIterator_Next(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
-		p, _ = json.Marshal(map[string]interface{}{"ID": "1", "NAME": "foo"})
-		key = map[string]interface{}{"ID": "1"}
+		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
+		key = map[string]interface{}{"ID": "2"}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -141,16 +143,16 @@ func TestIterator_Next(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
-		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "bar"})
+		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 1, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -170,13 +172,13 @@ func TestIterator_Next(t *testing.T) {
 		ctx := context.Background()
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "missing_key", 0, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
 
 		_, err := i.Next(ctx)
 		if err == nil {
@@ -185,19 +187,19 @@ func TestIterator_Next(t *testing.T) {
 	})
 }
 
-func TestIterator_Stop(t *testing.T) {
+func TestCDCIterator_Stop(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
 
 		err := i.Stop()
 		if err != nil {
@@ -208,39 +210,16 @@ func TestIterator_Stop(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
 		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
+			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
+			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
 
 		err := i.Stop()
-		if err == nil {
-			t.Errorf("want error")
-		}
-	})
-}
-
-func TestIterator_Ack(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		i := NewSnapshotIterator(nil, "test", nil, "id", 2, 0, 10, 10, nil)
-
-		pos := sdk.Position("s.1.0.10")
-
-		err := i.Ack(pos)
-		if err != nil {
-			t.Errorf("ack \"%s\"", err.Error())
-		}
-	})
-	t.Run("failed", func(t *testing.T) {
-		i := NewSnapshotIterator(nil, "test", nil, "ID", 2, 0, 10, 10, nil)
-
-		pos := sdk.Position("s.1.1.0")
-
-		err := i.Ack(pos)
 		if err == nil {
 			t.Errorf("want error")
 		}
