@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/huandu/go-sqlbuilder"
 
@@ -267,16 +268,30 @@ func buildConsumeDataQuery(trackingTable, stream string, fields []string) string
 	if fields == nil {
 		selectSb.Select("*, current_timestamp()")
 	} else {
-		fields = append(fields, MetadataFields...)
-		fields = append(fields, "current_timestamp()")
-		selectSb.Select(fields...)
+		columns := fields
+		columns = append(columns, MetadataColumnAction)
+		columns = append(columns, MetadataColumnUpdate)
+		columns = append(columns, "current_timestamp()")
+		selectSb.Select(columns...)
 	}
+
 	selectSb.From(stream)
 
-	sb := sqlbuilder.Build(fmt.Sprintf(queryInsertInto, trackingTable, selectSb.String()))
+	var sb sqlbuilder.Builder
+	if fields == nil {
+		sb = sqlbuilder.Build(fmt.Sprintf(queryInsertInto, trackingTable, selectSb.String()))
+	} else {
+		columns := fields
+		columns = append(columns, MetadataFields...)
+		sb = sqlbuilder.Build(fmt.Sprintf(queryInsertIntoColumn, trackingTable, toStr(columns), selectSb.String()))
+	}
 	s, _ := sb.Build()
 
 	return s
+}
+
+func toStr(fields []string) string {
+	return strings.Join(fields, ", ")
 }
 
 func buildCreateStreamQuery(stream, table string) string {

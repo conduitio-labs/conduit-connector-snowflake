@@ -43,6 +43,7 @@ Snapshot iterator start works first, if snapshot iterator `hasNext` method retur
 
 #### Snapshot Iterator
 
+Whet source starts work we get total count of rows what snapshot iterator will be inserted. 
 The snapshot iterator starts get data from table using select query with limit and offset. Limit is configurable
 parameter, offset value is zero for first time. Iterator save information from table to `data` slice variable.
 Iterator `HasNext` method check if next element exist in `data` using variable `index` and if it is needed
@@ -52,7 +53,7 @@ it to `Record` and increase `index`.
 #### CDC Iterator
 
 CDC iterator uses snowflake stream (more information about streams https://docs.snowflake.com/en/user-guide/streams-intro.html) 
-When cdc iterator start works, it <b>creates</b> stream with name `conduit_stream_{table}` to `table` from
+When source starts work first time iterator <b>creates</b> stream with name `conduit_stream_{table}` to `table` from
 config, <b>creates</b> table for consuming stream with name `conduit_tracking_{table}`. 
 This consuming table has the same schema as `table`  with additional metadata columns:
 `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID`, `METADATA$TS`. Then iterator consume
@@ -67,4 +68,4 @@ using metadata columns `METADATA$ACTION`, `METADATA$ISUPDATE` and increase `inde
 #### Position
 
 Position has fields: `type` (`c` - CDC or `s`- Snapshot), `element`(index of element of current
-offset), `offset`.
+offset), `offset`, `snapshotTotal`.
