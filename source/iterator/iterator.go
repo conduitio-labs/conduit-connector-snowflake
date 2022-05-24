@@ -50,6 +50,7 @@ func New(
 		snapshotIterator *SnapshotIterator
 		cdcIterator      *CDCIterator
 		posType          position.IteratorType
+		isFirstStart     bool
 		total            int
 	)
 
@@ -60,6 +61,8 @@ func New(
 
 	if pos == nil {
 		posType = position.TypeSnapshot
+
+		isFirstStart = true
 
 		// Get total count for snapshot.
 		total, err = snowflake.GetTotalCount(ctx, table)
@@ -86,7 +89,8 @@ func New(
 
 	switch posType {
 	case position.TypeSnapshot:
-		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, pos, table, key, columns, limit, total)
+		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, pos, table, key,
+			columns, limit, total, isFirstStart)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %v", err)
 		}
@@ -115,6 +119,7 @@ func setupSnapshotIterator(
 	table, key string,
 	columns []string,
 	limit, total int,
+	isFirstStart bool,
 ) (*SnapshotIterator, error) {
 	var (
 		index      int
@@ -132,7 +137,7 @@ func setupSnapshotIterator(
 		totalCount = p.SnapshotTotal
 	}
 
-	if p.Element != 0 {
+	if !isFirstStart {
 		index = p.Element + 1
 	}
 
