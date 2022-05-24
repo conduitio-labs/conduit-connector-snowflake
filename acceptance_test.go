@@ -24,38 +24,17 @@ import (
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"go.uber.org/goleak"
+
 	"github.com/conduitio/conduit-connector-snowflake/config"
 	"github.com/conduitio/conduit-connector-snowflake/source"
-	"go.uber.org/goleak"
 )
 
 func TestAcceptance(t *testing.T) {
-	username := os.Getenv("SNOWFLAKE_USERNAME")
-	if username == "" {
-		t.Skip("SNOWFLAKE_USERNAME env var must be set")
+	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
+	if connectionURL == "" {
+		t.Skip("SNOWFLAKE_CONNECTION_STRING env var must be set")
 	}
-
-	password := os.Getenv("SNOWFLAKE_PASSWORD")
-	if password == "" {
-		t.Skip("SNOWFLAKE_PASSWORD env var must be set")
-	}
-
-	host := os.Getenv("SNOWFLAKE_HOST")
-	if host == "" {
-		t.Skip("SNOWFLAKE_HOST env var must be set")
-	}
-
-	database := os.Getenv("SNOWFLAKE_DATABASE")
-	if database == "" {
-		t.Skip("SNOWFLAKE_DATABASE env var must be set")
-	}
-
-	schema := os.Getenv("SNOWFLAKE_SCHEMA")
-	if schema == "" {
-		t.Skip("SNOWFLAKE_SCHEMA env var must be set")
-	}
-
-	connectionURL := fmt.Sprintf("%s:%s@%s/%s/%s", username, password, host, database, schema)
 
 	table := setupTestDB(t, connectionURL)
 
@@ -75,12 +54,11 @@ func TestAcceptance(t *testing.T) {
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
 			Skip: []string{
-				// the method requires NewDestination and has unstructured data
+				// the method requires NewDestination.
 				"TestSource_Read*",
-				// the method requires NewDestination
+				// the method requires NewDestination.
 				"TestSource_Open_ResumeAtPositionSnapshot",
-				// the method raises an error "Identified SQL statement is not currently executing".
-				// this error occurs due to a bug in snowflake library.
+				// the method requires NewDestination.
 				"TestSource_Open_ResumeAtPositionCDC",
 			},
 			GoleakOptions: []goleak.Option{
