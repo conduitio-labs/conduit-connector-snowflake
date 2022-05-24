@@ -79,6 +79,9 @@ func TestAcceptance(t *testing.T) {
 				"TestSource_Read*",
 				// the method requires NewDestination
 				"TestSource_Open_ResumeAtPositionSnapshot",
+				// the method raises an error "Identified SQL statement is not currently executing".
+				// this error occurs due to a bug in snowflake library.
+				"TestSource_Open_ResumeAtPositionCDC",
 			},
 			GoleakOptions: []goleak.Option{
 				goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
