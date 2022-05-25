@@ -52,7 +52,7 @@ func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error 
 // Open prepare the plugin to start sending records from the given position.
 func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 	it, err := iterator.New(ctx, s.config.Connection, s.config.Table,
-		s.config.Key, s.config.Columns, s.config.Limit, rp)
+		s.config.Key, s.config.Columns, rp)
 	if err != nil {
 		return fmt.Errorf("create iterator: %v", err)
 	}

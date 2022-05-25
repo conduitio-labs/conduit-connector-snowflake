@@ -59,12 +59,13 @@ func TestSource_Snapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Start first time.
+	// Start first time with nil position.
 	err = s.Open(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Check first read.
 	r, err := s.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +78,7 @@ func TestSource_Snapshot(t *testing.T) {
 		t.Fatal(errors.New("wrong record key"))
 	}
 
+	// Check teardown.
 	err = s.Teardown(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +90,7 @@ func TestSource_Snapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Check read after teardown.
 	r, err = s.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +152,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// CDC case.
+	// Check cdc update.
 	r, err := s.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +162,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(errors.New("wrong action"))
 	}
 
-	// CDC case.
+	// Check cdc delete.
 	r, err = s.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +170,114 @@ func TestSource_CDC(t *testing.T) {
 
 	if r.Metadata["action"] != "delete" {
 		t.Fatal(errors.New("wrong action"))
+	}
+}
+
+func TestSource_Snapshot_Empty_Table(t *testing.T) {
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	ctx := context.Background()
+
+	err = prepareEmptyTable(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start first time with nil position.
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check read from empty table.
+	_, err = s.Read(ctx)
+	if err != sdk.ErrBackoffRetry {
+		t.Fatal(err)
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSource_CDC_Empty_Stream(t *testing.T) {
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	ctx := context.Background()
+
+	err = prepareData(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Snapshot case.
+	_, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Snapshot case.
+	_, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = prepareCDCData(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// CDC case.
+	_, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// CDC case.
+	_, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// CDC read from empty stream.
+	_, err = s.Read(ctx)
+	if err != sdk.ErrBackoffRetry {
+		t.Fatal(err)
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -181,7 +292,6 @@ func prepareConfig() (map[string]string, error) {
 		"connection": connection,
 		"table":      testTable,
 		"columns":    "",
-		"limit":      "100",
 		"key":        "id",
 	}, nil
 }
@@ -205,6 +315,27 @@ func prepareData(ctx context.Context, conn string) error {
 	}
 
 	_, err = db.Exec(fmt.Sprintf(queryInsertSnapshotData, testTable))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func prepareEmptyTable(ctx context.Context, conn string) error {
+	db, err := sql.Open("snowflake", conn)
+	if err != nil {
+		return err
+	}
+
+	defer db.Close()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf(queryCreateTable, testTable))
 	if err != nil {
 		return err
 	}

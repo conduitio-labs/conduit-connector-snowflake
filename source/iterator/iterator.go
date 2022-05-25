@@ -34,7 +34,6 @@ type Iterator struct {
 	table   string
 	columns []string
 	key     string
-	limit   int
 }
 
 // New iterator.
@@ -43,7 +42,6 @@ func New(
 	conn, table,
 	key string,
 	columns []string,
-	limit int,
 	pos sdk.Position,
 ) (*Iterator, error) {
 	var (
@@ -51,7 +49,6 @@ func New(
 		cdcIterator      *CDCIterator
 		posType          position.IteratorType
 		isFirstStart     bool
-		total            int
 	)
 
 	snowflake, err := repository.Create(ctx, conn)
@@ -59,43 +56,42 @@ func New(
 		return nil, fmt.Errorf("create snowflake repository: %v", err)
 	}
 
+	// First start.
 	if pos == nil {
+		// Snapshot iterator starts work first.
 		posType = position.TypeSnapshot
 
 		isFirstStart = true
 
-		// Get total count for snapshot.
-		total, err = snowflake.GetTotalCount(ctx, table)
-		if err != nil {
-			return nil, fmt.Errorf("get total count %v", err)
-		}
-
-		// Prepare stream and tracking table.
+		// Prepare stream for cdc iterator.
 		err = snowflake.CreateStream(ctx, getStreamName(table), table)
 		if err != nil {
 			return nil, fmt.Errorf("create stream: %v", err)
 		}
 
+		// Prepare tracking table for consume stream.
 		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
 		if err != nil {
 			return nil, fmt.Errorf("create tracking table: %v", err)
 		}
 	} else {
-		posType, err = position.GetType(pos)
-		if err != nil {
-			return nil, fmt.Errorf("get position type: %v", err)
+		p, er := position.ParseSDKPosition(pos)
+		if er != nil {
+			return nil, fmt.Errorf("parse sdk position: %v", err)
 		}
+
+		posType = p.IteratorType
 	}
 
 	switch posType {
 	case position.TypeSnapshot:
 		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, pos, table, key,
-			columns, limit, total, isFirstStart)
+			columns, butchSize, isFirstStart)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %v", err)
 		}
 	case position.TypeCDC:
-		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, limit)
+		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, butchSize)
 		if err != nil {
 			return nil, fmt.Errorf("setup cdc iterator: %v", err)
 		}
@@ -108,7 +104,6 @@ func New(
 		columns:          columns,
 		key:              key,
 		pos:              pos,
-		limit:            limit,
 	}, nil
 }
 
@@ -118,12 +113,11 @@ func setupSnapshotIterator(
 	pos sdk.Position,
 	table, key string,
 	columns []string,
-	limit, total int,
+	butchSize int,
 	isFirstStart bool,
 ) (*SnapshotIterator, error) {
 	var (
-		index      int
-		totalCount int
+		index int
 	)
 
 	p, err := position.ParseSDKPosition(pos)
@@ -131,23 +125,17 @@ func setupSnapshotIterator(
 		return nil, fmt.Errorf("parse sdk position: %v", err)
 	}
 
-	if total != 0 {
-		totalCount = total
-	} else {
-		totalCount = p.SnapshotTotal
-	}
-
 	if !isFirstStart {
 		index = p.Element + 1
 	}
 
-	data, err := snowflake.GetData(ctx, table, key, columns, p.Offset, limit)
+	data, err := snowflake.GetData(ctx, table, key, columns, p.Offset, butchSize)
 	if err != nil {
 		return nil, fmt.Errorf("get data: %v", err)
 	}
 
 	return NewSnapshotIterator(snowflake, table,
-		columns, key, index, p.Offset, limit, totalCount, data), nil
+		columns, key, index, p.Offset, butchSize, data), nil
 }
 
 func setupCDCIterator(
@@ -191,10 +179,10 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		}
 
 		// Setup cdc iterator.
-		pos := position.NewPosition(position.TypeCDC, 0, 0, 0)
+		pos := position.NewPosition(position.TypeCDC, 0, 0)
 
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			pos.FormatSDKPosition(), i.table, i.key, i.columns, i.limit)
+			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, butchSize)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %v", err)
 		}

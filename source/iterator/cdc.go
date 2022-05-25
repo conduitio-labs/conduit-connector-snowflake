@@ -34,9 +34,9 @@ type CDCIterator struct {
 	columns []string
 	key     string
 
-	index  int
-	offset int
-	limit  int
+	index     int
+	offset    int
+	butchSize int
 
 	data []map[string]interface{}
 }
@@ -46,9 +46,7 @@ func NewCDCIterator(
 	table string,
 	columns []string,
 	key string,
-	index int,
-	offset int,
-	limit int,
+	index, offset, butchSize int,
 	data []map[string]interface{},
 ) *CDCIterator {
 	return &CDCIterator{
@@ -58,7 +56,7 @@ func NewCDCIterator(
 		key:       key,
 		index:     index,
 		offset:    offset,
-		limit:     limit,
+		butchSize: butchSize,
 		data:      data,
 	}
 }
@@ -82,13 +80,13 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	if c.index >= c.limit {
-		c.offset += c.limit
+	if c.index >= c.butchSize {
+		c.offset += c.butchSize
 		c.index = 0
 	}
 
 	c.data, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
-		getTrackingTable(c.table), c.columns, c.offset, c.limit)
+		getTrackingTable(c.table), c.columns, c.offset, c.butchSize)
 	if err != nil {
 		return false, err
 	}
@@ -107,9 +105,12 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 		err     error
 	)
 
-	pos := position.NewPosition(position.TypeCDC, c.index, c.offset, 0)
+	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
 
-	action := getAction(c.data[c.index])
+	action, err := getAction(c.data[c.index])
+	if err != nil {
+		return sdk.Record{}, fmt.Errorf("get action: %v", err)
+	}
 
 	// remove metadata columns.
 	delete(c.data[c.index], repository.MetadataColumnUpdate)
@@ -131,7 +132,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 	c.index++
 
 	return sdk.Record{
-		Position: pos.FormatSDKPosition(),
+		Position: pos.ConvertToSDKPosition(),
 		Metadata: map[string]string{
 			metadataTable:  c.table,
 			metadataAction: string(action),
@@ -164,25 +165,25 @@ func (c *CDCIterator) Ack(rp sdk.Position) error {
 }
 
 func getStreamName(table string) string {
-	return fmt.Sprintf(nameFormat, Conduit, "stream", table)
+	return fmt.Sprintf(nameFormat, conduit, "stream", table)
 }
 
 func getTrackingTable(table string) string {
-	return fmt.Sprintf(nameFormat, Conduit, "tracking", table)
+	return fmt.Sprintf(nameFormat, conduit, "tracking", table)
 }
 
-func getAction(data map[string]interface{}) actionType {
+func getAction(data map[string]interface{}) (actionType, error) {
 	if data[repository.MetadataColumnAction] == insertValue && data[repository.MetadataColumnUpdate] == false {
-		return actionInsert
+		return actionInsert, nil
 	}
 
 	if data[repository.MetadataColumnAction] == insertValue && data[repository.MetadataColumnUpdate] == true {
-		return actionUpdate
+		return actionUpdate, nil
 	}
 
 	if data[repository.MetadataColumnAction] == deleteValue && data[repository.MetadataColumnUpdate] == false {
-		return actionDelete
+		return actionDelete, nil
 	}
 
-	return ""
+	return "", ErrCantFindActionType
 }
