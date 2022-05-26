@@ -33,7 +33,7 @@ import (
 func TestAcceptance(t *testing.T) {
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
 	if connectionURL == "" {
-		t.Skip("SNOWFLAKE_CONNECTION_STRING env var must be set")
+		t.Skip("SNOWFLAKE_CONNECTION_URL env var must be set")
 	}
 
 	table := setupTestDB(t, connectionURL)
