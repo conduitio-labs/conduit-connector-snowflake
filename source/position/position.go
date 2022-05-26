@@ -15,10 +15,8 @@
 package position
 
 import (
+	"encoding/json"
 	"fmt"
-	"reflect"
-	"strconv"
-	"strings"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -27,94 +25,52 @@ import (
 type IteratorType string
 
 const (
-	indexType = iota
-	indexElement
-	indexOffset
-	indexOffsetTotal
-
 	TypeSnapshot = "s"
 	TypeCDC      = "c"
-
-	posFormat = "%s.%d.%d.%d"
 )
 
 // Position represents Snowflake position.
 type Position struct {
+	// IteratorType - shows in what iterator was created position.
 	IteratorType IteratorType
 
-	Element       int
-	Offset        int
-	SnapshotTotal int
+	// Element - index position in current offset.
+	Element int
+	// Offset - show current offset.
+	Offset int
 }
 
 // NewPosition create position.
-func NewPosition(iteratorType IteratorType, element int, offset int, total int) *Position {
-	return &Position{IteratorType: iteratorType, Element: element, Offset: offset, SnapshotTotal: total}
+func NewPosition(iteratorType IteratorType, element int, offset int) *Position {
+	return &Position{IteratorType: iteratorType, Element: element, Offset: offset}
 }
 
 // ParseSDKPosition parses SDK position and returns Position.
 func ParseSDKPosition(p sdk.Position) (Position, error) {
-	var iteratorType IteratorType
+	var pos Position
 
 	if p == nil {
-		return Position{}, nil
+		return pos, nil
 	}
 
-	parts := strings.Split(string(p), ".")
-
-	if len(parts) != reflect.TypeOf(Position{}).NumField() {
-		return Position{}, fmt.Errorf("the number of position elements must be equal to %d, now it is %d",
-			reflect.TypeOf(Position{}).NumField(), len(parts))
+	err := json.Unmarshal(p, &pos)
+	if err != nil {
+		return pos, err
 	}
 
-	switch parts[indexType] {
+	switch pos.IteratorType {
 	case TypeSnapshot:
-		iteratorType = TypeSnapshot
+		return pos, nil
 	case TypeCDC:
-		iteratorType = TypeCDC
+		return pos, nil
 	default:
-		return Position{}, ErrInvalidType
+		return pos, fmt.Errorf("%v : %s", ErrUnknownIteratorType, pos.IteratorType)
 	}
-
-	element, err := strconv.Atoi(parts[indexElement])
-	if err != nil {
-		return Position{}, ErrFieldInvalidElement
-	}
-
-	offset, err := strconv.Atoi(parts[indexOffset])
-	if err != nil {
-		return Position{}, ErrFieldInvalidOffset
-	}
-
-	total, err := strconv.Atoi(parts[indexOffsetTotal])
-	if err != nil {
-		return Position{}, ErrFieldInvalidOffset
-	}
-
-	return Position{
-		IteratorType:  iteratorType,
-		Element:       element,
-		Offset:        offset,
-		SnapshotTotal: total,
-	}, nil
 }
 
-// FormatSDKPosition formats and returns sdk.Position.
-func (p Position) FormatSDKPosition() sdk.Position {
-	return sdk.Position(fmt.Sprintf(posFormat, p.IteratorType, p.Element, p.Offset, p.SnapshotTotal))
-}
+// ConvertToSDKPosition formats and returns sdk.Position.
+func (p Position) ConvertToSDKPosition() sdk.Position {
+	b, _ := json.Marshal(p)
 
-// GetType get position type.
-func GetType(p sdk.Position) (IteratorType, error) {
-	parts := strings.Split(string(p), ".")
-
-	if parts[0] == TypeSnapshot {
-		return TypeSnapshot, nil
-	}
-
-	if parts[0] == TypeCDC {
-		return TypeCDC, nil
-	}
-
-	return "", ErrInvalidType
+	return b
 }

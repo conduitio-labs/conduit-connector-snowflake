@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/huandu/go-sqlbuilder"
 
@@ -26,6 +27,8 @@ import (
 )
 
 var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
+
+const queryTimeout = 10
 
 // Snowflake repository.
 type Snowflake struct {
@@ -64,7 +67,14 @@ func (s *Snowflake) GetData(
 	fields []string,
 	offset, limit int,
 ) ([]map[string]interface{}, error) {
-	rows, err := s.conn.QueryContext(ctx, buildGetDataQuery(table, key, fields, offset, limit))
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	ctxTime, cancel := context.WithTimeout(context.Background(), queryTimeout*time.Second)
+	defer cancel()
+
+	rows, err := s.conn.QueryContext(ctxTime, buildGetDataQuery(table, key, fields, offset, limit))
 	if err != nil {
 		return nil, fmt.Errorf("run query: %v", err)
 	}
@@ -149,25 +159,6 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 	return err
 }
 
-// GetTotalCount - get total count.
-func (s *Snowflake) GetTotalCount(ctx context.Context, table string) (int, error) {
-	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetTotal, table))
-	if err != nil {
-		return 0, err
-	}
-
-	var total int
-
-	for rows.Next() {
-		err = rows.Scan(&total)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return total, nil
-}
-
 // GetTrackingData get data from tracking table.
 func (s *Snowflake) GetTrackingData(
 	ctx context.Context,
@@ -175,7 +166,14 @@ func (s *Snowflake) GetTrackingData(
 	fields []string,
 	offset, limit int,
 ) ([]map[string]interface{}, error) {
-	tx, err := s.conn.BeginTx(ctx, nil)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	ctxTime, cancel := context.WithTimeout(context.Background(), queryTimeout*time.Second)
+	defer cancel()
+
+	tx, err := s.conn.BeginTx(ctxTime, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +181,12 @@ func (s *Snowflake) GetTrackingData(
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
 	// Consume data.
-	_, err = tx.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
+	_, err = tx.ExecContext(ctxTime, buildConsumeDataQuery(trackingTable, stream, fields))
 	if err != nil {
 		return nil, fmt.Errorf("consume data: %v", err)
 	}
 
-	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
+	rows, err := tx.QueryContext(ctxTime, buildGetTrackingData(trackingTable, fields, offset, limit))
 	if err != nil {
 		return nil, fmt.Errorf("run query: %v", err)
 	}

@@ -15,7 +15,8 @@
 package position
 
 import (
-	"fmt"
+	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -23,6 +24,22 @@ import (
 )
 
 func TestParseSDKPosition(t *testing.T) {
+	snapshotPos := Position{
+		IteratorType: TypeSnapshot,
+		Element:      99,
+		Offset:       103,
+	}
+
+	wrongPosType := Position{
+		IteratorType: "i",
+		Element:      99,
+		Offset:       103,
+	}
+
+	snapshotPosBytes, _ := json.Marshal(snapshotPos)
+
+	wrongPosBytes, _ := json.Marshal(wrongPosType)
+
 	tests := []struct {
 		name        string
 		in          sdk.Position
@@ -31,36 +48,15 @@ func TestParseSDKPosition(t *testing.T) {
 		expectedErr string
 	}{
 		{
-			name: "valid snapshot sdk position",
-			in:   sdk.Position("s.20.1.120"),
-			want: Position{
-				IteratorType:  TypeSnapshot,
-				Element:       20,
-				Offset:        1,
-				SnapshotTotal: 120,
-			},
+			name: "valid position",
+			in:   sdk.Position(snapshotPosBytes),
+			want: snapshotPos,
 		},
 		{
-			name: "valid cdc sdk position",
-			in:   sdk.Position("c.99.103.0"),
-			want: Position{
-				IteratorType: TypeCDC,
-				Element:      99,
-				Offset:       103,
-			},
-		},
-		{
-			name:    "wrong the number of position elements",
-			in:      sdk.Position("s.20"),
-			wantErr: true,
-			expectedErr: fmt.Sprintf("the number of position elements must be equal to %d, now it is 2",
-				reflect.TypeOf(Position{}).NumField()),
-		},
-		{
-			name:        "wrong element IteratorType",
-			in:          sdk.Position("s.test.3.10"),
+			name:        "unknown iterator type",
+			in:          sdk.Position(wrongPosBytes),
 			wantErr:     true,
-			expectedErr: ErrFieldInvalidElement.Error(),
+			expectedErr: errors.New("unknown iterator type : i").Error(),
 		},
 	}
 
@@ -85,43 +81,6 @@ func TestParseSDKPosition(t *testing.T) {
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parse = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFormatSDKPosition(t *testing.T) {
-	tests := []struct {
-		name       string
-		pos        Position
-		wantSDKPos sdk.Position
-	}{
-		{
-			name: "sdk snapshot position",
-			pos: Position{
-				IteratorType:  TypeSnapshot,
-				Element:       20,
-				Offset:        1,
-				SnapshotTotal: 110,
-			},
-			wantSDKPos: sdk.Position("s.20.1.110"),
-		},
-		{
-			name: "sdk cdc position",
-			pos: Position{
-				IteratorType: TypeCDC,
-				Element:      35,
-				Offset:       10,
-			},
-			wantSDKPos: sdk.Position("c.35.10.0"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.pos.FormatSDKPosition()
-			if !reflect.DeepEqual(got, tt.wantSDKPos) {
-				t.Errorf("parse = %v, want %v", got, tt.wantSDKPos)
 			}
 		})
 	}
