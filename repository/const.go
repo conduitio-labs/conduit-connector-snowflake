@@ -27,5 +27,4 @@ const (
 	queryAddBooleanColumn    = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
 	queryInsertInto          = `INSERT INTO %s %s`
 	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
-	queryGetTotal            = `SELECT COUNT(*) as TOTAL FROM %s`
 )

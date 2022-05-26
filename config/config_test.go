@@ -30,51 +30,46 @@ func TestParse(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
+				"connection": "user:password@my_organization-my_account/mydb/public",
 				"table":      "customer",
 				"key":        "id",
-				"limit":      "100",
 			},
 			want: Config{
-				Connection: "user:password@my_organization-my_account/mydb",
+				Connection: "user:password@my_organization-my_account/mydb/public",
 				Table:      "customer",
 				Key:        "ID",
-				Limit:      100,
 			},
 			wantErr:     false,
 			expectedErr: "",
 		},
 		{
-			name: "missing connection",
+			name: "missing connection field",
 			cfg: map[string]string{
 				"table":   "customer",
 				"columns": "",
 				"key":     "id",
-				"limit":   "100",
 			},
 			want:        Config{},
 			wantErr:     true,
 			expectedErr: `"connection" config value must be set`,
 		},
 		{
-			name: "missing table",
+			name: "missing table field",
 			cfg: map[string]string{
 				"connection": "user:password@my_organization-my_account/mydb",
 				"columns":    "",
 				"key":        "id",
-				"limit":      "100",
 			},
 			want:        Config{},
 			wantErr:     true,
 			expectedErr: `"table" config value must be set`,
 		},
 		{
-			name: "missing key",
+			name: "missing key field",
 			cfg: map[string]string{
 				"connection": "user:password@my_organization-my_account/mydb",
 				"table":      "customer",
 				"columns":    "",
-				"limit":      "100",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -95,19 +90,6 @@ func TestParse(t *testing.T) {
 			want:        Config{},
 			wantErr:     true,
 			expectedErr: `"table" config value is too long`,
-		},
-		{
-			name: "wrong limit",
-			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
-				"table":      "customer",
-				"columns":    "",
-				"limit":      "test",
-				"key":        "ID",
-			},
-			want:        Config{},
-			wantErr:     true,
-			expectedErr: `"limit" config value must be int`,
 		},
 	}
 

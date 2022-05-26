@@ -28,7 +28,7 @@ import (
 
 var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
-const queryTimeout = 15
+const queryTimeout = 10
 
 // Snowflake repository.
 type Snowflake struct {
@@ -157,25 +157,6 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 	}
 
 	return err
-}
-
-// GetTotalCount - get total count.
-func (s *Snowflake) GetTotalCount(ctx context.Context, table string) (int, error) {
-	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetTotal, table))
-	if err != nil {
-		return 0, err
-	}
-
-	var total int
-
-	for rows.Next() {
-		err = rows.Scan(&total)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return total, nil
 }
 
 // GetTrackingData get data from tracking table.
