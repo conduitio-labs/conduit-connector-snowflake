@@ -33,10 +33,10 @@ type SnapshotIterator struct {
 	columns []string
 	key     string
 
-	index  int
-	offset int
-	limit  int
-	total  int
+	index     int
+	offset    int
+	butchSize int
+	total     int
 
 	data []map[string]interface{}
 }
@@ -47,7 +47,7 @@ func NewSnapshotIterator(
 	table string,
 	columns []string,
 	key string,
-	index, offset, limit, total int,
+	index, offset, butchSize int,
 	data []map[string]interface{},
 ) *SnapshotIterator {
 	return &SnapshotIterator{
@@ -57,8 +57,7 @@ func NewSnapshotIterator(
 		key:       key,
 		index:     index,
 		offset:    offset,
-		limit:     limit,
-		total:     total,
+		butchSize: butchSize,
 		data:      data,
 	}
 }
@@ -67,25 +66,21 @@ func NewSnapshotIterator(
 func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	var err error
 
-	if i.total == i.index+i.offset {
-		return false, nil
-	}
-
 	if i.index < len(i.data) {
 		return true, nil
 	}
 
-	if i.index >= i.limit {
-		i.offset += i.limit
+	if i.index >= i.butchSize {
+		i.offset += i.butchSize
 		i.index = 0
 	}
 
-	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.limit)
+	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.butchSize)
 	if err != nil {
 		return false, err
 	}
 
-	if len(i.data) == 0 || len(i.data) == i.index {
+	if len(i.data) == 0 || len(i.data) <= i.index {
 		return false, nil
 	}
 
@@ -99,7 +94,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 		err     error
 	)
 
-	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset, i.total)
+	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset)
 
 	payload, err = json.Marshal(i.data[i.index])
 	if err != nil {
@@ -115,7 +110,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 	i.index++
 
 	return sdk.Record{
-		Position: pos.FormatSDKPosition(),
+		Position: pos.ConvertToSDKPosition(),
 		Metadata: map[string]string{
 			metadataTable:  i.table,
 			metadataAction: string(actionInsert),

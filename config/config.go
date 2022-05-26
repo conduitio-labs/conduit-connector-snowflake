@@ -15,8 +15,6 @@
 package config
 
 import (
-	"errors"
-	"strconv"
 	"strings"
 )
 
@@ -25,18 +23,22 @@ const (
 	KeyTable      string = "table"
 	KeyColumns    string = "columns"
 	KeyKey        string = "key"
-	KeyLimit      string = "limit"
-
-	DefaultLimit = 1000
 )
 
 // Config represents configuration needed for Snowflake.
 type Config struct {
+	// Connection string connection to snowflake DB.
+	// Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
 	Connection string `validate:"required"`
-	Table      string `validate:"required,max=255"`
-	Columns    []string
-	Key        string `validate:"required,max=251"`
-	Limit      int    `validate:"gte=1,lte=100000"`
+
+	// Table name.
+	Table string `validate:"required,max=255"`
+
+	// List of columns from table, by default read all columns.
+	Columns []string
+
+	// Key - Column name that records should use for their `Key` fields.
+	Key string `validate:"required,max=251"`
 }
 
 // Parse attempts to parse plugins.Config into a Config struct.
@@ -51,23 +53,15 @@ func Parse(cfg map[string]string) (Config, error) {
 		config.Columns = strings.Split(colsRaw, ",")
 	}
 
-	if cfg[KeyLimit] == "" {
-		config.Limit = DefaultLimit
-
-		return config, config.Validate()
-	}
-
-	limit, err := strconv.Atoi(cfg[KeyLimit])
-	if err != nil {
-		return Config{}, errors.New(`"limit" config value must be int`)
-	}
-
-	config.Limit = limit
-
 	// Columns in snowflake is uppercase.
 	if cfg[KeyKey] != "" {
 		config.Key = strings.ToUpper(config.Key)
 	}
 
-	return config, config.Validate()
+	err := config.Validate()
+	if err != nil {
+		return Config{}, err
+	}
+
+	return config, nil
 }

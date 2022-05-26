@@ -27,6 +27,5 @@ type Repository interface {
 		offset, limit int,
 	) ([]map[string]interface{}, error)
 	CreateTrackingTable(ctx context.Context, trackingTable, table string) error
-	GetTotalCount(ctx context.Context, table string) (int, error)
 	Close() error
 }

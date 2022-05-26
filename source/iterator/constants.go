@@ -17,7 +17,9 @@ package iterator
 type actionType string
 
 const (
-	Conduit = "conduit"
+	conduit = "conduit"
+
+	butchSize = 1000
 
 	insertValue = "INSERT"
 	deleteValue = "DELETE"
