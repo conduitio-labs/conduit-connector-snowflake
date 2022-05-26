@@ -86,12 +86,12 @@ func New(
 	switch posType {
 	case position.TypeSnapshot:
 		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, pos, table, key,
-			columns, butchSize, isFirstStart)
+			columns, batchSize, isFirstStart)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %v", err)
 		}
 	case position.TypeCDC:
-		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, butchSize)
+		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, batchSize)
 		if err != nil {
 			return nil, fmt.Errorf("setup cdc iterator: %v", err)
 		}
@@ -182,7 +182,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		pos := position.NewPosition(position.TypeCDC, 0, 0)
 
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, butchSize)
+			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, batchSize)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %v", err)
 		}
