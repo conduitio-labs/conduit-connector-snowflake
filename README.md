@@ -42,7 +42,7 @@ check if is record with the position was recorded. The `Teardown` do gracefully 
 
 #### Snapshot Iterator
  
-The snapshot iterator starts get data from table using select query with limit and offset. Butch size is 1000,
+The snapshot iterator starts get data from table using select query with limit and offset. Batch size is 1000,
 offset value is zero for first time. Iterator save information from table to `data` slice variable.
 Iterator `HasNext` method check if next element exist in `data` using variable `index` and if it is needed
 change offset and run select query to get new data with new offset. Method `Next` gets next element and converts 
@@ -57,7 +57,7 @@ config, <b>creates</b> table for consuming stream with name `conduit_tracking_{t
 This consuming table has the same schema as `table`  with additional metadata columns:
 `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID`, `METADATA$TS`. Then iterator consume
 data from stream using insert query to consuming table. Iterator run select query for get data
-from consuming table using limit and offset and ordering by `METADATA$TS`. Butch size is 1000, offset value is zero for first time.
+from consuming table using limit and offset and ordering by `METADATA$TS`. Batch size is 1000, offset value is zero for first time.
 Iterator save information from table to 
 `data` slice variable. Iterator `HasNext` method check if next element exist in `data` using variable
 `index` and if it is needed change offset and run select query to get new data with new offset.
