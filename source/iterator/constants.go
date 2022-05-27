@@ -19,7 +19,7 @@ type actionType string
 const (
 	conduit = "conduit"
 
-	butchSize = 1000
+	batchSize = 1000
 
 	insertValue = "INSERT"
 	deleteValue = "DELETE"
