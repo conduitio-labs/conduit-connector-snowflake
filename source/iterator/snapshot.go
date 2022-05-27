@@ -98,7 +98,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	payload, err = json.Marshal(i.data[i.index])
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("marshal error : %v", err)
+		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
 	}
 
 	if _, ok := i.data[i.index][i.key]; !ok {
@@ -132,11 +132,12 @@ func (i *SnapshotIterator) Stop() error {
 func (i *SnapshotIterator) Ack(rp sdk.Position) error {
 	p, err := position.ParseSDKPosition(rp)
 	if err != nil {
-		return fmt.Errorf("parse sdk position: %v", err)
+		return fmt.Errorf("parse sdk position: %w", err)
 	}
 
 	if p.Offset > i.offset || (p.Offset == i.offset && p.Element > i.index) {
-		return fmt.Errorf("record was not recorded: element %d, offset %d", p.Element, p.Offset)
+		return fmt.Errorf("record with this postiton was not recorded: "+
+			"element %d, offset %d", p.Element, p.Offset)
 	}
 
 	return nil

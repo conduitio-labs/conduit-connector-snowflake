@@ -53,7 +53,7 @@ func New(
 
 	snowflake, err := repository.Create(ctx, conn)
 	if err != nil {
-		return nil, fmt.Errorf("create snowflake repository: %v", err)
+		return nil, fmt.Errorf("create snowflake repository: %w", err)
 	}
 
 	// First start.
@@ -66,18 +66,18 @@ func New(
 		// Prepare stream for cdc iterator.
 		err = snowflake.CreateStream(ctx, getStreamName(table), table)
 		if err != nil {
-			return nil, fmt.Errorf("create stream: %v", err)
+			return nil, fmt.Errorf("create stream: %w", err)
 		}
 
 		// Prepare tracking table for consume stream.
 		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
 		if err != nil {
-			return nil, fmt.Errorf("create tracking table: %v", err)
+			return nil, fmt.Errorf("create tracking table: %w", err)
 		}
 	} else {
 		p, er := position.ParseSDKPosition(pos)
 		if er != nil {
-			return nil, fmt.Errorf("parse sdk position: %v", err)
+			return nil, fmt.Errorf("parse sdk position: %w", err)
 		}
 
 		posType = p.IteratorType
@@ -88,12 +88,12 @@ func New(
 		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, pos, table, key,
 			columns, batchSize, isFirstStart)
 		if err != nil {
-			return nil, fmt.Errorf("setup snapshot iterator: %v", err)
+			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
 	case position.TypeCDC:
 		cdcIterator, err = setupCDCIterator(ctx, snowflake, pos, table, key, columns, batchSize)
 		if err != nil {
-			return nil, fmt.Errorf("setup cdc iterator: %v", err)
+			return nil, fmt.Errorf("setup cdc iterator: %w", err)
 		}
 	}
 
@@ -122,7 +122,7 @@ func setupSnapshotIterator(
 
 	p, err := position.ParseSDKPosition(pos)
 	if err != nil {
-		return nil, fmt.Errorf("parse sdk position: %v", err)
+		return nil, fmt.Errorf("parse sdk position: %w", err)
 	}
 
 	if !isFirstStart {
@@ -131,7 +131,7 @@ func setupSnapshotIterator(
 
 	data, err := snowflake.GetData(ctx, table, key, columns, p.Offset, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("get data: %v", err)
+		return nil, fmt.Errorf("get data: %w", err)
 	}
 
 	return NewSnapshotIterator(snowflake, table,
@@ -150,7 +150,7 @@ func setupCDCIterator(
 
 	p, err := position.ParseSDKPosition(pos)
 	if err != nil {
-		return nil, fmt.Errorf("parse sdk position: %v", err)
+		return nil, fmt.Errorf("parse sdk position: %w", err)
 	}
 
 	if p.Element != 0 {
@@ -160,7 +160,7 @@ func setupCDCIterator(
 	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns,
 		p.Offset, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("get stream data: %v", err)
+		return nil, fmt.Errorf("get stream data: %w", err)
 	}
 
 	return NewCDCIterator(snowflake, table,
@@ -172,7 +172,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.snapshotIterator != nil {
 		hasNext, err := i.snapshotIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("snapshot iterator has next: %v", err)
+			return false, fmt.Errorf("snapshot iterator has next: %w", err)
 		}
 
 		if hasNext {
@@ -185,7 +185,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
 			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, batchSize)
 		if err != nil {
-			return false, fmt.Errorf("setup cdc iterator: %v", err)
+			return false, fmt.Errorf("setup cdc iterator: %w", err)
 		}
 
 		i.cdcIterator = cdcIterator
@@ -193,7 +193,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 		hasNext, err = i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("cdc iterator has next: %v", err)
+			return false, fmt.Errorf("cdc iterator has next: %w", err)
 		}
 
 		return hasNext, nil
@@ -202,7 +202,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.cdcIterator != nil {
 		hasNext, err := i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, fmt.Errorf("cdc iterator has next: %v", err)
+			return false, fmt.Errorf("cdc iterator has next: %w", err)
 		}
 
 		return hasNext, nil

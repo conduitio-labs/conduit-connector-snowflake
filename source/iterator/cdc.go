@@ -109,7 +109,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	action, err := getAction(c.data[c.index])
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("get action: %v", err)
+		return sdk.Record{}, fmt.Errorf("get action: %w", err)
 	}
 
 	// remove metadata columns.
@@ -120,7 +120,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	payload, err = json.Marshal(c.data[c.index])
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("marshal error : %v", err)
+		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
 	}
 
 	if _, ok := c.data[c.index][c.key]; !ok {
@@ -154,7 +154,7 @@ func (c *CDCIterator) Stop() error {
 func (c *CDCIterator) Ack(rp sdk.Position) error {
 	p, err := position.ParseSDKPosition(rp)
 	if err != nil {
-		return fmt.Errorf("parse sdk position: %v", err)
+		return fmt.Errorf("parse sdk position: %w", err)
 	}
 
 	if p.Offset > c.offset || (p.Offset == c.offset && p.Element > c.index) {
