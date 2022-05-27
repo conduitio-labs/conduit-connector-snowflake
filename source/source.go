@@ -54,7 +54,7 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 	it, err := iterator.New(ctx, s.config.Connection, s.config.Table,
 		s.config.Key, s.config.Columns, rp)
 	if err != nil {
-		return fmt.Errorf("create iterator: %v", err)
+		return fmt.Errorf("create iterator: %w", err)
 	}
 
 	s.iterator = it
@@ -66,7 +66,7 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 	hasNext, err := s.iterator.HasNext(ctx)
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("has next: %v", err)
+		return sdk.Record{}, fmt.Errorf("has next: %w", err)
 	}
 
 	if !hasNext {
@@ -75,7 +75,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 
 	r, err := s.iterator.Next(ctx)
 	if err != nil {
-		return sdk.Record{}, err
+		return sdk.Record{}, fmt.Errorf("next: %w", err)
 	}
 
 	return r, nil

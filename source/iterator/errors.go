@@ -20,7 +20,6 @@ import (
 
 var (
 	ErrKeyIsNotExist      = errors.New("key is not exist")
-	ErrUnknownActionType  = errors.New("unknown action type")
 	ErrCantFindActionType = errors.New("can't find action type")
 	ErrInvalidSetup       = errors.New("invalid setup")
 )

@@ -64,7 +64,7 @@ func ParseSDKPosition(p sdk.Position) (Position, error) {
 	case TypeCDC:
 		return pos, nil
 	default:
-		return pos, fmt.Errorf("%v : %s", ErrUnknownIteratorType, pos.IteratorType)
+		return pos, fmt.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
 	}
 }
 
