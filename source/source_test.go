@@ -41,16 +41,16 @@ func TestSource_Configure(t *testing.T) {
 			cfg: map[string]string{
 				"connection": "user:password@my_organization-my_account/mydb",
 				"table":      "customer",
-				"key":        "id",
+				"primaryKey": "id",
 			},
 			expectedErr: nil,
 		},
 		{
 			name: "missing connection",
 			cfg: map[string]string{
-				"table":   "customer",
-				"columns": "",
-				"key":     "id",
+				"table":      "customer",
+				"columns":    "",
+				"primaryKey": "id",
 			},
 			expectedErr: errors.New(`"connection" config value must be set`),
 		},

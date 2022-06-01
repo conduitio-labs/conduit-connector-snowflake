@@ -35,7 +35,7 @@ type SnapshotIterator struct {
 
 	index     int
 	offset    int
-	butchSize int
+	batchSize int
 	total     int
 
 	data []map[string]interface{}
@@ -47,7 +47,7 @@ func NewSnapshotIterator(
 	table string,
 	columns []string,
 	key string,
-	index, offset, butchSize int,
+	index, offset, batchSize int,
 	data []map[string]interface{},
 ) *SnapshotIterator {
 	return &SnapshotIterator{
@@ -57,7 +57,7 @@ func NewSnapshotIterator(
 		key:       key,
 		index:     index,
 		offset:    offset,
-		butchSize: butchSize,
+		batchSize: batchSize,
 		data:      data,
 	}
 }
@@ -70,12 +70,12 @@ func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	if i.index >= i.butchSize {
-		i.offset += i.butchSize
+	if i.index >= i.batchSize {
+		i.offset += i.batchSize
 		i.index = 0
 	}
 
-	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.butchSize)
+	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.batchSize)
 	if err != nil {
 		return false, err
 	}

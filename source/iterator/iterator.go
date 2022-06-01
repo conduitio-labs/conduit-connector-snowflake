@@ -42,6 +42,7 @@ func New(
 	conn, table,
 	key string,
 	columns []string,
+	batchSize int,
 	pos sdk.Position,
 ) (*Iterator, error) {
 	var (
@@ -183,7 +184,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		pos := position.NewPosition(position.TypeCDC, 0, 0)
 
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, batchSize)
+			pos.ConvertToSDKPosition(), i.table, i.key, i.columns, i.snapshotIterator.batchSize)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %w", err)
 		}

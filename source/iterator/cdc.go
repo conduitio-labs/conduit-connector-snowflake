@@ -36,7 +36,7 @@ type CDCIterator struct {
 
 	index     int
 	offset    int
-	butchSize int
+	batchSize int
 
 	data []map[string]interface{}
 }
@@ -56,7 +56,7 @@ func NewCDCIterator(
 		key:       key,
 		index:     index,
 		offset:    offset,
-		butchSize: butchSize,
+		batchSize: butchSize,
 		data:      data,
 	}
 }
@@ -80,13 +80,13 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	if c.index >= c.butchSize {
-		c.offset += c.butchSize
+	if c.index >= c.batchSize {
+		c.offset += c.batchSize
 		c.index = 0
 	}
 
 	c.data, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
-		getTrackingTable(c.table), c.columns, c.offset, c.butchSize)
+		getTrackingTable(c.table), c.columns, c.offset, c.batchSize)
 	if err != nil {
 		return false, err
 	}
