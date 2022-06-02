@@ -27,6 +27,8 @@ func Specification() sdk.Specification {
 	return sdk.Specification{
 		Name:    "snowflake",
 		Summary: "An Snowflake source plugin for Conduit, written in Go.",
+		Description: "The Snowflake connector is one of Conduit plugins." +
+			"It provides the source snowflake connector.",
 		Version: "v0.1.0",
 		Author:  "Meroxa, Inc.",
 		SourceParams: map[string]sdk.Parameter{
