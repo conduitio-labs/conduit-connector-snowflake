@@ -28,17 +28,25 @@ import (
 
 // CDCIterator to iterate snowflake objects.
 type CDCIterator struct {
+	// repository for run queries to snowflake.
 	snowflake Repository
 
-	table   string
+	// table - table in snowflake for getting currentBatch.
+	table string
+	// columns list of table columns for record payload
+	// if empty - will get all columns.
 	columns []string
-	key     string
+	// Name of column what iterator use for setting key in record.
+	key string
 
-	index     int
-	offset    int
+	// index - current index of element in current batch which iterator converts to record
+	index int
+	// offset - current offset, show what batch iterator uses, using in query to get currentBatch.
+	offset int
+	// batchSize size of batch.
 	batchSize int
-
-	data []map[string]interface{}
+	// currentBatch - rows in current batch from tracking table.
+	currentBatch []map[string]interface{}
 }
 
 func NewCDCIterator(
@@ -47,17 +55,17 @@ func NewCDCIterator(
 	columns []string,
 	key string,
 	index, offset, butchSize int,
-	data []map[string]interface{},
+	currentBatch []map[string]interface{},
 ) *CDCIterator {
 	return &CDCIterator{
-		snowflake: snowflake,
-		table:     table,
-		columns:   columns,
-		key:       key,
-		index:     index,
-		offset:    offset,
-		batchSize: butchSize,
-		data:      data,
+		snowflake:    snowflake,
+		table:        table,
+		columns:      columns,
+		key:          key,
+		index:        index,
+		offset:       offset,
+		batchSize:    butchSize,
+		currentBatch: currentBatch,
 	}
 }
 
@@ -69,14 +77,14 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 	// 1) where metadata actionType = delete and metadata update = true, this is deleting.
 	// 2) where metadata actionType = insertValue and update = true, this is exactly updating.
 	// Skip first part and work only with second to avoid duplicate info.
-	if c.index < len(c.data) && c.data[c.index][repository.MetadataColumnAction] == deleteValue &&
-		c.data[c.index][repository.MetadataColumnUpdate] == true {
+	if c.index < len(c.currentBatch) && c.currentBatch[c.index][repository.MetadataColumnAction] == deleteValue &&
+		c.currentBatch[c.index][repository.MetadataColumnUpdate] == true {
 		c.index++
 
 		return c.HasNext(ctx)
 	}
 
-	if c.index < len(c.data) {
+	if c.index < len(c.currentBatch) {
 		return true, nil
 	}
 
@@ -85,13 +93,13 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 		c.index = 0
 	}
 
-	c.data, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
+	c.currentBatch, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
 		getTrackingTable(c.table), c.columns, c.offset, c.batchSize)
 	if err != nil {
 		return false, err
 	}
 
-	if len(c.data) == 0 || len(c.data) == c.index {
+	if len(c.currentBatch) == 0 || len(c.currentBatch) == c.index {
 		return false, nil
 	}
 
@@ -107,27 +115,27 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
 
-	action, err := getAction(c.data[c.index])
+	action, err := getAction(c.currentBatch[c.index])
 	if err != nil {
 		return sdk.Record{}, fmt.Errorf("get action: %w", err)
 	}
 
 	// remove metadata columns.
-	delete(c.data[c.index], repository.MetadataColumnUpdate)
-	delete(c.data[c.index], repository.MetadataColumnAction)
-	delete(c.data[c.index], repository.MetadataColumnRow)
-	delete(c.data[c.index], repository.MetadataColumnTime)
+	delete(c.currentBatch[c.index], repository.MetadataColumnUpdate)
+	delete(c.currentBatch[c.index], repository.MetadataColumnAction)
+	delete(c.currentBatch[c.index], repository.MetadataColumnRow)
+	delete(c.currentBatch[c.index], repository.MetadataColumnTime)
 
-	payload, err = json.Marshal(c.data[c.index])
+	payload, err = json.Marshal(c.currentBatch[c.index])
 	if err != nil {
 		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
 	}
 
-	if _, ok := c.data[c.index][c.key]; !ok {
+	if _, ok := c.currentBatch[c.index][c.key]; !ok {
 		return sdk.Record{}, ErrKeyIsNotExist
 	}
 
-	key := c.data[c.index][c.key]
+	key := c.currentBatch[c.index][c.key]
 
 	c.index++
 
@@ -157,8 +165,8 @@ func (c *CDCIterator) Ack(rp sdk.Position) error {
 		return fmt.Errorf("parse sdk position: %w", err)
 	}
 
-	if p.Offset > c.offset || (p.Offset == c.offset && p.Element > c.index) {
-		return fmt.Errorf("record was not recorded: element %d, offset %d", p.Element, p.Offset)
+	if p.BatchID > c.offset || (p.BatchID == c.offset && p.IndexInBatch > c.index) {
+		return fmt.Errorf("record was not recorded: element %d, offset %d", p.IndexInBatch, p.BatchID)
 	}
 
 	return nil

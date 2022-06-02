@@ -26,14 +26,14 @@ import (
 func TestParseSDKPosition(t *testing.T) {
 	snapshotPos := Position{
 		IteratorType: TypeSnapshot,
-		Element:      99,
-		Offset:       103,
+		IndexInBatch: 99,
+		BatchID:      103,
 	}
 
 	wrongPosType := Position{
 		IteratorType: "i",
-		Element:      99,
-		Offset:       103,
+		IndexInBatch: 99,
+		BatchID:      103,
 	}
 
 	snapshotPosBytes, _ := json.Marshal(snapshotPos)

@@ -20,12 +20,17 @@ import (
 
 // Repository interface.
 type Repository interface {
+	// GetData - get rows from table.
 	GetData(ctx context.Context, table, key string, fields []string,
 		offset, limit int) ([]map[string]interface{}, error)
+	// CreateStream - create stream.
 	CreateStream(ctx context.Context, stream, table string) error
+	// GetTrackingData - get rows from tracking table.
 	GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string,
 		offset, limit int,
 	) ([]map[string]interface{}, error)
+	// CreateTrackingTable - create tracking table
 	CreateTrackingTable(ctx context.Context, trackingTable, table string) error
+	// Close - shutdown repository.
 	Close() error
 }

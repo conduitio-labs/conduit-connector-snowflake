@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+
+	"github.com/conduitio/conduit-connector-snowflake/config"
 )
 
 const (
@@ -289,10 +291,10 @@ func prepareConfig() (map[string]string, error) {
 	}
 
 	return map[string]string{
-		"connection": connection,
-		"table":      testTable,
-		"columns":    "",
-		"key":        "id",
+		config.KeyConnection: connection,
+		config.KeyTable:      testTable,
+		config.KeyColumns:    "",
+		config.KeyPrimaryKey: "id",
 	}, nil
 }
 
