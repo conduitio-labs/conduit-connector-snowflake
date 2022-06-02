@@ -72,6 +72,8 @@ github.com/conduitio/conduit-connector-protocol v0.2.0 h1:gwYXVKEMgTtU67ephQ5WwT
 github.com/conduitio/conduit-connector-protocol v0.2.0/go.mod h1:udCU2AkLcYQoLjAO06tHVL2iFJPw+DamK+wllnj50hk=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf h1:ha3MHAecTrQQ3F7GW2qLDVkmCiCNWmNNuulBzb3cVyI=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
+github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b h1:KULsrkk4m0CXWDrkgOBHUaXKQl/eSYVqCNtPTHmV6Ws=
+github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
