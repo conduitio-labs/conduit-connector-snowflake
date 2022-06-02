@@ -28,16 +28,24 @@ import (
 
 // CDCIterator to iterate snowflake objects.
 type CDCIterator struct {
+	// repository for run queries to snowflake.
 	snowflake Repository
 
-	table   string
+	// table - table in snowflake for getting data.
+	table string
+	// columns list of table columns for record payload
+	// if empty - will get all columns.
 	columns []string
-	key     string
+	// Name of column what iterator use for setting key in record.
+	key string
 
-	index     int
-	offset    int
+	// index - current index of element in current batch which iterator converts to record
+	index int
+	// offset - current offset, show what batch iterator uses, using in query to get data.
+	offset int
+	// batchSize size of batch.
 	batchSize int
-
+	// data - rows in current batch from tracking table.
 	data []map[string]interface{}
 }
 
@@ -157,8 +165,8 @@ func (c *CDCIterator) Ack(rp sdk.Position) error {
 		return fmt.Errorf("parse sdk position: %w", err)
 	}
 
-	if p.Offset > c.offset || (p.Offset == c.offset && p.Element > c.index) {
-		return fmt.Errorf("record was not recorded: element %d, offset %d", p.Element, p.Offset)
+	if p.BatchID > c.offset || (p.BatchID == c.offset && p.IndexInBatch > c.index) {
+		return fmt.Errorf("record was not recorded: element %d, offset %d", p.IndexInBatch, p.BatchID)
 	}
 
 	return nil
