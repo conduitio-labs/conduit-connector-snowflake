@@ -173,11 +173,11 @@ func (c *CDCIterator) Ack(rp sdk.Position) error {
 }
 
 func getStreamName(table string) string {
-	return fmt.Sprintf(nameFormat, conduit, "stream", table)
+	return fmt.Sprintf(nameFormat, Conduit, "stream", table)
 }
 
 func getTrackingTable(table string) string {
-	return fmt.Sprintf(nameFormat, conduit, "tracking", table)
+	return fmt.Sprintf(nameFormat, Conduit, "tracking", table)
 }
 
 func getAction(data map[string]interface{}) (actionType, error) {

@@ -237,7 +237,7 @@ func buildGetDataQuery(table, key string, fields []string, offset, limit int) st
 	}
 
 	sb.From(table)
-	sb.OrderBy(key)
+	//sb.OrderBy(key)
 	sb.Offset(offset)
 	sb.Limit(limit)
 

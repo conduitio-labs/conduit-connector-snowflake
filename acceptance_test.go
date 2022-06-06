@@ -17,18 +17,76 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/google/uuid"
+	builder "github.com/huandu/go-sqlbuilder"
 	"go.uber.org/goleak"
 
 	"github.com/conduitio/conduit-connector-snowflake/config"
 	"github.com/conduitio/conduit-connector-snowflake/source"
+	"github.com/conduitio/conduit-connector-snowflake/source/iterator"
 )
+
+type ConfigurableAcceptanceTestDriver struct {
+	sdk.ConfigurableAcceptanceTestDriver
+}
+
+func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
+	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
+
+	db, err := sql.Open("snowflake", connectionURL)
+	if err != nil {
+		t.Errorf("open db: %v", err)
+	}
+
+	err = db.PingContext(context.Background())
+	if err != nil {
+		t.Errorf("ping db: %v", err)
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Errorf("create conn: %v", err)
+	}
+
+	defer conn.Close()
+
+	for _, r := range records {
+		er := writeRecord(conn, r, d.Config.SourceConfig["table"])
+		if er != nil {
+			t.Errorf("write to snowflake %s", err)
+		}
+	}
+
+	return records
+}
+
+func (d ConfigurableAcceptanceTestDriver) GenerateRecord(_ *testing.T) sdk.Record {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	id := fmt.Sprintf("%d", r.Intn(1000))
+	m := map[string]any{"ID": id}
+
+	b, _ := json.Marshal(m)
+
+	return sdk.Record{
+		Position:  sdk.Position(uuid.New().String()),
+		Metadata:  nil,
+		CreatedAt: time.Now(),
+		Key: sdk.StructuredData{
+			d.Config.SourceConfig["primaryKey"]: id,
+		},
+		Payload: sdk.RawData(b),
+	}
+}
 
 func TestAcceptance(t *testing.T) {
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
@@ -41,10 +99,10 @@ func TestAcceptance(t *testing.T) {
 	cfg := map[string]string{
 		config.KeyConnection: connectionURL,
 		config.KeyTable:      table,
-		config.KeyKey:        "id",
+		config.KeyPrimaryKey: "ID",
 	}
 
-	sdk.AcceptanceTest(t, sdk.ConfigurableAcceptanceTestDriver{
+	sdk.AcceptanceTest(t, ConfigurableAcceptanceTestDriver{sdk.ConfigurableAcceptanceTestDriver{
 		Config: sdk.ConfigurableAcceptanceTestDriverConfig{
 			Connector: sdk.Connector{
 				NewSpecification: Specification,
@@ -53,14 +111,6 @@ func TestAcceptance(t *testing.T) {
 			},
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
-			Skip: []string{
-				// the method requires NewDestination.
-				"TestSource_Read*",
-				// the method requires NewDestination.
-				"TestSource_Open_ResumeAtPositionSnapshot",
-				// the method requires NewDestination.
-				"TestSource_Open_ResumeAtPositionCDC",
-			},
 			GoleakOptions: []goleak.Option{
 				goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
 				goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
@@ -70,7 +120,7 @@ func TestAcceptance(t *testing.T) {
 				t.Logf("testing on table %s", table)
 			},
 		},
-	},
+	}},
 	)
 }
 
@@ -92,7 +142,7 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 
 	tableName := randomIdentifier(t)
 
-	createQuery := fmt.Sprintf("create or replace table %s (id int, name text);", tableName)
+	createQuery := fmt.Sprintf("create or replace table %s (id string);", tableName)
 
 	_, err = conn.ExecContext(context.Background(), createQuery)
 	if err != nil {
@@ -105,6 +155,14 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 		if err != nil {
 			t.Errorf("drop test table: %v", err)
 		}
+
+		trackingTable := fmt.Sprintf("%s_tracking_%s", iterator.Conduit, tableName)
+
+		dropTrackingTable := fmt.Sprintf("drop table %s;", trackingTable)
+		_, err = conn.ExecContext(context.Background(), dropTrackingTable)
+		if err != nil {
+			t.Errorf("drop test table: %v", err)
+		}
 	})
 
 	return tableName
@@ -114,4 +172,66 @@ func randomIdentifier(t *testing.T) string {
 	return fmt.Sprintf("conduit_%v_%d",
 		strings.ReplaceAll(strings.ToLower(t.Name()), "/", "_"),
 		time.Now().UnixMicro()%1000)
+}
+
+func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
+	payload, err := structurizeData(r.Payload)
+	if err != nil {
+		return fmt.Errorf("structurize data")
+	}
+
+	cols, vals := extractColumnsAndValues(payload)
+
+	sqlbuilder := builder.NewInsertBuilder()
+	sqlbuilder.InsertInto(table)
+	sqlbuilder.Cols(cols...)
+	sqlbuilder.Values(vals...)
+	q, arg := sqlbuilder.Build()
+
+	_, err = conn.ExecContext(context.Background(), q, arg...)
+	return err
+}
+
+func extractColumnsAndValues(payload sdk.StructuredData) ([]string, []any) {
+	var (
+		colArgs []string
+		valArgs []any
+	)
+
+	for field, value := range payload {
+		colArgs = append(colArgs, field)
+		valArgs = append(valArgs, value)
+	}
+
+	return colArgs, valArgs
+}
+
+func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
+	if data == nil || len(data.Bytes()) == 0 {
+		return nil, nil
+	}
+
+	structuredData := make(sdk.StructuredData)
+	err := json.Unmarshal(data.Bytes(), &structuredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal data into structured data: %w", err)
+	}
+
+	structuredDataUpper := make(sdk.StructuredData)
+	for key, value := range structuredData {
+		if parsedValue, ok := value.(map[string]any); ok {
+			valueJSON, err := json.Marshal(parsedValue)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal map into json: %w", err)
+			}
+
+			structuredDataUpper[strings.ToUpper(key)] = string(valueJSON)
+
+			continue
+		}
+
+		structuredDataUpper[strings.ToUpper(key)] = value
+	}
+
+	return structuredDataUpper, nil
 }
