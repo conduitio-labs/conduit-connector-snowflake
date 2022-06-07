@@ -70,8 +70,6 @@ github.com/cncf/xds/go v0.0.0-20210922020428-25de7278fc84/go.mod h1:eXthEFrGJvWH
 github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/conduitio/conduit-connector-protocol v0.2.0 h1:gwYXVKEMgTtU67ephQ5WwTGIDbT/eTLA9Mdr9Bnbqxc=
 github.com/conduitio/conduit-connector-protocol v0.2.0/go.mod h1:udCU2AkLcYQoLjAO06tHVL2iFJPw+DamK+wllnj50hk=
-github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf h1:ha3MHAecTrQQ3F7GW2qLDVkmCiCNWmNNuulBzb3cVyI=
-github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b h1:KULsrkk4m0CXWDrkgOBHUaXKQl/eSYVqCNtPTHmV6Ws=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=

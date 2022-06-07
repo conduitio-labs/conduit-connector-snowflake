@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -35,10 +34,12 @@ import (
 	"github.com/conduitio/conduit-connector-snowflake/source/iterator"
 )
 
+// ConfigurableAcceptanceTestDriver driver for test.
 type ConfigurableAcceptanceTestDriver struct {
 	sdk.ConfigurableAcceptanceTestDriver
 }
 
+// WriteToSource - write data to table.
 func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
 
@@ -60,7 +61,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 	defer conn.Close()
 
 	for _, r := range records {
-		er := writeRecord(conn, r, d.Config.SourceConfig["table"])
+		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable])
 		if er != nil {
 			t.Errorf("write to snowflake %s", err)
 		}
@@ -69,10 +70,9 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 	return records
 }
 
+// GenerateRecord generate record for snowflake account.
 func (d ConfigurableAcceptanceTestDriver) GenerateRecord(_ *testing.T) sdk.Record {
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	id := fmt.Sprintf("%d", r.Intn(1000))
+	id := uuid.New().String()
 	m := map[string]any{"ID": id}
 
 	b, _ := json.Marshal(m)
@@ -82,7 +82,7 @@ func (d ConfigurableAcceptanceTestDriver) GenerateRecord(_ *testing.T) sdk.Recor
 		Metadata:  nil,
 		CreatedAt: time.Now(),
 		Key: sdk.StructuredData{
-			d.Config.SourceConfig["primaryKey"]: id,
+			d.Config.SourceConfig[config.KeyPrimaryKey]: id,
 		},
 		Payload: sdk.RawData(b),
 	}
@@ -117,7 +117,7 @@ func TestAcceptance(t *testing.T) {
 				goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
 			},
 			BeforeTest: func(t *testing.T) {
-				t.Logf("testing on table %s", table)
+				clearTable(t, cfg[config.KeyTable])
 			},
 		},
 	}},
@@ -161,7 +161,7 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 		dropTrackingTable := fmt.Sprintf("drop table %s;", trackingTable)
 		_, err = conn.ExecContext(context.Background(), dropTrackingTable)
 		if err != nil {
-			t.Errorf("drop test table: %v", err)
+			t.Errorf("drop tracking table: %v", err)
 		}
 	})
 
@@ -234,4 +234,31 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 	}
 
 	return structuredDataUpper, nil
+}
+
+func clearTable(t *testing.T, table string) {
+	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
+
+	db, err := sql.Open("snowflake", connectionURL)
+	if err != nil {
+		t.Errorf("open db: %v", err)
+	}
+
+	err = db.PingContext(context.Background())
+	if err != nil {
+		t.Errorf("ping db: %v", err)
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Errorf("create conn: %v", err)
+	}
+
+	defer conn.Close()
+
+	_, err = conn.ExecContext(context.Background(), fmt.Sprintf("TRUNCATE TABLE %s", table))
+	if err != nil {
+		t.Errorf("trucate table: %v", err)
+	}
+
 }
