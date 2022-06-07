@@ -43,7 +43,7 @@ checks if the record with the position was recorded. The `Teardown` do gracefull
 #### Snapshot Iterator
 
 The snapshot iterator starts getting data from the table using select query with limit and offset.
-Batch size is configurable, offset value is zero for first time. Iterator save information from table
+Batch size is configurable, offset value is zero for first time. Iterator save rows from table
 to `currentBatch` slice variable.
 
 Iterator `HasNext` method check if next element exist in `currentBatch` using variable `index`
@@ -56,6 +56,21 @@ in current batch, this last element what was recorded, `Offset` - shows the last
 getting data query. Iterator runs query to get data from table with `batchSize` and `offset` which was got from
 position. `index` value will be `Element` increased by one, because iterator tries to find next element in current batch.
 If `index` > `batchSize` iterator will change `offset` to next and set `index` zero.
+
+For example, we get snapshot position in `Open` function:
+
+```json
+{
+ "Type" : "s",
+ "IndexInBatch": 2,
+ "BatchID": 10
+}
+```
+
+Last recorded position has `BatchID` = 10, it is means iterator did last time query with `offset` value 10, iterator will
+do the same query with the  same `offset` value. Iterator gets batch with rows from table. `IndexInBatch` it is last
+index for element in this batch what was processed. Iterator looks for next element in batch (with index = 3) and convert
+it to record. 
 
 #### CDC Iterator
 
@@ -85,8 +100,8 @@ When source starts work first time iterator <b>creates</b> stream with name `con
 config, <b>creates</b> table for consuming stream with name `conduit_tracking_{table}`.
 This consuming table has the same schema as `table`  with additional metadata columns:
 `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID` (Those columns from stream) and `METADATA$TS`.
-`METADATA$TS` it is timestamp column, it is special column created by iterator to ordering rows from tracking table.
-Then iterator consume data from stream using insert query to consuming table. `METADATA$TS` sets like current timestamp.
+`METADATA$TS` it is timestamp column, it is special column created by iterator to ordering rows from tracking table. When
+Then iterator consume data from stream using insert query to consuming table. `METADATA$TS` will have  current timestamp value.
 After consuming stream, tracking table has copy of stream data with inserted time. All rows from stream were
 automatically removed and stream did new snapshot for `table`.
 
@@ -117,7 +132,13 @@ Then we add new client. Stream table will look like:
 
 Connector consumes stream running query `INSERT INTO CONDUIT_TRACKING_CLIENTS SELECT *,
 current_timestamp() FROM CONDUIT_STREAM_CLIENTS`. After this stream will be empty, we will have data on tracking table.
-The connector will run select query `SELECT * FROM CONDUIT_TRACKING_CLIENTS ORDER BY METADATA$TS LIMIT {batchSize} OFFSET 0`
+The connector will run select query:
+
+```sql
+SELECT * FROM CONDUIT_TRACKING_CLIENTS ORDER BY METADATA$TS LIMIT {batchSize} OFFSET 0;
+```
+
+
 Connectors will transform this data to records.
 
 
@@ -125,12 +146,12 @@ Connectors will transform this data to records.
 
 #### Position
 
-Position has fields: `type` (`c` - CDC or `s`- Snapshot), `element`(index of element of current
-offset), `offset`.
+Position has fields: `Type` (`c` - CDC or `s`- Snapshot), `IndexInBatch`(index of element of current
+batch), `BatchID`(offset value).
 
 Example:
 
-```
+```json
 {
  "Type" : "c",
  "IndexInBatch": 2,
