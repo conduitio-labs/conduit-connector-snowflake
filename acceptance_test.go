@@ -189,6 +189,7 @@ func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
 	q, arg := sqlbuilder.Build()
 
 	_, err = conn.ExecContext(context.Background(), q, arg...)
+
 	return err
 }
 
@@ -260,5 +261,4 @@ func clearTable(t *testing.T, table string) {
 	if err != nil {
 		t.Errorf("trucate table: %v", err)
 	}
-
 }

@@ -128,7 +128,7 @@ func setupSnapshotIterator(
 
 	data, err := snowflake.GetData(ctx, table, key, columns, offset, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("get data: %w", err)
+		return nil, fmt.Errorf("get currentBatch: %w", err)
 	}
 
 	return NewSnapshotIterator(snowflake, table,
@@ -151,7 +151,7 @@ func setupCDCIterator(
 	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns,
 		offset, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("get stream data: %w", err)
+		return nil, fmt.Errorf("get stream currentBatch: %w", err)
 	}
 
 	return NewCDCIterator(snowflake, table,
