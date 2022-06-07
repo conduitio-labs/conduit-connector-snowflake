@@ -39,7 +39,7 @@ type CDCIterator struct {
 	// Name of column what iterator use for setting key in record.
 	key string
 
-	// index - current index of element in current batch which iterator converts to record
+	// index - current index of element in current batch which iterator converts to record.
 	index int
 	// offset - current offset, show what batch iterator uses, using in query to get currentBatch.
 	offset int
@@ -173,11 +173,11 @@ func (c *CDCIterator) Ack(rp sdk.Position) error {
 }
 
 func getStreamName(table string) string {
-	return fmt.Sprintf(nameFormat, conduit, "stream", table)
+	return fmt.Sprintf(nameFormat, Conduit, "stream", table)
 }
 
 func getTrackingTable(table string) string {
-	return fmt.Sprintf(nameFormat, conduit, "tracking", table)
+	return fmt.Sprintf(nameFormat, Conduit, "tracking", table)
 }
 
 func getAction(data map[string]interface{}) (actionType, error) {
