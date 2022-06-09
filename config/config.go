@@ -27,7 +27,7 @@ const (
 	KeyPrimaryKey string = "primaryKey"
 	KeyBatchSize  string = "batchSize"
 
-	DefaultBatchSize = 1000
+	defaultBatchSize = 1000
 )
 
 // Config represents configuration needed for Snowflake.
@@ -55,7 +55,7 @@ func Parse(cfg map[string]string) (Config, error) {
 		Connection: cfg[KeyConnection],
 		Table:      cfg[KeyTable],
 		Key:        cfg[KeyPrimaryKey],
-		BatchSize:  DefaultBatchSize,
+		BatchSize:  defaultBatchSize,
 	}
 
 	if colsRaw := cfg[KeyColumns]; colsRaw != "" {
@@ -70,7 +70,7 @@ func Parse(cfg map[string]string) (Config, error) {
 	if cfg[KeyBatchSize] != "" {
 		batchSize, err := strconv.Atoi(cfg[KeyBatchSize])
 		if err != nil {
-			return Config{}, errors.New(`"limit" config value must be int`)
+			return Config{}, errors.New(`"batchSize" config value must be int`)
 		}
 
 		config.BatchSize = batchSize

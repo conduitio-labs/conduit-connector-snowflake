@@ -55,7 +55,7 @@ func TestParse(t *testing.T) {
 				Connection: "user:password@my_organization-my_account/mydb/public",
 				Table:      "customer",
 				Key:        "ID",
-				BatchSize:  DefaultBatchSize,
+				BatchSize:  defaultBatchSize,
 			},
 			wantErr:     false,
 			expectedErr: "",
