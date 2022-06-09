@@ -71,11 +71,14 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 }
 
 // GenerateRecord generate record for snowflake account.
-func (d ConfigurableAcceptanceTestDriver) GenerateRecord(_ *testing.T) sdk.Record {
+func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T) sdk.Record {
 	id := uuid.New().String()
 	m := map[string]any{"ID": id}
 
-	b, _ := json.Marshal(m)
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Error(err)
+	}
 
 	return sdk.Record{
 		Position:  sdk.Position(uuid.New().String()),
