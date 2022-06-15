@@ -115,9 +115,11 @@ func TestAcceptance(t *testing.T) {
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
 			GoleakOptions: []goleak.Option{
-				goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
+				// Snowflake drivers has those leaks. Issue created https://github.com/snowflakedb/gosnowflake/issues/588
 				goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
 				goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+				// Not catch in integration test, but cathe in acceptance test, continue looking problem place.
+				goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
 			},
 			BeforeTest: func(t *testing.T) {
 				clearTable(t, cfg[config.KeyTable])

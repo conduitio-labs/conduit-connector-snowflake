@@ -34,8 +34,12 @@ steam for getting fresh and actual data. Also, for us is important to get data b
 right iteration. Then we decided to create tracking table for consuming stream and saving data.
 The next problem was ordering in tracking table. Stream doesn't have fields about time creation and when we insert 
 new batch data it will insert inside some rows and could break position. For this reason we decided to add special
-column to save current timestamp when we consume data and do ordering by this column <br>
+column to save current timestamp when we consume data and do ordering by this column 
+
+
 Other idea was to set in config special incrementing column. The main issue for it that the table could be
-without this specific column. It also can be the issue with right ordering.
+without this specific column. It also can be the issue with right ordering. Because after interrupted cdc we have to 
+continue from position, it is means we must be sure that we have ordering where new updates will be always after 
+previous updates.
 The final solution with details in readme file https://github.com/ConduitIO/conduit-connector-snowflake/blob/main/README.md
 
