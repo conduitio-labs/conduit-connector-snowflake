@@ -21,7 +21,7 @@ The config passed to `Configure` can contain the following fields.
 | `table`      | The table name in snowflake db.                                                                                                                                                                                                                 | yes      | "users"                                                |
 | `columns`    | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                 | no       | "id,name,age"                                          |
 | `primaryKey` | Column name that records should use for their `Key` fields.                                                                                                                                                                                     | yes      | "id"                                                   |
-| `batchSize`  | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable, it will cause problem with position.                                                                                                                    | no       | "100"                                                  |
+| `batchSize`  | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                                                   | no       | "100"                                                  |
 
 ### How to build it
 
