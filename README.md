@@ -51,11 +51,11 @@ and if it is needed change offset and run select query to get new data with new 
 next element and converts it to `Record` sets metadata variable `table`, set metadata variable `action` - `insert`,
 increase `index`.
 
-If snapshot stops, it will parse position from last record. Position has fields: `Element` - it is the index of element
-in current batch, this last element what was recorded, `Offset` - shows the last value offset what iterator used for
+If snapshot stops, it will parse position from last record. Position has fields: `IndexInBatch` - it is the index of element
+in current batch, this last element what was recorded, `BatchID` - shows the last value offset what iterator used for
 getting data query. Iterator runs query to get data from table with `batchSize` and `offset` which was got from
 position. `index` value will be `Element` increased by one, because iterator tries to find next element in current batch.
-If `index` > `batchSize` iterator will change `offset` to next and set `index` zero.
+If `index` > `batchSize` iterator will change `BatchID` to next and set `index` zero.
 
 For example, we get snapshot position in `Open` function:
 
@@ -96,12 +96,16 @@ INSERT records in the stream with a metadata column METADATA$ISUPDATE values set
 `METADATA$ROW_ID`: Specifies the unique and immutable ID for the row, which can be used to track changes
 to specific rows over time.
 
+
 When source starts work first time iterator <b>creates</b> stream with name `conduit_stream_{table}` to `table` from
-config, <b>creates</b> table for consuming stream with name `conduit_tracking_{table}`.
-This consuming table has the same schema as `table`  with additional metadata columns:
+config, <b>creates</b> table  with name `conduit_tracking_{table}`. Table uses for consuming stream and ability to resume
+CDC iterator after interrupting.
+
+
+This table has the same schema as `table`  with additional metadata columns:
 `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID` (Those columns from stream) and `METADATA$TS`.
-`METADATA$TS` it is timestamp column, it is special column created by iterator to ordering rows from tracking table. When
-Then iterator consume data from stream using insert query to consuming table. `METADATA$TS` will have  current timestamp value.
+`METADATA$TS` it is timestamp column, it is special column created by iterator to ordering rows from tracking table.
+When iterator consume data from stream using insert query to consuming table. `METADATA$TS` will have  current timestamp value.
 After consuming stream, tracking table has copy of stream data with inserted time. All rows from stream were
 automatically removed and stream did new snapshot for `table`.
 
