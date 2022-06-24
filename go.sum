@@ -70,8 +70,6 @@ github.com/cncf/xds/go v0.0.0-20210922020428-25de7278fc84/go.mod h1:eXthEFrGJvWH
 github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
 github.com/conduitio/conduit-connector-protocol v0.2.0 h1:gwYXVKEMgTtU67ephQ5WwTGIDbT/eTLA9Mdr9Bnbqxc=
 github.com/conduitio/conduit-connector-protocol v0.2.0/go.mod h1:udCU2AkLcYQoLjAO06tHVL2iFJPw+DamK+wllnj50hk=
-github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf h1:ha3MHAecTrQQ3F7GW2qLDVkmCiCNWmNNuulBzb3cVyI=
-github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220512151626-07c8c0b907bf/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b h1:KULsrkk4m0CXWDrkgOBHUaXKQl/eSYVqCNtPTHmV6Ws=
 github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220530152250-733149cddc0b/go.mod h1:1rf6zsSIcrmUGkuGNOQNdRIcXoqPx8Xh/cYJ1h1vFp4=
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
@@ -223,8 +221,8 @@ github.com/rs/zerolog v1.26.1/go.mod h1:/wSSJWX7lVrsOwlbyTRSOJvqRlc+WjWlfes+CiJ+
 github.com/ruudk/golang-pdf417 v0.0.0-20181029194003-1af4ab5afa58/go.mod h1:6lfFZQK844Gfx8o5WFuvpxWRwnSoipWe/p622j1v06w=
 github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
 github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
-github.com/snowflakedb/gosnowflake v1.6.10 h1:pEppkXSSkN7F2eyEjGiMp8LC6Dm2cToU2RV9RzNBOZ8=
-github.com/snowflakedb/gosnowflake v1.6.10/go.mod h1:BoZ0gnLERaUEiziH4Dumim10LN8cvoaCKovsAfhxzrE=
+github.com/snowflakedb/gosnowflake v1.6.11 h1:iA8BO+CstFArdfMw3OoXZnn/F8oFluX64KOGg1wVQtU=
+github.com/snowflakedb/gosnowflake v1.6.11/go.mod h1:BoZ0gnLERaUEiziH4Dumim10LN8cvoaCKovsAfhxzrE=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=

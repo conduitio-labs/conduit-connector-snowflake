@@ -9,7 +9,7 @@ require (
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/golang/mock v1.6.0
 	github.com/huandu/go-sqlbuilder v1.13.0
-	github.com/snowflakedb/gosnowflake v1.6.10
+	github.com/snowflakedb/gosnowflake v1.6.11
 	go.uber.org/goleak v1.1.12
 	go.uber.org/multierr v1.8.0
 )
