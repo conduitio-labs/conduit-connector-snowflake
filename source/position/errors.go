@@ -19,7 +19,5 @@ import (
 )
 
 var (
-	ErrFieldInvalidElement = errors.New("invalid element type")
 	ErrUnknownIteratorType = errors.New("unknown iterator type")
-	ErrInvalidType         = errors.New("invalid position type")
 )

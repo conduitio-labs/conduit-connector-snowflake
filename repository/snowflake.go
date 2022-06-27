@@ -230,14 +230,13 @@ func (s *Snowflake) GetTrackingData(
 func buildGetDataQuery(table, key string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 
-	if fields == nil {
+	if len(fields) == 0 {
 		sb.Select("*")
 	} else {
 		sb.Select(fields...)
 	}
 
 	sb.From(table)
-	sb.OrderBy(key)
 	sb.Offset(offset)
 	sb.Limit(limit)
 
@@ -246,7 +245,7 @@ func buildGetDataQuery(table, key string, fields []string, offset, limit int) st
 
 func buildGetTrackingData(table string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
-	if fields == nil {
+	if len(fields) == 0 {
 		sb.Select("*")
 	} else {
 		fields = append(fields, MetadataFields...)
@@ -263,7 +262,7 @@ func buildGetTrackingData(table string, fields []string, offset, limit int) stri
 
 func buildConsumeDataQuery(trackingTable, stream string, fields []string) string {
 	selectSb := sqlbuilder.NewSelectBuilder()
-	if fields == nil {
+	if len(fields) == 0 {
 		selectSb.Select("*, current_timestamp()")
 	} else {
 		columns := fields

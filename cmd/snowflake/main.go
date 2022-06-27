@@ -22,5 +22,9 @@ import (
 )
 
 func main() {
-	sdk.Serve(snowflake.Specification, source.New, nil)
+	sdk.Serve(sdk.Connector{
+		NewSpecification: snowflake.Specification,
+		NewSource:        source.New,
+		NewDestination:   nil,
+	})
 }

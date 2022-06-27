@@ -15,6 +15,8 @@
 package config
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -22,7 +24,10 @@ const (
 	KeyConnection string = "connection"
 	KeyTable      string = "table"
 	KeyColumns    string = "columns"
-	KeyKey        string = "key"
+	KeyPrimaryKey string = "primaryKey"
+	KeyBatchSize  string = "batchSize"
+
+	defaultBatchSize = 1000
 )
 
 // Config represents configuration needed for Snowflake.
@@ -39,6 +44,9 @@ type Config struct {
 
 	// Key - Column name that records should use for their `Key` fields.
 	Key string `validate:"required,max=251"`
+
+	// BatchSize - size of batch.
+	BatchSize int `validate:"gte=1,lte=100000"`
 }
 
 // Parse attempts to parse plugins.Config into a Config struct.
@@ -46,7 +54,8 @@ func Parse(cfg map[string]string) (Config, error) {
 	config := Config{
 		Connection: cfg[KeyConnection],
 		Table:      cfg[KeyTable],
-		Key:        cfg[KeyKey],
+		Key:        cfg[KeyPrimaryKey],
+		BatchSize:  defaultBatchSize,
 	}
 
 	if colsRaw := cfg[KeyColumns]; colsRaw != "" {
@@ -54,8 +63,17 @@ func Parse(cfg map[string]string) (Config, error) {
 	}
 
 	// Columns in snowflake is uppercase.
-	if cfg[KeyKey] != "" {
+	if cfg[KeyPrimaryKey] != "" {
 		config.Key = strings.ToUpper(config.Key)
+	}
+
+	if cfg[KeyBatchSize] != "" {
+		batchSize, err := strconv.Atoi(cfg[KeyBatchSize])
+		if err != nil {
+			return Config{}, errors.New(`"batchSize" config value must be int`)
+		}
+
+		config.BatchSize = batchSize
 	}
 
 	err := config.Validate()

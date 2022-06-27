@@ -24,6 +24,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
 
+	"github.com/conduitio/conduit-connector-snowflake/config"
 	"github.com/conduitio/conduit-connector-snowflake/source/mock"
 )
 
@@ -39,18 +40,18 @@ func TestSource_Configure(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
-				"table":      "customer",
-				"key":        "id",
+				config.KeyConnection: "user:password@my_organization-my_account/mydb",
+				config.KeyTable:      "customer",
+				config.KeyPrimaryKey: "id",
 			},
 			expectedErr: nil,
 		},
 		{
 			name: "missing connection",
 			cfg: map[string]string{
-				"table":   "customer",
-				"columns": "",
-				"key":     "id",
+				config.KeyTable:      "customer",
+				config.KeyColumns:    "",
+				config.KeyPrimaryKey: "id",
 			},
 			expectedErr: errors.New(`"connection" config value must be set`),
 		},

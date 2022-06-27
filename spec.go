@@ -27,6 +27,8 @@ func Specification() sdk.Specification {
 	return sdk.Specification{
 		Name:    "snowflake",
 		Summary: "An Snowflake source plugin for Conduit, written in Go.",
+		Description: "The Snowflake connector is one of Conduit plugins." +
+			"It provides the source snowflake connector.",
 		Version: "v0.1.0",
 		Author:  "Meroxa, Inc.",
 		SourceParams: map[string]sdk.Parameter{
@@ -45,10 +47,15 @@ func Specification() sdk.Specification {
 				Required:    false,
 				Description: "Comma separated list of column names that should be included in each Record's payload.",
 			},
-			config.KeyKey: {
+			config.KeyPrimaryKey: {
 				Default:     "",
 				Required:    true,
 				Description: "Column name that records should use for their `Key` fields.",
+			},
+			config.KeyBatchSize: {
+				Default:     "1000",
+				Required:    false,
+				Description: "Size of batch",
 			},
 		},
 	}

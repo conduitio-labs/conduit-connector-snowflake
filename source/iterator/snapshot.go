@@ -27,18 +27,26 @@ import (
 
 // SnapshotIterator to iterate snowflake objects.
 type SnapshotIterator struct {
+	// repository for run queries to snowflake.
 	snowflake Repository
 
-	table   string
+	// table - table in snowflake for getting currentBatch.
+	table string
+	// columns list of table columns for record payload
+	// if empty - will get all columns.
 	columns []string
-	key     string
+	// Name of column what iterator use for setting key in record.
+	key string
 
-	index     int
-	offset    int
-	butchSize int
-	total     int
+	// index - current index of element in current batch which iterator converts to record
+	index int
+	// offset - current offset, show what batch iterator uses, using in query to get currentBatch.
+	offset int
+	// batchSize size of batch.
+	batchSize int
 
-	data []map[string]interface{}
+	// currentBatch - rows in current batch from table.
+	currentBatch []map[string]interface{}
 }
 
 // NewSnapshotIterator iterator.
@@ -47,18 +55,18 @@ func NewSnapshotIterator(
 	table string,
 	columns []string,
 	key string,
-	index, offset, butchSize int,
-	data []map[string]interface{},
+	index, offset, batchSize int,
+	currentBatch []map[string]interface{},
 ) *SnapshotIterator {
 	return &SnapshotIterator{
-		snowflake: snowflake,
-		table:     table,
-		columns:   columns,
-		key:       key,
-		index:     index,
-		offset:    offset,
-		butchSize: butchSize,
-		data:      data,
+		snowflake:    snowflake,
+		table:        table,
+		columns:      columns,
+		key:          key,
+		index:        index,
+		offset:       offset,
+		batchSize:    batchSize,
+		currentBatch: currentBatch,
 	}
 }
 
@@ -66,21 +74,21 @@ func NewSnapshotIterator(
 func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	var err error
 
-	if i.index < len(i.data) {
+	if i.index < len(i.currentBatch) {
 		return true, nil
 	}
 
-	if i.index >= i.butchSize {
-		i.offset += i.butchSize
+	if i.index >= i.batchSize {
+		i.offset += i.batchSize
 		i.index = 0
 	}
 
-	i.data, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.butchSize)
+	i.currentBatch, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.batchSize)
 	if err != nil {
 		return false, err
 	}
 
-	if len(i.data) == 0 || len(i.data) <= i.index {
+	if len(i.currentBatch) == 0 || len(i.currentBatch) <= i.index {
 		return false, nil
 	}
 
@@ -96,16 +104,16 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset)
 
-	payload, err = json.Marshal(i.data[i.index])
+	payload, err = json.Marshal(i.currentBatch[i.index])
 	if err != nil {
 		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
 	}
 
-	if _, ok := i.data[i.index][i.key]; !ok {
+	if _, ok := i.currentBatch[i.index][i.key]; !ok {
 		return sdk.Record{}, ErrKeyIsNotExist
 	}
 
-	key := i.data[i.index][i.key]
+	key := i.currentBatch[i.index][i.key]
 
 	i.index++
 
@@ -135,9 +143,9 @@ func (i *SnapshotIterator) Ack(rp sdk.Position) error {
 		return fmt.Errorf("parse sdk position: %w", err)
 	}
 
-	if p.Offset > i.offset || (p.Offset == i.offset && p.Element > i.index) {
+	if p.BatchID > i.offset || (p.BatchID == i.offset && p.IndexInBatch > i.index) {
 		return fmt.Errorf("record with this postiton was not recorded: "+
-			"element %d, offset %d", p.Element, p.Offset)
+			"element %d, offset %d", p.IndexInBatch, p.BatchID)
 	}
 
 	return nil
