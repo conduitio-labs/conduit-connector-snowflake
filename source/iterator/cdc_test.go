@@ -46,7 +46,7 @@ func TestCDCIterator_HasNext(t *testing.T) {
 			t.Errorf("has next error = \"%s\"", err.Error())
 		}
 
-		if !reflect.DeepEqual(hasNext, true) {
+		if !hasNext {
 			t.Errorf("got = %v, want %v", hasNext, true)
 		}
 	})

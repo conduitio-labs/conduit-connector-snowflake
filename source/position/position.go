@@ -34,15 +34,15 @@ type Position struct {
 	// IteratorType - shows in what iterator was created position.
 	IteratorType IteratorType
 
-	// Element - index position in current offset.
-	Element int
-	// Offset - show current offset.
-	Offset int
+	// IndexInBatch - index position in current batch.
+	IndexInBatch int
+	// BatchID - batch id.
+	BatchID int
 }
 
 // NewPosition create position.
-func NewPosition(iteratorType IteratorType, element int, offset int) *Position {
-	return &Position{IteratorType: iteratorType, Element: element, Offset: offset}
+func NewPosition(iteratorType IteratorType, element int, batchID int) *Position {
+	return &Position{IteratorType: iteratorType, IndexInBatch: element, BatchID: batchID}
 }
 
 // ParseSDKPosition parses SDK position and returns Position.

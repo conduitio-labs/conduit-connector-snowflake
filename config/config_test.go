@@ -30,14 +30,32 @@ func TestParse(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb/public",
-				"table":      "customer",
-				"key":        "id",
+				KeyConnection: "user:password@my_organization-my_account/mydb/public",
+				KeyTable:      "customer",
+				KeyPrimaryKey: "id",
+				KeyBatchSize:  "100",
 			},
 			want: Config{
 				Connection: "user:password@my_organization-my_account/mydb/public",
 				Table:      "customer",
 				Key:        "ID",
+				BatchSize:  100,
+			},
+			wantErr:     false,
+			expectedErr: "",
+		},
+		{
+			name: "default batchSize",
+			cfg: map[string]string{
+				KeyConnection: "user:password@my_organization-my_account/mydb/public",
+				KeyTable:      "customer",
+				KeyPrimaryKey: "id",
+			},
+			want: Config{
+				Connection: "user:password@my_organization-my_account/mydb/public",
+				Table:      "customer",
+				Key:        "ID",
+				BatchSize:  defaultBatchSize,
 			},
 			wantErr:     false,
 			expectedErr: "",
@@ -45,9 +63,9 @@ func TestParse(t *testing.T) {
 		{
 			name: "missing connection field",
 			cfg: map[string]string{
-				"table":   "customer",
-				"columns": "",
-				"key":     "id",
+				KeyTable:      "customer",
+				KeyColumns:    "",
+				KeyPrimaryKey: "id",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -56,9 +74,9 @@ func TestParse(t *testing.T) {
 		{
 			name: "missing table field",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
-				"columns":    "",
-				"key":        "id",
+				KeyConnection: "user:password@my_organization-my_account/mydb",
+				KeyColumns:    "",
+				KeyPrimaryKey: "id",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -67,9 +85,9 @@ func TestParse(t *testing.T) {
 		{
 			name: "missing key field",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
-				"table":      "customer",
-				"columns":    "",
+				KeyConnection: "user:password@my_organization-my_account/mydb",
+				KeyTable:      "customer",
+				KeyColumns:    "",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -78,14 +96,14 @@ func TestParse(t *testing.T) {
 		{
 			name: "too long table name",
 			cfg: map[string]string{
-				"connection": "user:password@my_organization-my_account/mydb",
-				"table": "some_specific_really_big_name_with_additional_not_needed_things_" +
+				KeyConnection: "user:password@my_organization-my_account/mydb",
+				KeyTable: "some_specific_really_big_name_with_additional_not_needed_things_" +
 					"really_big_description_some_specific_really_big_name_with" +
 					"_additional_not_needed_things_some_specific_really_big_name_with_additional_not_needed_things_" +
 					"some_specific_really_big_name_with_additional_not_needed_things_" +
 					"_additional_not_needed_things_some_specific_really_big_name_with_additional_not_needed_things",
-				"columns": "",
-				"key":     "id",
+				KeyColumns:    "",
+				KeyPrimaryKey: "id",
 			},
 			want:        Config{},
 			wantErr:     true,
