@@ -10,7 +10,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.14.0
-	github.com/snowflakedb/gosnowflake v1.6.10
+	github.com/snowflakedb/gosnowflake v1.6.11
 	go.uber.org/goleak v1.1.12
 	go.uber.org/multierr v1.8.0
 )
