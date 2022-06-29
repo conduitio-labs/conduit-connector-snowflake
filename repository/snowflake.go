@@ -42,6 +42,8 @@ func Create(ctx context.Context, connectionData string) (*Snowflake, error) {
 		return nil, fmt.Errorf("open db: %v", err)
 	}
 
+	defer db.Close()
+
 	err = db.PingContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ping db: %v", err)
