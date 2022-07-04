@@ -214,13 +214,13 @@ func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
 }
 
 // Ack check if record with position was recorded.
-func (i *Iterator) Ack(rp sdk.Position) error {
+func (i *Iterator) Ack(ctx context.Context, rp sdk.Position) error {
 	if i.snapshotIterator != nil {
-		return i.snapshotIterator.Ack(rp)
+		return i.snapshotIterator.Ack(ctx, rp)
 	}
 
 	if i.cdcIterator != nil {
-		return i.cdcIterator.Ack(rp)
+		return i.cdcIterator.Ack(ctx, rp)
 	}
 
 	return nil
