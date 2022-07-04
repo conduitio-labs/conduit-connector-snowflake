@@ -95,5 +95,5 @@ func (s *Source) Teardown(ctx context.Context) error {
 
 // Ack check if record with position was recorded.
 func (s *Source) Ack(ctx context.Context, p sdk.Position) error {
-	return s.iterator.Ack(p)
+	return s.iterator.Ack(ctx, p)
 }

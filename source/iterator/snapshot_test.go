@@ -25,7 +25,6 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/conduitio/conduit-connector-snowflake/source/iterator/mock"
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
 )
 
 func TestIterator_HasNext(t *testing.T) {
@@ -219,33 +218,6 @@ func TestIterator_Stop(t *testing.T) {
 		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
 
 		err := i.Stop()
-		if err == nil {
-			t.Errorf("want error")
-		}
-	})
-}
-
-func TestIterator_Ack(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		i := NewSnapshotIterator(nil, "test", nil, "id", 2, 0, 10, nil)
-
-		b, _ := json.Marshal(position.NewPosition(position.TypeSnapshot, 1, 0))
-
-		pos := sdk.Position(b)
-
-		err := i.Ack(pos)
-		if err != nil {
-			t.Errorf("ack \"%s\"", err.Error())
-		}
-	})
-	t.Run("failed", func(t *testing.T) {
-		i := NewSnapshotIterator(nil, "test", nil, "ID", 2, 0, 10, nil)
-
-		b, _ := json.Marshal(position.NewPosition(position.TypeSnapshot, 3, 0))
-
-		pos := sdk.Position(b)
-
-		err := i.Ack(pos)
 		if err == nil {
 			t.Errorf("want error")
 		}

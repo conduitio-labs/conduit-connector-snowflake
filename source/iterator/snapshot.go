@@ -137,16 +137,8 @@ func (i *SnapshotIterator) Stop() error {
 }
 
 // Ack check if record with position was recorded.
-func (i *SnapshotIterator) Ack(rp sdk.Position) error {
-	p, err := position.ParseSDKPosition(rp)
-	if err != nil {
-		return fmt.Errorf("parse sdk position: %w", err)
-	}
-
-	if p.BatchID > i.offset || (p.BatchID == i.offset && p.IndexInBatch > i.index) {
-		return fmt.Errorf("record with this postiton was not recorded: "+
-			"element %d, offset %d", p.IndexInBatch, p.BatchID)
-	}
+func (i *SnapshotIterator) Ack(ctx context.Context, rp sdk.Position) error {
+	sdk.Logger(ctx).Debug().Str("position", string(rp)).Msg("got ack")
 
 	return nil
 }

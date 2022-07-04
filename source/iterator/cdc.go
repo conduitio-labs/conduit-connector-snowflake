@@ -159,15 +159,8 @@ func (c *CDCIterator) Stop() error {
 }
 
 // Ack check if record with position was recorded.
-func (c *CDCIterator) Ack(rp sdk.Position) error {
-	p, err := position.ParseSDKPosition(rp)
-	if err != nil {
-		return fmt.Errorf("parse sdk position: %w", err)
-	}
-
-	if p.BatchID > c.offset || (p.BatchID == c.offset && p.IndexInBatch > c.index) {
-		return fmt.Errorf("record was not recorded: element %d, offset %d", p.IndexInBatch, p.BatchID)
-	}
+func (c *CDCIterator) Ack(ctx context.Context, rp sdk.Position) error {
+	sdk.Logger(ctx).Debug().Str("position", string(rp)).Msg("got ack")
 
 	return nil
 }
