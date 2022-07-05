@@ -48,6 +48,8 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 		t.Errorf("open db: %v", err)
 	}
 
+	defer db.Close()
+
 	err = db.PingContext(context.Background())
 	if err != nil {
 		t.Errorf("ping db: %v", err)
@@ -115,11 +117,9 @@ func TestAcceptance(t *testing.T) {
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
 			GoleakOptions: []goleak.Option{
-				// Snowflake drivers has those leaks. Issue created https://github.com/snowflakedb/gosnowflake/issues/588
+				// Snowflake driver has those leaks. Issue: https://github.com/snowflakedb/gosnowflake/issues/588
 				goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
 				goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
-				// Not catch in integration test, but cathe in acceptance test, continue looking problem place.
-				goleak.IgnoreTopFunction("database/sql.(*DB).connectionOpener"),
 			},
 			BeforeTest: func(t *testing.T) {
 				clearTable(t, cfg[config.KeyTable])
@@ -135,6 +135,8 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 		t.Errorf("open db: %v", err)
 	}
 
+	defer db.Close()
+
 	err = db.PingContext(context.Background())
 	if err != nil {
 		t.Errorf("ping db: %v", err)
@@ -144,6 +146,8 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 	if err != nil {
 		t.Errorf("create conn: %v", err)
 	}
+
+	defer conn.Close()
 
 	tableName := randomIdentifier(t)
 
@@ -155,8 +159,15 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 	}
 
 	t.Cleanup(func() {
+		d, er := sql.Open("snowflake", connectionURL)
+		if er != nil {
+			t.Error(er)
+		}
+
+		defer d.Close()
+
 		dropQuery := fmt.Sprintf("drop table %s;", tableName)
-		_, err = conn.ExecContext(context.Background(), dropQuery)
+		_, err = d.ExecContext(context.Background(), dropQuery)
 		if err != nil {
 			t.Errorf("drop test table: %v", err)
 		}
@@ -164,7 +175,7 @@ func setupTestDB(t *testing.T, connectionURL string) string {
 		trackingTable := fmt.Sprintf("%s_tracking_%s", iterator.Conduit, tableName)
 
 		dropTrackingTable := fmt.Sprintf("drop table %s;", trackingTable)
-		_, err = conn.ExecContext(context.Background(), dropTrackingTable)
+		_, err = d.ExecContext(context.Background(), dropTrackingTable)
 		if err != nil {
 			t.Errorf("drop tracking table: %v", err)
 		}
@@ -249,6 +260,8 @@ func clearTable(t *testing.T, table string) {
 	if err != nil {
 		t.Errorf("open db: %v", err)
 	}
+
+	defer db.Close()
 
 	err = db.PingContext(context.Background())
 	if err != nil {
