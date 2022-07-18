@@ -17,8 +17,9 @@ package main
 import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	snowflake "github.com/conduitio/conduit-connector-snowflake"
-	"github.com/conduitio/conduit-connector-snowflake/source"
+	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
+
+	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 )
 
 func main() {

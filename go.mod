@@ -1,4 +1,4 @@
-module github.com/conduitio/conduit-connector-snowflake
+module github.com/conduitio-labs/conduit-connector-snowflake
 
 go 1.18
 

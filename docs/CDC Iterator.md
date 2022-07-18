@@ -41,5 +41,5 @@ Other idea was to set in config special incrementing column. The main issue for 
 without this specific column. It also can be the issue with right ordering. Because after interrupted cdc we have to 
 continue from position, it is means we must be sure that we have ordering where new updates will be always after 
 previous updates.
-The final solution with details in readme file https://github.com/ConduitIO/conduit-connector-snowflake/blob/main/README.md
+The final solution with details in readme file https://github.com/conduitio-labs/conduit-connector-snowflake/blob/main/README.md
 

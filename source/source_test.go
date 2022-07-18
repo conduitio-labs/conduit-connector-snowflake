@@ -24,8 +24,8 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
 
-	"github.com/conduitio/conduit-connector-snowflake/config"
-	"github.com/conduitio/conduit-connector-snowflake/source/mock"
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 )
 
 func TestSource_Configure(t *testing.T) {

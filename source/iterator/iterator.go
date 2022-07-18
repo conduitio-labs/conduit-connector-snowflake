@@ -20,8 +20,8 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	"github.com/conduitio/conduit-connector-snowflake/repository"
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
+	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 // Iterator combined iterator.

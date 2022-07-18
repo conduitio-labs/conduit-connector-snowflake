@@ -22,7 +22,7 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	"github.com/conduitio/conduit-connector-snowflake/source/position"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 // SnapshotIterator to iterate snowflake objects.

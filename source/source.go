@@ -20,8 +20,8 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	"github.com/conduitio/conduit-connector-snowflake/config"
-	"github.com/conduitio/conduit-connector-snowflake/source/iterator"
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
 // Source connector.

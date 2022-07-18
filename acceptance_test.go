@@ -29,9 +29,9 @@ import (
 	builder "github.com/huandu/go-sqlbuilder"
 	"go.uber.org/goleak"
 
-	"github.com/conduitio/conduit-connector-snowflake/config"
-	"github.com/conduitio/conduit-connector-snowflake/source"
-	"github.com/conduitio/conduit-connector-snowflake/source/iterator"
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
 // ConfigurableAcceptanceTestDriver driver for test.
