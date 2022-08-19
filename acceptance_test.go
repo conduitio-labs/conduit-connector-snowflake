@@ -73,7 +73,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 }
 
 // GenerateRecord generate record for snowflake account.
-func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T) sdk.Record {
+func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
 	id := uuid.New().String()
 	m := map[string]any{"ID": id}
 
@@ -84,12 +84,14 @@ func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T) sdk.Recor
 
 	return sdk.Record{
 		Position:  sdk.Position(uuid.New().String()),
-		Metadata:  nil,
-		CreatedAt: time.Now(),
+		Operation: operation,
 		Key: sdk.StructuredData{
 			d.Config.SourceConfig[config.KeyPrimaryKey]: id,
 		},
-		Payload: sdk.RawData(b),
+		Payload: sdk.Change{
+			Before: nil,
+			After:  sdk.RawData(b),
+		},
 	}
 }
 
@@ -191,7 +193,7 @@ func randomIdentifier(t *testing.T) string {
 }
 
 func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
-	payload, err := structurizeData(r.Payload)
+	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
 		return fmt.Errorf("structurize data")
 	}

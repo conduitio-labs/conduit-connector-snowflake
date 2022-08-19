@@ -19,7 +19,6 @@ import (
 	"errors"
 	"reflect"
 	"testing"
-	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
@@ -76,11 +75,10 @@ func TestSource_Read(t *testing.T) {
 		st["key"] = "value"
 
 		record := sdk.Record{
-			Position:  sdk.Position("1.0"),
-			Metadata:  nil,
-			CreatedAt: time.Time{},
-			Key:       st,
-			Payload:   st,
+			Position: sdk.Position("1.0"),
+			Metadata: nil,
+			Key:      st,
+			Payload:  sdk.Change{After: st},
 		}
 
 		it := mock.NewMockIterator(ctrl)

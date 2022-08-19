@@ -23,11 +23,10 @@ const (
 	deleteValue = "DELETE"
 
 	// metadata related.
-	metadataTable  = "table"
-	metadataAction = "action"
+	metadataTable = "table"
 
 	// actionType names.
-	actionInsert actionType = "insertValue"
+	actionInsert actionType = "insert"
 	actionDelete actionType = "delete"
 	actionUpdate actionType = "update"
 

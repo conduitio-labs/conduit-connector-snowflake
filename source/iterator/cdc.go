@@ -111,13 +111,14 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 	var (
 		payload sdk.RawData
 		err     error
+		record  sdk.Record
 	)
 
 	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
 
 	action, err := getAction(c.currentBatch[c.index])
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("get action: %w", err)
+		return record, fmt.Errorf("get action: %w", err)
 	}
 
 	// remove metadata columns.
@@ -128,29 +129,33 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	payload, err = json.Marshal(c.currentBatch[c.index])
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
+		return record, fmt.Errorf("marshal error : %w", err)
 	}
 
 	if _, ok := c.currentBatch[c.index][c.key]; !ok {
-		return sdk.Record{}, ErrKeyIsNotExist
+		return record, ErrKeyIsNotExist
 	}
 
 	key := c.currentBatch[c.index][c.key]
 
 	c.index++
 
-	return sdk.Record{
-		Position: pos.ConvertToSDKPosition(),
-		Metadata: map[string]string{
-			metadataTable:  c.table,
-			metadataAction: string(action),
-		},
-		CreatedAt: time.Now(),
-		Key: sdk.StructuredData{
-			c.key: key,
-		},
-		Payload: payload,
-	}, nil
+	metadata := sdk.Metadata(map[string]string{metadataTable: c.table})
+	metadata.SetCreatedAt(time.Now())
+
+	switch action {
+	case actionInsert:
+		return sdk.Util.Source.NewRecordCreate(pos.ConvertToSDKPosition(), metadata,
+			sdk.StructuredData{c.key: key}, payload), nil
+	case actionUpdate:
+		return sdk.Util.Source.NewRecordUpdate(pos.ConvertToSDKPosition(), metadata,
+			sdk.StructuredData{c.key: key}, nil, payload), nil
+	case actionDelete:
+		return sdk.Util.Source.NewRecordDelete(pos.ConvertToSDKPosition(), metadata,
+			sdk.StructuredData{c.key: key}), nil
+	default:
+		return record, ErrCantFindActionType
+	}
 }
 
 // Stop shutdown iterator.
