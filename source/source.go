@@ -37,6 +37,7 @@ func New() sdk.Source {
 	return &Source{}
 }
 
+// Parameters returns a map of named sdk.Parameters that describe how to configure the Source.
 func (s *Source) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
 		config.KeyConnection: {
