@@ -101,8 +101,8 @@ func TestCDCIterator_HasNext(t *testing.T) {
 func TestCDCIterator_Next(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var (
-			p   sdk.RawData
-			key sdk.StructuredData
+			rawData sdk.RawData
+			key     sdk.StructuredData
 		)
 
 		ctrl := gomock.NewController(t)
@@ -113,8 +113,12 @@ func TestCDCIterator_Next(t *testing.T) {
 			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
-		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
+		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
+		change := sdk.Change{
+			Before: nil,
+			After:  rawData,
+		}
 
 		rp := mock.NewMockRepository(ctrl)
 
@@ -125,8 +129,8 @@ func TestCDCIterator_Next(t *testing.T) {
 			t.Errorf("has next error = \"%s\"", err.Error())
 		}
 
-		if !reflect.DeepEqual(rec.Payload, p) {
-			t.Errorf("got = %v, want %v", rec.Payload, p)
+		if !reflect.DeepEqual(rec.Payload, change) {
+			t.Errorf("got = %v, want %v", rec.Payload, change)
 		}
 
 		if !reflect.DeepEqual(rec.Key, key) {
@@ -135,8 +139,8 @@ func TestCDCIterator_Next(t *testing.T) {
 	})
 	t.Run("success next record", func(t *testing.T) {
 		var (
-			p   sdk.RawData
-			key sdk.StructuredData
+			rawData sdk.RawData
+			key     sdk.StructuredData
 		)
 
 		ctrl := gomock.NewController(t)
@@ -147,8 +151,12 @@ func TestCDCIterator_Next(t *testing.T) {
 			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
 		}
 
-		p, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
+		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
+		change := sdk.Change{
+			Before: nil,
+			After:  rawData,
+		}
 
 		rp := mock.NewMockRepository(ctrl)
 
@@ -159,8 +167,8 @@ func TestCDCIterator_Next(t *testing.T) {
 			t.Errorf("has next error = \"%s\"", err.Error())
 		}
 
-		if !reflect.DeepEqual(rec.Payload, p) {
-			t.Errorf("got = %v, want %v", rec.Payload, p)
+		if !reflect.DeepEqual(rec.Payload, change) {
+			t.Errorf("got = %v, want %v", rec.Payload, change)
 		}
 
 		if !reflect.DeepEqual(rec.Key, key) {

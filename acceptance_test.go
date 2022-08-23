@@ -30,7 +30,6 @@ import (
 	"go.uber.org/goleak"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
@@ -63,7 +62,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 	defer conn.Close()
 
 	for _, r := range records {
-		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable])
+		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable]) // nolint:typecheck
 		if er != nil {
 			t.Errorf("write to snowflake %s", err)
 		}
@@ -73,7 +72,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 }
 
 // GenerateRecord generate record for snowflake account.
-func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T) sdk.Record {
+func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
 	id := uuid.New().String()
 	m := map[string]any{"ID": id}
 
@@ -84,12 +83,14 @@ func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T) sdk.Recor
 
 	return sdk.Record{
 		Position:  sdk.Position(uuid.New().String()),
-		Metadata:  nil,
-		CreatedAt: time.Now(),
+		Operation: operation,
 		Key: sdk.StructuredData{
-			d.Config.SourceConfig[config.KeyPrimaryKey]: id,
+			"ID": id,
 		},
-		Payload: sdk.RawData(b),
+		Payload: sdk.Change{
+			Before: nil,
+			After:  sdk.RawData(b),
+		},
 	}
 }
 
@@ -109,11 +110,7 @@ func TestAcceptance(t *testing.T) {
 
 	sdk.AcceptanceTest(t, ConfigurableAcceptanceTestDriver{sdk.ConfigurableAcceptanceTestDriver{
 		Config: sdk.ConfigurableAcceptanceTestDriverConfig{
-			Connector: sdk.Connector{
-				NewSpecification: Specification,
-				NewSource:        source.New,
-				NewDestination:   nil,
-			},
+			Connector:         Connector,
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
 			GoleakOptions: []goleak.Option{
@@ -191,7 +188,7 @@ func randomIdentifier(t *testing.T) string {
 }
 
 func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
-	payload, err := structurizeData(r.Payload)
+	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
 		return fmt.Errorf("structurize data")
 	}
