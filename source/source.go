@@ -37,6 +37,37 @@ func New() sdk.Source {
 	return &Source{}
 }
 
+// Parameters returns a map of named sdk.Parameters that describe how to configure the Source.
+func (s *Source) Parameters() map[string]sdk.Parameter {
+	return map[string]sdk.Parameter{
+		config.KeyConnection: {
+			Default:     "",
+			Required:    true,
+			Description: "Snowflake connection string.",
+		},
+		config.KeyTable: {
+			Default:     "",
+			Required:    true,
+			Description: "The table name that the connector should read.",
+		},
+		config.KeyColumns: {
+			Default:     "",
+			Required:    false,
+			Description: "Comma separated list of column names that should be included in each Record's payload.",
+		},
+		config.KeyPrimaryKey: {
+			Default:     "",
+			Required:    true,
+			Description: "Column name that records should use for their `Key` fields.",
+		},
+		config.KeyBatchSize: {
+			Default:     "1000",
+			Required:    false,
+			Description: "Size of batch",
+		},
+	}
+}
+
 // Configure parses and stores configurations, returns an error in case of invalid configuration.
 func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error {
 	cfg, err := config.Parse(cfgRaw)

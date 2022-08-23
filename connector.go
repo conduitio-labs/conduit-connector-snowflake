@@ -12,24 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iterator
+package snowflake
 
-type actionType string
+import (
+	sdk "github.com/conduitio/conduit-connector-sdk"
 
-const (
-	Conduit = "conduit"
-
-	insertValue = "INSERT"
-	deleteValue = "DELETE"
-
-	// metadata related.
-	metadataTable = "table"
-
-	// actionType names.
-	actionInsert actionType = "insert"
-	actionDelete actionType = "delete"
-	actionUpdate actionType = "update"
-
-	// names format.
-	nameFormat = "%s_%s_%s"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 )
+
+var Connector = sdk.Connector{
+	NewSpecification: Specification,
+	NewSource:        source.New,
+	NewDestination:   nil,
+}

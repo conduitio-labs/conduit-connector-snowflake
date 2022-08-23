@@ -16,8 +16,6 @@ package snowflake
 
 import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 )
 
 type Spec struct{}
@@ -31,32 +29,5 @@ func Specification() sdk.Specification {
 			"It provides the source snowflake connector.",
 		Version: "v0.1.0",
 		Author:  "Meroxa, Inc.",
-		SourceParams: map[string]sdk.Parameter{
-			config.KeyConnection: {
-				Default:     "",
-				Required:    true,
-				Description: "Snowflake connection string.",
-			},
-			config.KeyTable: {
-				Default:     "",
-				Required:    true,
-				Description: "The table name that the connector should read.",
-			},
-			config.KeyColumns: {
-				Default:     "",
-				Required:    false,
-				Description: "Comma separated list of column names that should be included in each Record's payload.",
-			},
-			config.KeyPrimaryKey: {
-				Default:     "",
-				Required:    true,
-				Description: "Column name that records should use for their `Key` fields.",
-			},
-			config.KeyBatchSize: {
-				Default:     "1000",
-				Required:    false,
-				Description: "Size of batch",
-			},
-		},
 	}
 }
