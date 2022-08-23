@@ -18,6 +18,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
 	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 )
@@ -26,6 +27,6 @@ func main() {
 	sdk.Serve(sdk.Connector{
 		NewSpecification: snowflake.Specification,
 		NewSource:        source.New,
-		NewDestination:   nil,
+		NewDestination:   destination.New,
 	})
 }
