@@ -62,7 +62,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 	defer conn.Close()
 
 	for _, r := range records {
-		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable])
+		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable]) // nolint:typecheck
 		if er != nil {
 			t.Errorf("write to snowflake %s", err)
 		}
@@ -85,7 +85,7 @@ func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T, operation
 		Position:  sdk.Position(uuid.New().String()),
 		Operation: operation,
 		Key: sdk.StructuredData{
-			d.Config.SourceConfig[config.KeyPrimaryKey]: id,
+			"ID": id,
 		},
 		Payload: sdk.Change{
 			Before: nil,
