@@ -30,7 +30,6 @@ import (
 	"go.uber.org/goleak"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
@@ -111,11 +110,7 @@ func TestAcceptance(t *testing.T) {
 
 	sdk.AcceptanceTest(t, ConfigurableAcceptanceTestDriver{sdk.ConfigurableAcceptanceTestDriver{
 		Config: sdk.ConfigurableAcceptanceTestDriverConfig{
-			Connector: sdk.Connector{
-				NewSpecification: Specification,
-				NewSource:        source.New,
-				NewDestination:   nil,
-			},
+			Connector:         Connector,
 			SourceConfig:      cfg,
 			DestinationConfig: nil,
 			GoleakOptions: []goleak.Option{

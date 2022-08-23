@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package snowflake
 
 import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source"
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+var Connector = sdk.Connector{
+	NewSpecification: Specification,
+	NewSource:        source.New,
+	NewDestination:   nil,
 }

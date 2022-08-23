@@ -3,7 +3,7 @@ module github.com/conduitio-labs/conduit-connector-snowflake
 go 1.18
 
 require (
-	github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220812170036-f0ac2714fe94
+	github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220823112121-47067cda967a
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0
