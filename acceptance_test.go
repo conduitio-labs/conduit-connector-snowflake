@@ -62,7 +62,7 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 	defer conn.Close()
 
 	for _, r := range records {
-		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable]) // nolint:typecheck
+		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable])
 		if er != nil {
 			t.Errorf("write to snowflake %s", err)
 		}

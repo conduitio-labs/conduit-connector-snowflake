@@ -66,16 +66,9 @@ func New(
 
 		isFirstStart = true
 
-		// Prepare stream for cdc iterator.
-		err = snowflake.CreateStream(ctx, getStreamName(table), table)
+		err = prepareCDC(ctx, snowflake, table)
 		if err != nil {
-			return nil, fmt.Errorf("create stream: %w", err)
-		}
-
-		// Prepare tracking table for consume stream.
-		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
-		if err != nil {
-			return nil, fmt.Errorf("create tracking table: %w", err)
+			return nil, fmt.Errorf("prepare cdc: %w", err)
 		}
 	} else {
 		p, er = position.ParseSDKPosition(pos)
@@ -108,6 +101,32 @@ func New(
 		key:              key,
 		pos:              pos,
 	}, nil
+}
+
+func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table string) error {
+	// Check if table tracking table exist.
+	isExist, err := snowflake.IsTableExist(ctx, getTrackingTable(table))
+	if err != nil {
+		return fmt.Errorf("check if table exist: %w", err)
+	}
+
+	if isExist {
+		return nil
+	}
+
+	// Prepare stream for cdc iterator.
+	err = snowflake.CreateStream(ctx, getStreamName(table), table)
+	if err != nil {
+		return fmt.Errorf("create stream: %w", err)
+	}
+
+	// Prepare tracking table for consume stream.
+	err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
+	if err != nil {
+		return fmt.Errorf("create tracking table: %w", err)
+	}
+
+	return nil
 }
 
 func setupSnapshotIterator(

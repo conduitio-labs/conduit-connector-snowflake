@@ -229,6 +229,17 @@ func (s *Snowflake) GetTrackingData(
 	return result, nil
 }
 
+// IsTableExist check if table exist.
+func (s *Snowflake) IsTableExist(ctx context.Context, table string) (bool, error) {
+	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsTableExist, strings.ToUpper(table)))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	return rows.Next(), nil
+}
+
 func buildGetDataQuery(table, key string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 
