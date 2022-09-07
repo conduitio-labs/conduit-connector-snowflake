@@ -34,7 +34,7 @@ const (
 
 	queryCreateTable        = "CREATE OR REPLACE TABLE %s (ID INT, NAME STRING)"
 	queryInsertSnapshotData = "INSERT INTO %s VALUES (1, 'Petro'), (2, 'Olena')"
-	queryDeleteTable        = "DROP TABLE IF EXIST %s"
+	queryDeleteTable        = "DROP TABLE %s"
 	queryDeleteRow          = "DELETE FROM %s WHERE ID = 1"
 	queryUpdateRow          = "UPDATE %s set NAME = 'test' WHERE ID = 2"
 )
@@ -160,7 +160,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r.Metadata["action"] != "update" {
+	if r.Operation != sdk.OperationUpdate {
 		t.Fatal(errors.New("wrong action"))
 	}
 
@@ -170,7 +170,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r.Metadata["action"] != "delete" {
+	if r.Operation != sdk.OperationDelete {
 		t.Fatal(errors.New("wrong action"))
 	}
 }
