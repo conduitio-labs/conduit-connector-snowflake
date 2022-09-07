@@ -28,7 +28,7 @@ import (
 
 var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
-const queryTimeout = 10
+const queryTimeout = 20
 
 // Snowflake repository.
 type Snowflake struct {
@@ -232,6 +232,17 @@ func (s *Snowflake) GetTrackingData(
 // IsTableExist check if table exist.
 func (s *Snowflake) IsTableExist(ctx context.Context, table string) (bool, error) {
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsTableExist, strings.ToUpper(table)))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	return rows.Next(), nil
+}
+
+// IsStreamExist check if stream exist.
+func (s *Snowflake) IsStreamExist(ctx context.Context, stream string) (bool, error) {
+	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsStreamExist, strings.ToUpper(stream)))
 	if err != nil {
 		return false, err
 	}

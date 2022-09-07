@@ -28,4 +28,5 @@ const (
 	queryInsertInto          = `INSERT INTO %s %s`
 	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
 	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
+	queryIsStreamExist       = `SHOW STREAMS LIKE '%s'`
 )
