@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.15.1
 	github.com/snowflakedb/gosnowflake v1.6.12
-	go.uber.org/goleak v1.1.12
+	go.uber.org/goleak v1.2.0
 	go.uber.org/multierr v1.8.0
 )
 
