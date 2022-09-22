@@ -6,11 +6,11 @@ require (
 	github.com/conduitio/conduit-connector-sdk v0.2.1-0.20220823112121-47067cda967a
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
-	github.com/go-playground/validator/v10 v10.11.0
+	github.com/go-playground/validator/v10 v10.11.1
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.15.1
-	github.com/snowflakedb/gosnowflake v1.6.12
+	github.com/snowflakedb/gosnowflake v1.6.13
 	go.uber.org/goleak v1.2.0
 	go.uber.org/multierr v1.8.0
 )
