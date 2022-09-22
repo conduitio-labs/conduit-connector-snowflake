@@ -2,8 +2,10 @@ GOLINT := golangci-lint
 
 .PHONY: build test
 
+VERSION=$(shell git describe --tags --dirty --always)
+
 build:
-	go build -o conduit-connector-snowflake cmd/snowflake/main.go
+	go build -ldflags "-X 'github.com/conduitio-labs/conduit-connector-snowflake.version=${VERSION}'" -o conduit-connector-snowflake cmd/connector/main.go
 
 test:
 	go test $(GOTEST_FLAGS) -race ./...
