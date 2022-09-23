@@ -16,28 +16,31 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/huandu/go-sqlbuilder"
+	"github.com/jmoiron/sqlx"
 
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
+
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
-const queryTimeout = 20
+const queryTimeout = 40
 
 // Snowflake repository.
 type Snowflake struct {
-	conn *sql.Conn
+	conn *sqlx.Conn
 }
 
 // Create storage.
 func Create(ctx context.Context, connectionData string) (*Snowflake, error) {
-	db, err := sql.Open("snowflake", connectionData)
+	db, err := sqlx.Open("snowflake", connectionData)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %v", err)
 	}
@@ -49,7 +52,7 @@ func Create(ctx context.Context, connectionData string) (*Snowflake, error) {
 		return nil, fmt.Errorf("ping db: %v", err)
 	}
 
-	conn, err := db.Conn(ctx)
+	conn, err := db.Connx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create conn: %v", err)
 	}
@@ -62,55 +65,50 @@ func (s *Snowflake) Close() error {
 	return s.conn.Close()
 }
 
-// GetData get rows with columns offset from table.
-func (s *Snowflake) GetData(
+// GetRows get rows with columns offset from table.
+func (s *Snowflake) GetRows(
 	ctx context.Context,
-	table, key string,
+	table, orderingColumn string,
 	fields []string,
-	offset, limit int,
-) ([]map[string]interface{}, error) {
+	pos *position.Position,
+	maxValue any,
+	limit int,
+) (*sqlx.Rows, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
+	sb := sqlbuilder.NewSelectBuilder()
+
+	if len(fields) == 0 {
+		sb.Select("*")
+	} else {
+		sb.Select(fields...)
+	}
+
+	sb.From(table)
+	sb.OrderBy(orderingColumn)
+	if pos != nil {
+		sb.Where(
+			sb.GreaterThan(orderingColumn, pos.SnapshotLastProcessedVal),
+		)
+	}
+	if !isNil(maxValue) {
+		sb.Where(sb.LessEqualThan(orderingColumn, maxValue))
+	}
+	sb.Limit(limit)
+
+	query, args := sb.Build()
+
 	ctxTime, cancel := context.WithTimeout(context.Background(), queryTimeout*time.Second)
 	defer cancel()
 
-	rows, err := s.conn.QueryContext(ctxTime, buildGetDataQuery(table, key, fields, offset, limit))
+	rows, err := s.conn.QueryxContext(ctxTime, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("run query: %v", err)
+		return nil, fmt.Errorf("execute query: %v", err)
 	}
 
-	defer rows.Close()
-
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("get columns: %v", err)
-	}
-
-	result := make([]map[string]interface{}, 0)
-
-	colValues := make([]interface{}, len(columns))
-
-	for rows.Next() {
-		row := make(map[string]interface{}, len(columns))
-
-		for i := range colValues {
-			colValues[i] = new(interface{})
-		}
-
-		if er := rows.Scan(colValues...); er != nil {
-			return nil, fmt.Errorf("scan: %v", err)
-		}
-
-		for i, col := range columns {
-			row[col] = *colValues[i].(*interface{})
-		}
-
-		result = append(result, row)
-	}
-
-	return result, nil
+	return rows, nil
 }
 
 // CreateStream create stream.
@@ -251,20 +249,24 @@ func (s *Snowflake) IsStreamExist(ctx context.Context, stream string) (bool, err
 	return rows.Next(), nil
 }
 
-func buildGetDataQuery(table, key string, fields []string, offset, limit int) string {
-	sb := sqlbuilder.NewSelectBuilder()
-
-	if len(fields) == 0 {
-		sb.Select("*")
-	} else {
-		sb.Select(fields...)
+// GetMaxValue get max value by ordering column.
+func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
+	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))
+	if err != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
 	}
 
-	sb.From(table)
-	sb.Offset(offset)
-	sb.Limit(limit)
+	defer rows.Close()
 
-	return sb.String()
+	var maxValue any
+	for rows.Next() {
+		er := rows.Scan(&maxValue)
+		if er != nil {
+			return nil, er
+		}
+	}
+
+	return maxValue, nil
 }
 
 func buildGetTrackingData(table string, fields []string, offset, limit int) string {
@@ -348,4 +350,8 @@ func buildAddTimestampColumn(table, column string) string {
 	s, _ := sb.Build()
 
 	return s
+}
+
+func isNil(v interface{}) bool {
+	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
 }

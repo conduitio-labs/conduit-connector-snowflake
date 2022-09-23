@@ -29,4 +29,5 @@ const (
 	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
 	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
 	queryIsStreamExist       = `SHOW STREAMS LIKE '%s'`
+	queryGetMaxValue         = `SELECT MAX(%s) FROM %s`
 )

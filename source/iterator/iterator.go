@@ -40,7 +40,7 @@ type Iterator struct {
 func New(
 	ctx context.Context,
 	conn, table,
-	key string,
+	key, orderingColumn string,
 	columns []string,
 	batchSize int,
 	pos sdk.Position,
@@ -49,8 +49,7 @@ func New(
 		snapshotIterator *SnapshotIterator
 		cdcIterator      *CDCIterator
 		posType          position.IteratorType
-		isFirstStart     bool
-		p                position.Position
+		p                *position.Position
 		er               error
 	)
 
@@ -63,8 +62,6 @@ func New(
 	if pos == nil {
 		// Snapshot iterator starts work first.
 		posType = position.TypeSnapshot
-
-		isFirstStart = true
 
 		err = prepareCDC(ctx, snowflake, table)
 		if err != nil {
@@ -81,8 +78,7 @@ func New(
 
 	switch posType {
 	case position.TypeSnapshot:
-		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, table, key,
-			columns, p.IndexInBatch, p.BatchID, batchSize, isFirstStart)
+		snapshotIterator, err = NewSnapshotIterator(ctx, snowflake, table, orderingColumn, key, columns, batchSize, p)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
@@ -133,31 +129,6 @@ func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table stri
 	}
 
 	return nil
-}
-
-func setupSnapshotIterator(
-	ctx context.Context,
-	snowflake Repository,
-	table, key string,
-	columns []string,
-	element, offset, batchSize int,
-	isFirstStart bool,
-) (*SnapshotIterator, error) {
-	var (
-		index int
-	)
-
-	if !isFirstStart {
-		index = element + 1
-	}
-
-	data, err := snowflake.GetData(ctx, table, key, columns, offset, batchSize)
-	if err != nil {
-		return nil, fmt.Errorf("get currentBatch: %w", err)
-	}
-
-	return NewSnapshotIterator(snowflake, table,
-		columns, key, index, offset, batchSize, data), nil
 }
 
 func setupCDCIterator(
