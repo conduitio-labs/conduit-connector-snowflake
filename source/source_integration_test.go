@@ -291,10 +291,11 @@ func prepareConfig() (map[string]string, error) {
 	}
 
 	return map[string]string{
-		config.KeyConnection: connection,
-		config.KeyTable:      testTable,
-		config.KeyColumns:    "",
-		config.KeyPrimaryKey: "id",
+		config.KeyConnection:     connection,
+		config.KeyTable:          testTable,
+		config.KeyColumns:        "",
+		config.KeyPrimaryKey:     "id",
+		config.KeyOrderingColumn: "id",
 	}, nil
 }
 

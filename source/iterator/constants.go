@@ -22,8 +22,10 @@ const (
 	insertValue = "INSERT"
 	deleteValue = "DELETE"
 
+	snowflakeErrorCodeQueryNotExecuting = "000605"
+
 	// metadata related.
-	metadataTable = "table"
+	metadataTable = "snowflake.table"
 
 	// actionType names.
 	actionInsert actionType = "insert"

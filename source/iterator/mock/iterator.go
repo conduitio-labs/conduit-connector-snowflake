@@ -8,7 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
+	position "github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	gomock "github.com/golang/mock/gomock"
+	sqlx "github.com/jmoiron/sqlx"
 )
 
 // MockRepository is a mock of Repository interface.
@@ -76,19 +78,34 @@ func (mr *MockRepositoryMockRecorder) CreateTrackingTable(ctx, trackingTable, ta
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrackingTable", reflect.TypeOf((*MockRepository)(nil).CreateTrackingTable), ctx, trackingTable, table)
 }
 
-// GetData mocks base method.
-func (m *MockRepository) GetData(ctx context.Context, table, key string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
+// GetMaxValue mocks base method.
+func (m *MockRepository) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetData", ctx, table, key, fields, offset, limit)
-	ret0, _ := ret[0].([]map[string]interface{})
+	ret := m.ctrl.Call(m, "GetMaxValue", ctx, table, orderingColumn)
+	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetData indicates an expected call of GetData.
-func (mr *MockRepositoryMockRecorder) GetData(ctx, table, key, fields, offset, limit interface{}) *gomock.Call {
+// GetMaxValue indicates an expected call of GetMaxValue.
+func (mr *MockRepositoryMockRecorder) GetMaxValue(ctx, table, orderingColumn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetData", reflect.TypeOf((*MockRepository)(nil).GetData), ctx, table, key, fields, offset, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxValue", reflect.TypeOf((*MockRepository)(nil).GetMaxValue), ctx, table, orderingColumn)
+}
+
+// GetRows mocks base method.
+func (m *MockRepository) GetRows(ctx context.Context, table, orderingColumn string, fields []string, pos *position.Position, maxValue any, limit int) (*sqlx.Rows, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRows", ctx, table, orderingColumn, fields, pos, maxValue, limit)
+	ret0, _ := ret[0].(*sqlx.Rows)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRows indicates an expected call of GetRows.
+func (mr *MockRepositoryMockRecorder) GetRows(ctx, table, orderingColumn, fields, pos, maxValue, limit interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRows", reflect.TypeOf((*MockRepository)(nil).GetRows), ctx, table, orderingColumn, fields, pos, maxValue, limit)
 }
 
 // GetTrackingData mocks base method.

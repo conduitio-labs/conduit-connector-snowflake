@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,13 +34,15 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
-// ConfigurableAcceptanceTestDriver driver for test.
-type ConfigurableAcceptanceTestDriver struct {
+// driver Configurable Acceptance test driver.
+type driver struct {
 	sdk.ConfigurableAcceptanceTestDriver
+
+	counter int32
 }
 
 // WriteToSource - write data to table.
-func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
+func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
 
 	db, err := sql.Open("snowflake", connectionURL)
@@ -72,9 +75,10 @@ func (d ConfigurableAcceptanceTestDriver) WriteToSource(t *testing.T, records []
 }
 
 // GenerateRecord generate record for snowflake account.
-func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
-	id := uuid.New().String()
-	m := map[string]any{"ID": id}
+func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
+	atomic.AddInt32(&d.counter, 1)
+
+	m := map[string]any{"ID": fmt.Sprintf("%d", d.counter)}
 
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -85,7 +89,7 @@ func (d ConfigurableAcceptanceTestDriver) GenerateRecord(t *testing.T, operation
 		Position:  sdk.Position(uuid.New().String()),
 		Operation: operation,
 		Key: sdk.StructuredData{
-			"ID": id,
+			"ID": fmt.Sprintf("%d", d.counter),
 		},
 		Payload: sdk.Change{
 			Before: nil,
@@ -101,24 +105,26 @@ func TestAcceptance(t *testing.T) {
 	}
 
 	cfg := map[string]string{
-		config.KeyConnection: connectionURL,
-		config.KeyPrimaryKey: "ID",
+		config.KeyConnection:     connectionURL,
+		config.KeyPrimaryKey:     "ID",
+		config.KeyOrderingColumn: "ID",
 	}
 
-	sdk.AcceptanceTest(t, ConfigurableAcceptanceTestDriver{sdk.ConfigurableAcceptanceTestDriver{
-		Config: sdk.ConfigurableAcceptanceTestDriverConfig{
-			Connector:         Connector,
-			SourceConfig:      cfg,
-			DestinationConfig: nil,
-			GoleakOptions: []goleak.Option{
-				// Snowflake driver has those leaks. Issue: https://github.com/snowflakedb/gosnowflake/issues/588
-				goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
-				goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+	sdk.AcceptanceTest(t, &driver{
+		ConfigurableAcceptanceTestDriver: sdk.ConfigurableAcceptanceTestDriver{
+			Config: sdk.ConfigurableAcceptanceTestDriverConfig{
+				Connector:         Connector,
+				SourceConfig:      cfg,
+				DestinationConfig: cfg,
+				BeforeTest:        beforeTest(t, cfg),
+				GoleakOptions: []goleak.Option{
+					// Snowflake driver has those leaks. Issue: https://github.com/snowflakedb/gosnowflake/issues/588
+					goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
+					goleak.IgnoreTopFunction("internal/poll.runtime_pollWait"),
+				},
 			},
-			BeforeTest: beforeTest(t, cfg),
 		},
-	}},
-	)
+	})
 }
 
 func setupTestDB(t *testing.T, connectionURL, table string) error {
@@ -141,7 +147,7 @@ func setupTestDB(t *testing.T, connectionURL, table string) error {
 
 	defer conn.Close()
 
-	createQuery := fmt.Sprintf("create table %s (id string);", table)
+	createQuery := fmt.Sprintf("create table %s (id text);", table)
 
 	_, err = conn.ExecContext(context.Background(), createQuery)
 	if err != nil {
