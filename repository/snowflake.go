@@ -100,7 +100,7 @@ func (s *Snowflake) GetRows(
 
 	query, args := sb.Build()
 
-	ctxTime, cancel := context.WithTimeout(context.Background(), queryTimeout*time.Second)
+	ctxTime, cancel := context.WithTimeout(ctx, queryTimeout*time.Second)
 	defer cancel()
 
 	rows, err := s.conn.QueryxContext(ctxTime, query, args...)
