@@ -115,7 +115,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 // Teardown gracefully shutdown connector.
 func (s *Source) Teardown(ctx context.Context) error {
 	if s.iterator != nil {
-		err := s.iterator.Stop()
+		err := s.iterator.Stop(ctx)
 		if err != nil {
 			return err
 		}

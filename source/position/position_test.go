@@ -29,15 +29,11 @@ func TestParseSDKPosition(t *testing.T) {
 		IteratorType:             TypeCDC,
 		SnapshotLastProcessedVal: "1",
 		SnapshotMaxValue:         "10",
-		IndexInBatch:             99,
-		BatchID:                  103,
 		Time:                     time.Time{},
 	}
 
 	wrongPosType := Position{
 		IteratorType: "i",
-		IndexInBatch: 99,
-		BatchID:      103,
 	}
 
 	posBytes, _ := json.Marshal(snapshotPos)

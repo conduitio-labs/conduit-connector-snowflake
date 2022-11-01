@@ -78,6 +78,20 @@ func (mr *MockRepositoryMockRecorder) CreateTrackingTable(ctx, trackingTable, ta
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrackingTable", reflect.TypeOf((*MockRepository)(nil).CreateTrackingTable), ctx, trackingTable, table)
 }
 
+// DeleteTrackingData mocks base method.
+func (m *MockRepository) DeleteTrackingData(ctx context.Context, table string, ids []any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTrackingData", ctx, table, ids)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTrackingData indicates an expected call of DeleteTrackingData.
+func (mr *MockRepositoryMockRecorder) DeleteTrackingData(ctx, table, ids interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrackingData", reflect.TypeOf((*MockRepository)(nil).DeleteTrackingData), ctx, table, ids)
+}
+
 // GetMaxValue mocks base method.
 func (m *MockRepository) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
 	m.ctrl.T.Helper()
@@ -109,16 +123,16 @@ func (mr *MockRepositoryMockRecorder) GetRows(ctx, table, orderingColumn, fields
 }
 
 // GetTrackingData mocks base method.
-func (m *MockRepository) GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string, offset, limit int) ([]map[string]interface{}, error) {
+func (m *MockRepository) GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string, limit int) (*sqlx.Rows, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTrackingData", ctx, stream, trackingTable, fields, offset, limit)
-	ret0, _ := ret[0].([]map[string]interface{})
+	ret := m.ctrl.Call(m, "GetTrackingData", ctx, stream, trackingTable, fields, limit)
+	ret0, _ := ret[0].(*sqlx.Rows)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTrackingData indicates an expected call of GetTrackingData.
-func (mr *MockRepositoryMockRecorder) GetTrackingData(ctx, stream, trackingTable, fields, offset, limit interface{}) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) GetTrackingData(ctx, stream, trackingTable, fields, limit interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackingData", reflect.TypeOf((*MockRepository)(nil).GetTrackingData), ctx, stream, trackingTable, fields, offset, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackingData", reflect.TypeOf((*MockRepository)(nil).GetTrackingData), ctx, stream, trackingTable, fields, limit)
 }

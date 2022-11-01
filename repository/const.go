@@ -23,7 +23,7 @@ const (
 	queryCreateStream        = `CREATE OR REPLACE STREAM %s on table %s`
 	queryCreateTrackingTable = `CREATE TABLE %s LIKE %s`
 	queryAddTimestampColumn  = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
-	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s STRING`
+	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s VARCHAR(60)`
 	queryAddBooleanColumn    = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
 	queryInsertInto          = `INSERT INTO %s %s`
 	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`

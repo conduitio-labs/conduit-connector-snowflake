@@ -32,14 +32,12 @@ func TestCDCIterator_HasNext(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
+			nil, 10).Return(nil, nil)
+
+		i := NewCDCIterator(rp, "test", nil, "ID", 10)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -51,45 +49,15 @@ func TestCDCIterator_HasNext(t *testing.T) {
 		}
 	})
 
-	t.Run("success_return_false", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		ctx := context.Background()
-
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
-		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
-			nil, 0, 10).Return(nil, nil)
-
-		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
-
-		hasNext, err := i.HasNext(ctx)
-		if err != nil {
-			t.Errorf("has next error = \"%s\"", err.Error())
-		}
-
-		if !reflect.DeepEqual(hasNext, false) {
-			t.Errorf("got = %v, want %v", hasNext, false)
-		}
-	})
-
 	t.Run("failed", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
-			nil, 0, 10).Return(nil, errors.New("some error"))
+			nil, 10).Return(nil, errors.New("some error"))
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 10)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -108,11 +76,6 @@ func TestCDCIterator_Next(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
 		change := sdk.Change{
@@ -122,7 +85,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 10)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -146,11 +109,6 @@ func TestCDCIterator_Next(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
 		change := sdk.Change{
@@ -160,7 +118,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "ID", 10)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -179,14 +137,9 @@ func TestCDCIterator_Next(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 10)
 
 		_, err := i.Next(ctx)
 		if err == nil {
@@ -199,17 +152,12 @@ func TestCDCIterator_Stop(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 10)
 
-		err := i.Stop()
+		err := i.Stop(context.Background())
 		if err != nil {
 			t.Errorf("stop \"%s\"", err.Error())
 		}
@@ -217,17 +165,12 @@ func TestCDCIterator_Stop(t *testing.T) {
 	t.Run("failed", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
-		res := []map[string]interface{}{
-			{"ID": "2", "NAME": "foo", "METADATA$ACTION": "INSERT", "METADATA$ISUPDATE": false},
-			{"ID": "1", "NAME": "bar", "METADATA$ACTION": "DELETE", "METADATA$ISUPDATE": false},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", nil, "missing_key", 10)
 
-		err := i.Stop()
+		err := i.Stop(context.Background())
 		if err == nil {
 			t.Errorf("want error")
 		}

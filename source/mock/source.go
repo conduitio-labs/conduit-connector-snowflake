@@ -80,15 +80,15 @@ func (mr *MockIteratorMockRecorder) Next(ctx interface{}) *gomock.Call {
 }
 
 // Stop mocks base method.
-func (m *MockIterator) Stop() error {
+func (m *MockIterator) Stop(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
+	ret := m.ctrl.Call(m, "Stop", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Stop indicates an expected call of Stop.
-func (mr *MockIteratorMockRecorder) Stop() *gomock.Call {
+func (mr *MockIteratorMockRecorder) Stop(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockIterator)(nil).Stop))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockIterator)(nil).Stop), ctx)
 }

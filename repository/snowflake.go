@@ -160,64 +160,24 @@ func (s *Snowflake) GetTrackingData(
 	ctx context.Context,
 	stream, trackingTable string,
 	fields []string,
-	offset, limit int,
-) ([]map[string]interface{}, error) {
+	limit int,
+) (*sqlx.Rows, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
-	tx, err := s.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	defer tx.Rollback() // nolint:errcheck,nolintlint
-
 	// Consume data.
-	_, err = tx.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
+	_, err := s.conn.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
 	if err != nil {
 		return nil, fmt.Errorf("consume data: %w", err)
 	}
 
-	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
+	rows, err := s.conn.QueryxContext(ctx, buildGetTrackingDataQuery(trackingTable, fields, limit))
 	if err != nil {
-		return nil, fmt.Errorf("run query: %w", err)
+		return nil, fmt.Errorf("get tracking data %w", err)
 	}
 
-	defer rows.Close()
-
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("get columns: %w", err)
-	}
-
-	result := make([]map[string]interface{}, 0)
-
-	colValues := make([]interface{}, len(columns))
-
-	for rows.Next() {
-		row := make(map[string]interface{}, len(columns))
-
-		for i := range colValues {
-			colValues[i] = new(interface{})
-		}
-
-		if er := rows.Scan(colValues...); er != nil {
-			return nil, fmt.Errorf("scan: %w", err)
-		}
-
-		for i, col := range columns {
-			row[col] = *colValues[i].(*interface{})
-		}
-
-		result = append(result, row)
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return rows, nil
 }
 
 // IsTableExist check if table exist.
@@ -262,7 +222,27 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	return maxValue, nil
 }
 
-func buildGetTrackingData(table string, fields []string, offset, limit int) string {
+// DeleteTrackingData - delete rows from tracking table.
+func (s *Snowflake) DeleteTrackingData(ctx context.Context, table string, ids []any) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	db := sqlbuilder.NewDeleteBuilder()
+	db.DeleteFrom(table)
+	db.Where(db.In(MetadataColumnRow, ids...))
+
+	query, args := db.Build()
+
+	_, err := s.conn.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("delete rows: %w", err)
+	}
+
+	return nil
+}
+
+func buildGetTrackingDataQuery(table string, fields []string, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 	if len(fields) == 0 {
 		sb.Select("*")
@@ -273,7 +253,6 @@ func buildGetTrackingData(table string, fields []string, offset, limit int) stri
 
 	sb.From(table)
 	sb.OrderBy(MetadataColumnTime)
-	sb.Offset(offset)
 	sb.Limit(limit)
 
 	return sb.String()

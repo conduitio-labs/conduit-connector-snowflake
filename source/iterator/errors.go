@@ -23,4 +23,5 @@ var (
 	ErrCantFindActionType       = errors.New("can't find action type")
 	ErrInvalidSetup             = errors.New("invalid setup")
 	ErrOrderingColumnIsNotExist = errors.New("ordering column is not exist")
+	ErrNotStringType            = errors.New("value is not string")
 )

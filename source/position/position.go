@@ -42,10 +42,8 @@ type Position struct {
 	SnapshotMaxValue any
 
 	// CDC information
-	// IndexInBatch - index position in current batch.
-	IndexInBatch int
-	// BatchID - batch id.
-	BatchID int
+	// RowID - row id from tracking data.
+	RowID string
 
 	// Time Created time.
 	Time time.Time

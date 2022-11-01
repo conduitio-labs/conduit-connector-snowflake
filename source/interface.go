@@ -24,6 +24,6 @@ import (
 type Iterator interface {
 	HasNext(ctx context.Context) (bool, error)
 	Next(ctx context.Context) (sdk.Record, error)
-	Stop() error
+	Stop(ctx context.Context) error
 	Ack(ctx context.Context, rp sdk.Position) error
 }

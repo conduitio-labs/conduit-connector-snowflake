@@ -31,12 +31,13 @@ type Repository interface {
 	CreateStream(ctx context.Context, stream, table string) error
 	// GetTrackingData - get rows from tracking table.
 	GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string,
-		offset, limit int,
-	) ([]map[string]interface{}, error)
+		limit int) (*sqlx.Rows, error)
 	// CreateTrackingTable - create tracking table.
 	CreateTrackingTable(ctx context.Context, trackingTable, table string) error
 	// GetMaxValue get max value by ordering column.
 	GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error)
+	// DeleteTrackingData delete rows from tracking table.
+	DeleteTrackingData(ctx context.Context, table string, ids []any) error
 	// Close - shutdown repository.
 	Close() error
 }

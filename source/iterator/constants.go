@@ -34,4 +34,10 @@ const (
 
 	// names format.
 	nameFormat = "%s_%s_%s"
+
+	// clearing buffer size.
+	idsClearingBufferSize = 50
+
+	// period after iterator clears table (seconds).
+	clearingDuration = 5
 )

@@ -84,7 +84,7 @@ func New(
 			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
 	case position.TypeCDC:
-		cdcIterator, err = setupCDCIterator(ctx, snowflake, table, key, columns, p.IndexInBatch, p.BatchID, batchSize)
+		cdcIterator, err = setupCDCIterator(ctx, snowflake, table, key, columns, batchSize)
 		if err != nil {
 			return nil, fmt.Errorf("setup cdc iterator: %w", err)
 		}
@@ -137,16 +137,13 @@ func setupCDCIterator(
 	snowflake Repository,
 	table, key string,
 	columns []string,
-	element, offset, batchSize int,
+	batchSize int,
 ) (*CDCIterator, error) {
-	var index int
+	var err error
 
-	if element != 0 {
-		index = element + 1
-	}
+	it := NewCDCIterator(snowflake, table, columns, key, batchSize)
 
-	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns,
-		offset, batchSize)
+	it.rows, err = snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns, batchSize)
 	if err != nil {
 		// Snowflake library sends request to abort query with query and to server when get context cancel.
 		// But sometimes query was executed or didn't start execution.
@@ -159,11 +156,10 @@ func setupCDCIterator(
 			return nil, ctx.Err()
 		}
 
-		return nil, fmt.Errorf("get stream currentBatch: %w", err)
+		return nil, fmt.Errorf("get stream rows: %w", err)
 	}
 
-	return NewCDCIterator(snowflake, table,
-		columns, key, index, offset, batchSize, data), nil
+	return it, nil
 }
 
 // HasNext check ability to get next record.
@@ -180,7 +176,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 		// Setup cdc iterator.
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			i.table, i.key, i.columns, 0, 0, i.snapshotIterator.batchSize)
+			i.table, i.key, i.columns, i.snapshotIterator.batchSize)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %w", err)
 		}
@@ -235,13 +231,13 @@ func (i *Iterator) Ack(ctx context.Context, rp sdk.Position) error {
 }
 
 // Stop iterator.
-func (i *Iterator) Stop() error {
+func (i *Iterator) Stop(ctx context.Context) error {
 	if i.snapshotIterator != nil {
 		return i.snapshotIterator.Stop()
 	}
 
 	if i.cdcIterator != nil {
-		return i.cdcIterator.Stop()
+		return i.cdcIterator.Stop(ctx)
 	}
 
 	return nil

@@ -114,11 +114,11 @@ func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	i.rows, err = i.snowflake.GetRows(ctx, i.table, i.orderingColumn, i.columns,
 		i.position, i.maxValue, i.batchSize)
 	if err != nil {
-		// Snowflake library sends request to abort query with query and to server when get context cancel.
-		// But sometimes query was executed or didn't start execution.
+		// Snowflake library sends request to abort query to server when get context cancel.
+		// But sometimes query had executed before or didn't start execution.
 		// On this case snowflake server return specific error:
 		// 000605: Identified SQL statement is not currently executing.
-		// Connector can't return this error and connector replace to
+		// Connector can't return this error to conduit system and connector replace to
 		// context cancel error
 		// https://github.com/snowflakedb/gosnowflake/blob/master/restful.go#L449
 		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {

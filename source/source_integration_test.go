@@ -284,10 +284,10 @@ func TestSource_CDC_Empty_Stream(t *testing.T) {
 }
 
 func prepareConfig() (map[string]string, error) {
-	connection := os.Getenv("SNOWFLAKE_CONNECTION")
+	connection := os.Getenv("SNOWFLAKE_CONNECTION_URL")
 
 	if connection == "" {
-		return map[string]string{}, errors.New("SNOWFLAKE_CONNECTION env var must be set")
+		return map[string]string{}, errors.New("SNOWFLAKE_CONNECTION_URL env var must be set")
 	}
 
 	return map[string]string{
