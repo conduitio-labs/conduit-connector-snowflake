@@ -19,15 +19,19 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 func TestParseSDKPosition(t *testing.T) {
-	snapshotPos := Position{
-		IteratorType: TypeSnapshot,
-		IndexInBatch: 99,
-		BatchID:      103,
+	snapshotPos := &Position{
+		IteratorType:             TypeCDC,
+		SnapshotLastProcessedVal: "1",
+		SnapshotMaxValue:         "10",
+		IndexInBatch:             99,
+		BatchID:                  103,
+		Time:                     time.Time{},
 	}
 
 	wrongPosType := Position{
@@ -36,20 +40,20 @@ func TestParseSDKPosition(t *testing.T) {
 		BatchID:      103,
 	}
 
-	snapshotPosBytes, _ := json.Marshal(snapshotPos)
+	posBytes, _ := json.Marshal(snapshotPos)
 
 	wrongPosBytes, _ := json.Marshal(wrongPosType)
 
 	tests := []struct {
 		name        string
 		in          sdk.Position
-		want        Position
+		want        *Position
 		wantErr     bool
 		expectedErr string
 	}{
 		{
 			name: "valid position",
-			in:   sdk.Position(snapshotPosBytes),
+			in:   sdk.Position(posBytes),
 			want: snapshotPos,
 		},
 		{
@@ -78,7 +82,7 @@ func TestParseSDKPosition(t *testing.T) {
 
 				return
 			}
-
+			got.Time = time.Time{}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("parse = %v, want %v", got, tt.want)
 			}

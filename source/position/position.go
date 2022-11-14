@@ -17,6 +17,7 @@ package position
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -34,43 +35,51 @@ type Position struct {
 	// IteratorType - shows in what iterator was created position.
 	IteratorType IteratorType
 
+	// Snapshot information.
+	// SnapshotLastProcessedVal - last processed value from ordering column.
+	SnapshotLastProcessedVal any
+	// SnapshotMaxValue max value by  ordering column, when snapshot starts work.
+	SnapshotMaxValue any
+
+	// CDC information
 	// IndexInBatch - index position in current batch.
 	IndexInBatch int
 	// BatchID - batch id.
 	BatchID int
-}
 
-// NewPosition create position.
-func NewPosition(iteratorType IteratorType, element int, batchID int) *Position {
-	return &Position{IteratorType: iteratorType, IndexInBatch: element, BatchID: batchID}
+	// Time Created time.
+	Time time.Time
 }
 
 // ParseSDKPosition parses SDK position and returns Position.
-func ParseSDKPosition(p sdk.Position) (Position, error) {
+func ParseSDKPosition(p sdk.Position) (*Position, error) {
 	var pos Position
 
 	if p == nil {
-		return pos, nil
+		return nil, nil
 	}
 
 	err := json.Unmarshal(p, &pos)
 	if err != nil {
-		return pos, err
+		return nil, err
 	}
 
 	switch pos.IteratorType {
 	case TypeSnapshot:
-		return pos, nil
+		return &pos, nil
 	case TypeCDC:
-		return pos, nil
+		return &pos, nil
 	default:
-		return pos, fmt.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
+		return &pos, fmt.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
 	}
 }
 
 // ConvertToSDKPosition formats and returns sdk.Position.
-func (p Position) ConvertToSDKPosition() sdk.Position {
-	b, _ := json.Marshal(p)
+func (p Position) ConvertToSDKPosition() (sdk.Position, error) {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return sdk.Position{}, err
+	}
 
-	return b
+	return b, nil
 }

@@ -18,15 +18,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 // SnapshotIterator to iterate snowflake objects.
 type SnapshotIterator struct {
+	rows *sqlx.Rows
+
 	// repository for run queries to snowflake.
 	snowflake Repository
 
@@ -37,97 +41,151 @@ type SnapshotIterator struct {
 	columns []string
 	// Name of column what iterator use for setting key in record.
 	key string
-
-	// index - current index of element in current batch which iterator converts to record
-	index int
-	// offset - current offset, show what batch iterator uses, using in query to get currentBatch.
-	offset int
 	// batchSize size of batch.
 	batchSize int
-
-	// currentBatch - rows in current batch from table.
-	currentBatch []map[string]interface{}
+	// orderingColumn Name of column what iterator using for sorting data.
+	orderingColumn string
+	// position last recorded position.
+	position *position.Position
+	// maxValue max value by ordering column when snapshot starts works
+	maxValue any
 }
 
-// NewSnapshotIterator iterator.
+// NewSnapshotIterator new snapshot iterator.
 func NewSnapshotIterator(
+	ctx context.Context,
 	snowflake Repository,
-	table string,
+	table, orderingColumn, key string,
 	columns []string,
-	key string,
-	index, offset, batchSize int,
-	currentBatch []map[string]interface{},
-) *SnapshotIterator {
-	return &SnapshotIterator{
-		snowflake:    snowflake,
-		table:        table,
-		columns:      columns,
-		key:          key,
-		index:        index,
-		offset:       offset,
-		batchSize:    batchSize,
-		currentBatch: currentBatch,
+	batchSize int,
+	position *position.Position,
+) (*SnapshotIterator, error) {
+	var (
+		err error
+	)
+
+	snapshotIterator := &SnapshotIterator{
+		snowflake:      snowflake,
+		table:          table,
+		columns:        columns,
+		key:            key,
+		orderingColumn: orderingColumn,
+		batchSize:      batchSize,
+		position:       position,
 	}
+
+	if position == nil {
+		snapshotIterator.maxValue, err = snapshotIterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
+		if err != nil {
+			return nil, fmt.Errorf("get max value: %w", err)
+		}
+	} else {
+		snapshotIterator.maxValue = position.SnapshotMaxValue
+	}
+
+	snapshotIterator.rows, err = snapshotIterator.snowflake.GetRows(ctx, table, orderingColumn, columns,
+		position, snapshotIterator.maxValue, batchSize)
+	if err != nil {
+		// Snowflake library sends request to abort query with query and to server when get context cancel.
+		// But sometimes query was executed or didn't start execution.
+		// On this case snowflake server return specific error:
+		// 000605: Identified SQL statement is not currently executing.
+		// Connector can't return this error and connector replace to
+		// context cancel error
+		// https://github.com/snowflakedb/gosnowflake/blob/master/restful.go#L449
+		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {
+			return nil, ctx.Err()
+		}
+
+		return nil, fmt.Errorf("get rows: %w", err)
+	}
+
+	return snapshotIterator, nil
 }
 
 // HasNext check ability to get next record.
 func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	var err error
 
-	if i.index < len(i.currentBatch) {
+	if i.rows != nil && i.rows.Next() {
 		return true, nil
 	}
 
-	if i.index >= i.batchSize {
-		i.offset += i.batchSize
-		i.index = 0
-	}
-
-	i.currentBatch, err = i.snowflake.GetData(ctx, i.table, i.key, i.columns, i.offset, i.batchSize)
+	i.rows, err = i.snowflake.GetRows(ctx, i.table, i.orderingColumn, i.columns,
+		i.position, i.maxValue, i.batchSize)
 	if err != nil {
-		return false, err
+		// Snowflake library sends request to abort query with query and to server when get context cancel.
+		// But sometimes query was executed or didn't start execution.
+		// On this case snowflake server return specific error:
+		// 000605: Identified SQL statement is not currently executing.
+		// Connector can't return this error and connector replace to
+		// context cancel error
+		// https://github.com/snowflakedb/gosnowflake/blob/master/restful.go#L449
+		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {
+			return false, ctx.Err()
+		}
+
+		return false, fmt.Errorf("get rows: %w", err)
 	}
 
-	if len(i.currentBatch) == 0 || len(i.currentBatch) <= i.index {
-		return false, nil
+	// check new batch.
+	if i.rows != nil && i.rows.Next() {
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 // Next get new record.
 func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
-	var (
-		payload sdk.RawData
-		err     error
-	)
-
-	pos := position.NewPosition(position.TypeSnapshot, i.index, i.offset)
-
-	payload, err = json.Marshal(i.currentBatch[i.index])
-	if err != nil {
-		return sdk.Record{}, fmt.Errorf("marshal error : %w", err)
+	row := make(map[string]any)
+	if err := i.rows.MapScan(row); err != nil {
+		return sdk.Record{}, fmt.Errorf("scan rows: %w", err)
 	}
 
-	if _, ok := i.currentBatch[i.index][i.key]; !ok {
+	if _, ok := row[i.orderingColumn]; !ok {
+		return sdk.Record{}, ErrOrderingColumnIsNotExist
+	}
+
+	pos := position.Position{
+		IteratorType:             position.TypeSnapshot,
+		SnapshotLastProcessedVal: row[i.orderingColumn],
+		SnapshotMaxValue:         i.maxValue,
+		Time:                     time.Now(),
+	}
+
+	convertedPosition, err := pos.ConvertToSDKPosition()
+	if err != nil {
+		return sdk.Record{}, fmt.Errorf("convert position %w", err)
+	}
+
+	if _, ok := row[i.key]; !ok {
 		return sdk.Record{}, ErrKeyIsNotExist
 	}
 
-	key := i.currentBatch[i.index][i.key]
+	transformedRowBytes, err := json.Marshal(row)
+	if err != nil {
+		return sdk.Record{}, fmt.Errorf("marshal row: %w", err)
+	}
 
-	i.index++
+	i.position = &pos
 
 	metadata := sdk.Metadata(map[string]string{metadataTable: i.table})
 	metadata.SetCreatedAt(time.Now())
 
-	record := sdk.Util.Source.NewRecordSnapshot(pos.ConvertToSDKPosition(), metadata,
-		sdk.StructuredData{i.key: key}, payload)
-
-	return record, nil
+	return sdk.Util.Source.NewRecordSnapshot(convertedPosition, metadata,
+		sdk.StructuredData{i.key: row[i.key]}, sdk.RawData(transformedRowBytes)), nil
 }
 
 // Stop shutdown iterator.
 func (i *SnapshotIterator) Stop() error {
+	if i.rows != nil {
+		err := i.rows.Close()
+		if err != nil {
+			return fmt.Errorf("close rows: %w", err)
+		}
+	}
+
 	return i.snowflake.Close()
 }
 

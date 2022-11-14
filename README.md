@@ -15,13 +15,14 @@ snowflake connector.
 
 The config passed to `Configure` can contain the following fields.
 
-| name         | description                                                                                                                                                                                                                                     | required | example                                                |
-|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
-| `connection` | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
-| `table`      | The table name in snowflake db.                                                                                                                                                                                                                 | yes      | "users"                                                |
-| `columns`    | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                 | no       | "id,name,age"                                          |
-| `primaryKey` | Column name that records should use for their `Key` fields.                                                                                                                                                                                     | yes      | "id"                                                   |
-| `batchSize`  | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                                                   | no       | "100"                                                  |
+| name             | description                                                                                                                                                                                                                                    | required | example                                                |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
+| `connection`     | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
+| `table`          | The table name in snowflake db.                                                                                                                                                                                                                | yes      | "users"                                                |
+| `columns`        | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                | no       | "id,name,age"                                          |
+| `primaryKey`     | Column name that records should use for their `Key` fields.                                                                                                                                                                                    | yes      | "id"                                                   |
+| `orderingColumn` | The name of a column that the connector will use for ordering rows. Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.                                                                          | yes      | "id"                                                   |
+| `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                         | no       | "100"                                                  |
 
 ### How to build it
 
@@ -34,7 +35,7 @@ Run `make test`.
 ### Snowflake Source
 
 The Snowflake Source Connector connects to a snowflake with the provided configurations, using
-`connection`, `table`,`columns`, `primaryKey`, `batchSize`  and using snowflake driver.
+`connection`, `table`,`columns`, `orderingColumn`, `primaryKey`, `batchSize`  and using snowflake driver.
 Source method `Configure`  parse the configurations.
 `Open` method is called to start the connection from the provided position get the
 data from snowflake db. The `Read` return next record. The `Ack` method
@@ -42,35 +43,17 @@ checks if the record with the position was recorded. The `Teardown` do gracefull
 
 #### Snapshot Iterator
 
-The snapshot iterator starts getting data from the table using select query with limit and offset.
-Batch size is configurable, offset value is zero for first time. Iterator save rows from table
-to `currentBatch` slice variable.
+First time when the snapshot iterator starts work, it is get max value from `orderingColumn` and saves this value to position.
+The snapshot iterator reads all rows, where `orderingColumn` values less or equal maxValue, from the table in batches
+via SELECT with fetching and ordering by `orderingColumn`.
 
-Iterator `HasNext` method check if next element exist in `currentBatch` using variable `index`
-and if it is needed change offset and run select query to get new data with new offset. Method `Next` gets
-next element and converts it to `Record` sets metadata variable `table`, set metadata variable `action` - `insert`,
-increase `index`.
 
-If snapshot stops, it will parse position from last record. Position has fields: `IndexInBatch` - it is the index of element
-in current batch, this last element what was recorded, `BatchID` - shows the last value offset what iterator used for
-getting data query. Iterator runs query to get data from table with `batchSize` and `offset` which was got from
-position. `index` value will be `Element` increased by one, because iterator tries to find next element in current batch.
-If `index` > `batchSize` iterator will change `BatchID` to next and set `index` zero.
+`OrderingColumn` value must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.
+Iterators saves last processed value from `orderingColumn` column to position to field `SnapshotLastProcessedVal`.
+If snapshot stops it will parse position from last record and will try gets row where `{{orderingColumn}} > {{position.SnapshotLastProcessedVal}}`
 
-For example, we get snapshot position in `Open` function:
 
-```json
-{
- "Type" : "s",
- "IndexInBatch": 2,
- "BatchID": 10
-}
-```
-
-Last recorded position has `BatchID` = 10, it is means iterator did last time query with `offset` value 10, iterator will
-do the same query with the  same `offset` value. Iterator gets batch with rows from table. `IndexInBatch` it is last
-index for element in this batch what was processed. Iterator looks for next element in batch (with index = 3) and convert
-it to record. 
+When all records are returned, the connector switches to the CDC iterator.
 
 #### CDC Iterator
 
@@ -150,14 +133,17 @@ Connectors will transform this data to records.
 
 #### Position
 
-Position has fields: `Type` (`c` - CDC or `s`- Snapshot), `IndexInBatch`(index of element of current
-batch), `BatchID`(offset value).
+Position has fields: `Type` (`c` - CDC or `s`- Snapshot),  `SnapshotLastProcessedVal`(last processed value from ordering column),
+`SnapshotMaxValue`(max value from ordering column), `IndexInBatch`(index of CDC element of current
+batch), `BatchID`(offset CDC  value).
 
 Example:
 
 ```json
 {
  "Type" : "c",
+ "SnapshotLastProcessedVal" : 299,
+ "SnapshotMaxValue" : 299,
  "IndexInBatch": 2,
  "BatchID": 5
 }
