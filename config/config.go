@@ -41,7 +41,7 @@ const (
 	KeyOrderingColumn = "orderingColumn"
 
 	// defaultBatchSize is a default value for a BatchSize field.
-	defaultBatchSize = 100
+	defaultBatchSize = 1000
 )
 
 // Config represents configuration needed for Snowflake.

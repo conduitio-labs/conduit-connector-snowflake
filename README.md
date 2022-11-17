@@ -22,7 +22,7 @@ The config passed to `Configure` can contain the following fields.
 | `columns`        | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                | no       | "id,name,age"                                          |
 | `primaryKey`     | Column name that records should use for their `Key` fields.                                                                                                                                                                                    | yes      | "id"                                                   |
 | `orderingColumn` | The name of a column that the connector will use for ordering rows. Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.                                                                          | yes      | "id"                                                   |
-| `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                         | no       | "100"                                                  |
+| `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                         | no       | "1000"                                                 |
 
 ### How to build it
 
