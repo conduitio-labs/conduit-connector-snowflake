@@ -34,14 +34,10 @@ Run `make test`.
 
 ### Snowflake Source
 
-The Snowflake Source Connector connects to a snowflake with the provided configurations, using
-`connection`, `table`,`columns`, `orderingColumn`, `primaryKey`, `batchSize`  and using snowflake driver.
-Source method `Configure`  parse the configurations.
-`Open` method is called to start the connection from the provided position get the
-data from snowflake db. The `Read` return next record. The `Ack` method
-checks if the record with the position was recorded. The `Teardown` do gracefully shutdown.
-
 #### Snapshot Iterator
+
+A "snapshot" is the state of a table data at a particular point in time when connector starts work. All changes after this
+(delete, update, insert operations) will capture Change Data Captured (CDC) iterator.
 
 First time when the snapshot iterator starts work, it is get max value from `orderingColumn` and saves this value to position.
 The snapshot iterator reads all rows, where `orderingColumn` values less or equal maxValue, from the table in batches
@@ -130,21 +126,3 @@ Connectors will transform this data to records.
 
 
 <b>NOTE:</b> please pay attention and don't accidentally delete `stream` and tracking table were created by CDC iterator.
-
-#### Position
-
-Position has fields: `Type` (`c` - CDC or `s`- Snapshot),  `SnapshotLastProcessedVal`(last processed value from ordering column),
-`SnapshotMaxValue`(max value from ordering column), `IndexInBatch`(index of CDC element of current
-batch), `BatchID`(offset CDC  value).
-
-Example:
-
-```json
-{
- "Type" : "c",
- "SnapshotLastProcessedVal" : 299,
- "SnapshotMaxValue" : 299,
- "IndexInBatch": 2,
- "BatchID": 5
-}
-```
