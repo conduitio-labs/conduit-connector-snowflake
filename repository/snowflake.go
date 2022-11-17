@@ -231,17 +231,6 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 	return rows.Next(), nil
 }
 
-// StreamExists check if stream exist.
-func (s *Snowflake) StreamExists(ctx context.Context, stream string) (bool, error) {
-	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsStreamExist, strings.ToUpper(stream)))
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-
-	return rows.Next(), nil
-}
-
 // GetMaxValue get max value by ordering column.
 func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))

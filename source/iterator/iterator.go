@@ -115,18 +115,10 @@ func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table stri
 		}
 	}
 
-	// Check if stream exist.
-	isStreamExist, err := snowflake.StreamExists(ctx, getTrackingTable(table))
+	// Prepare stream for cdc iterator.
+	err = snowflake.CreateStream(ctx, getStreamName(table), table)
 	if err != nil {
-		return fmt.Errorf("check if stream exist: %w", err)
-	}
-
-	if !isStreamExist {
-		// Prepare stream for cdc iterator.
-		err = snowflake.CreateStream(ctx, getStreamName(table), table)
-		if err != nil {
-			return fmt.Errorf("create stream: %w", err)
-		}
+		return fmt.Errorf("create stream: %w", err)
 	}
 
 	return nil

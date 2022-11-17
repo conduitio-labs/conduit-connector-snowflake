@@ -20,7 +20,7 @@ const (
 	MetadataColumnRow    = "METADATA$ROW_ID"
 	MetadataColumnTime   = "METADATA$TS"
 
-	queryCreateStream        = `CREATE OR REPLACE STREAM %s on table %s`
+	queryCreateStream        = `CREATE STREAM IF NOT EXISTS %s on table %s`
 	queryCreateTrackingTable = `CREATE TABLE %s LIKE %s`
 	queryAddTimestampColumn  = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
 	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s STRING`
@@ -28,6 +28,5 @@ const (
 	queryInsertInto          = `INSERT INTO %s %s`
 	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
 	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
-	queryIsStreamExist       = `SHOW STREAMS LIKE '%s'`
 	queryGetMaxValue         = `SELECT MAX(%s) FROM %s`
 )
