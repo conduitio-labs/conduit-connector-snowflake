@@ -77,7 +77,7 @@ func Parse(cfg map[string]string) (Config, error) {
 	}
 
 	if colsRaw := cfg[KeyColumns]; colsRaw != "" {
-		config.Columns = strings.Split(colsRaw, ",")
+		config.Columns = strings.Split(strings.ToUpper(colsRaw), ",")
 	}
 
 	// Columns in snowflake is uppercase.
@@ -85,7 +85,7 @@ func Parse(cfg map[string]string) (Config, error) {
 		config.Key = strings.ToUpper(config.Key)
 	}
 
-	if cfg[KeyPrimaryKey] != "" {
+	if cfg[KeyOrderingColumn] != "" {
 		config.OrderingColumn = strings.ToUpper(config.OrderingColumn)
 	}
 

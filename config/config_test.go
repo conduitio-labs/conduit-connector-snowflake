@@ -65,6 +65,27 @@ func TestParse(t *testing.T) {
 			expectedErr: "",
 		},
 		{
+			name: "valid config, custom fields",
+			cfg: map[string]string{
+				KeyConnection:     "user:password@my_organization-my_account/mydb/public",
+				KeyTable:          "customer",
+				KeyPrimaryKey:     "id",
+				KeyBatchSize:      "100",
+				KeyOrderingColumn: "id",
+				KeyColumns:        "id,name",
+			},
+			want: Config{
+				Connection:     "user:password@my_organization-my_account/mydb/public",
+				Table:          "customer",
+				Key:            "ID",
+				BatchSize:      100,
+				OrderingColumn: "ID",
+				Columns:        []string{"ID", "NAME"},
+			},
+			wantErr:     false,
+			expectedErr: "",
+		},
+		{
 			name: "missing connection field",
 			cfg: map[string]string{
 				KeyTable:          "customer",
@@ -128,6 +149,19 @@ func TestParse(t *testing.T) {
 			want:        Config{},
 			wantErr:     true,
 			expectedErr: `validate config: "Table" value must be less than or equal to 255`,
+		},
+		{
+			name: "missing orderingColumn field in columns",
+			cfg: map[string]string{
+				KeyConnection:     "user:password@my_organization-my_account/mydb",
+				KeyTable:          "customer",
+				KeyColumns:        "name",
+				KeyOrderingColumn: "id",
+				KeyPrimaryKey:     "id",
+			},
+			want:        Config{},
+			wantErr:     true,
+			expectedErr: `validate config: "Columns" value must contains values of these fields: "Key OrderingColumn"`,
 		},
 	}
 
