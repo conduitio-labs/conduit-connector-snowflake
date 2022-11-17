@@ -27,8 +27,8 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
-// SnapshotIterator to iterate snowflake objects.
-type SnapshotIterator struct {
+// snapshotIterator to iterate snowflake objects.
+type snapshotIterator struct {
 	rows *sqlx.Rows
 
 	// repository for run queries to snowflake.
@@ -51,20 +51,19 @@ type SnapshotIterator struct {
 	maxValue any
 }
 
-// NewSnapshotIterator new snapshot iterator.
-func NewSnapshotIterator(
+func newSnapshotIterator(
 	ctx context.Context,
 	snowflake Repository,
 	table, orderingColumn, key string,
 	columns []string,
 	batchSize int,
 	position *position.Position,
-) (*SnapshotIterator, error) {
+) (*snapshotIterator, error) {
 	var (
 		err error
 	)
 
-	snapshotIterator := &SnapshotIterator{
+	iterator := &snapshotIterator{
 		snowflake:      snowflake,
 		table:          table,
 		columns:        columns,
@@ -75,16 +74,16 @@ func NewSnapshotIterator(
 	}
 
 	if position == nil {
-		snapshotIterator.maxValue, err = snapshotIterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
+		iterator.maxValue, err = iterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
 		if err != nil {
 			return nil, fmt.Errorf("get max value: %w", err)
 		}
 	} else {
-		snapshotIterator.maxValue = position.SnapshotMaxValue
+		iterator.maxValue = position.SnapshotMaxValue
 	}
 
-	snapshotIterator.rows, err = snapshotIterator.snowflake.GetRows(ctx, table, orderingColumn, columns,
-		position, snapshotIterator.maxValue, batchSize)
+	iterator.rows, err = iterator.snowflake.GetRows(ctx, table, orderingColumn, columns,
+		position, iterator.maxValue, batchSize)
 	if err != nil {
 		// Snowflake library sends request to abort query with query and to server when get context cancel.
 		// But sometimes query was executed or didn't start execution.
@@ -100,11 +99,11 @@ func NewSnapshotIterator(
 		return nil, fmt.Errorf("get rows: %w", err)
 	}
 
-	return snapshotIterator, nil
+	return iterator, nil
 }
 
 // HasNext check ability to get next record.
-func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
+func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 	var err error
 
 	if i.rows != nil && i.rows.Next() {
@@ -137,7 +136,7 @@ func (i *SnapshotIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 	row := make(map[string]any)
 	if err := i.rows.MapScan(row); err != nil {
 		return sdk.Record{}, fmt.Errorf("scan rows: %w", err)
@@ -154,7 +153,7 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 		Time:                     time.Now(),
 	}
 
-	convertedPosition, err := pos.ConvertToSDKPosition()
+	sdkPos, err := pos.ConvertToSDKPosition()
 	if err != nil {
 		return sdk.Record{}, fmt.Errorf("convert position %w", err)
 	}
@@ -173,12 +172,12 @@ func (i *SnapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 	metadata := sdk.Metadata(map[string]string{metadataTable: i.table})
 	metadata.SetCreatedAt(time.Now())
 
-	return sdk.Util.Source.NewRecordSnapshot(convertedPosition, metadata,
+	return sdk.Util.Source.NewRecordSnapshot(sdkPos, metadata,
 		sdk.StructuredData{i.key: row[i.key]}, sdk.RawData(transformedRowBytes)), nil
 }
 
 // Stop shutdown iterator.
-func (i *SnapshotIterator) Stop() error {
+func (i *snapshotIterator) Stop() error {
 	if i.rows != nil {
 		err := i.rows.Close()
 		if err != nil {
@@ -190,7 +189,7 @@ func (i *SnapshotIterator) Stop() error {
 }
 
 // Ack check if record with position was recorded.
-func (i *SnapshotIterator) Ack(ctx context.Context, rp sdk.Position) error {
+func (i *snapshotIterator) Ack(ctx context.Context, rp sdk.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(rp)).Msg("got ack")
 
 	return nil

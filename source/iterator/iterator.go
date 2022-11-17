@@ -27,7 +27,7 @@ import (
 
 // Iterator combined iterator.
 type Iterator struct {
-	snapshotIterator *SnapshotIterator
+	snapshotIterator *snapshotIterator
 	cdcIterator      *CDCIterator
 
 	pos sdk.Position
@@ -47,7 +47,7 @@ func New(
 	pos sdk.Position,
 ) (*Iterator, error) {
 	var (
-		snapshotIterator *SnapshotIterator
+		snapshotIterator *snapshotIterator
 		cdcIterator      *CDCIterator
 		posType          position.IteratorType
 		p                *position.Position
@@ -79,7 +79,7 @@ func New(
 
 	switch posType {
 	case position.TypeSnapshot:
-		snapshotIterator, err = NewSnapshotIterator(ctx, snowflake, table, orderingColumn, key, columns, batchSize, p)
+		snapshotIterator, err = newSnapshotIterator(ctx, snowflake, table, orderingColumn, key, columns, batchSize, p)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
@@ -102,7 +102,7 @@ func New(
 
 func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table string) error {
 	// Check if table tracking table exist.
-	isTableExist, err := snowflake.IsTableExist(ctx, getTrackingTable(table))
+	isTableExist, err := snowflake.TableExists(ctx, getTrackingTable(table))
 	if err != nil {
 		return fmt.Errorf("check if table exist: %w", err)
 	}
@@ -116,7 +116,7 @@ func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table stri
 	}
 
 	// Check if stream exist.
-	isStreamExist, err := snowflake.IsStreamExist(ctx, getTrackingTable(table))
+	isStreamExist, err := snowflake.StreamExists(ctx, getTrackingTable(table))
 	if err != nil {
 		return fmt.Errorf("check if stream exist: %w", err)
 	}

@@ -49,7 +49,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 		rp.EXPECT().GetMaxValue(ctx, table, orderingColumn).Return(maxValue, nil)
 		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, nil, 12, batchSize).Return(nil, nil)
 
-		i, err := NewSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, nil)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +73,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 
 		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, maxValue, batchSize).Return(nil, nil)
 
-		i, err := NewSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, 12, batchSize).Return(nil, nil)
 
-		i, err := NewSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -126,7 +126,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, 12, batchSize).Return(nil, nil)
 		rp.EXPECT().Close().Return(nil)
 
-		i, err := NewSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +144,7 @@ func TestIterator_Stop(t *testing.T) {
 		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, 12, batchSize).Return(nil, nil)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i, err := NewSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
