@@ -65,7 +65,7 @@ func TestParse(t *testing.T) {
 			expectedErr: "",
 		},
 		{
-			name: "missed connection field",
+			name: "missing connection field",
 			cfg: map[string]string{
 				KeyTable:          "customer",
 				KeyColumns:        "",
@@ -77,7 +77,7 @@ func TestParse(t *testing.T) {
 			expectedErr: `validate config: Connection value must be set`,
 		},
 		{
-			name: "missed table field",
+			name: "missing table field",
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb",
 				KeyColumns:        "",
@@ -89,7 +89,7 @@ func TestParse(t *testing.T) {
 			expectedErr: `validate config: Table value must be set`,
 		},
 		{
-			name: "missed key field",
+			name: "missing key field",
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb",
 				KeyTable:          "customer",
@@ -101,7 +101,7 @@ func TestParse(t *testing.T) {
 			expectedErr: `validate config: Key value must be set`,
 		},
 		{
-			name: "missed orderingColumn field",
+			name: "missing orderingColumn field",
 			cfg: map[string]string{
 				KeyConnection: "user:password@my_organization-my_account/mydb",
 				KeyTable:      "customer",
