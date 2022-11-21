@@ -38,7 +38,7 @@ import (
 type driver struct {
 	sdk.ConfigurableAcceptanceTestDriver
 
-	counter int32
+	idCounter int32
 }
 
 // WriteToSource - write data to table.
@@ -76,9 +76,9 @@ func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record 
 
 // GenerateRecord generate record for snowflake account.
 func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
-	atomic.AddInt32(&d.counter, 1)
+	atomic.AddInt32(&d.idCounter, 1)
 
-	m := map[string]any{"ID": fmt.Sprintf("%d", d.counter)}
+	m := map[string]any{"ID": fmt.Sprintf("%d", d.idCounter)}
 
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -89,7 +89,7 @@ func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Recor
 		Position:  sdk.Position(uuid.New().String()),
 		Operation: operation,
 		Key: sdk.StructuredData{
-			"ID": fmt.Sprintf("%d", d.counter),
+			"ID": fmt.Sprintf("%d", d.idCounter),
 		},
 		Payload: sdk.Change{
 			Before: nil,
