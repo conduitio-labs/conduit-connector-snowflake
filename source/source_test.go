@@ -39,27 +39,29 @@ func TestSource_Configure(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: map[string]string{
-				config.KeyConnection: "user:password@my_organization-my_account/mydb",
-				config.KeyTable:      "customer",
-				config.KeyPrimaryKey: "id",
+				config.KeyConnection:     "user:password@my_organization-my_account/mydb",
+				config.KeyTable:          "customer",
+				config.KeyPrimaryKey:     "id",
+				config.KeyOrderingColumn: "id",
 			},
 			expectedErr: nil,
 		},
 		{
 			name: "missing connection",
 			cfg: map[string]string{
-				config.KeyTable:      "customer",
-				config.KeyColumns:    "",
-				config.KeyPrimaryKey: "id",
+				config.KeyTable:          "customer",
+				config.KeyColumns:        "",
+				config.KeyPrimaryKey:     "id",
+				config.KeyOrderingColumn: "id",
 			},
-			expectedErr: errors.New(`"connection" config value must be set`),
+			expectedErr: errors.New("validate config: Connection value must be set"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := s.Configure(context.Background(), tt.cfg)
-			if !reflect.DeepEqual(err, tt.expectedErr) {
+			if err != nil && errors.Is(err, tt.expectedErr) {
 				t.Errorf("got = %v, want %v", err, tt.expectedErr)
 			}
 		})

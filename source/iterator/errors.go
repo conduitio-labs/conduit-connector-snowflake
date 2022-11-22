@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	ErrKeyIsNotExist      = errors.New("key is not exist")
-	ErrCantFindActionType = errors.New("can't find action type")
-	ErrInvalidSetup       = errors.New("invalid setup")
+	ErrKeyIsNotExist            = errors.New("key is not exist")
+	ErrCantFindActionType       = errors.New("can't find action type")
+	ErrInvalidSetup             = errors.New("invalid setup")
+	ErrOrderingColumnIsNotExist = errors.New("ordering column is not exist")
 )

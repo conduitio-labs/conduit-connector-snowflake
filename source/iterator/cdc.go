@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -96,6 +97,13 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 	c.currentBatch, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
 		getTrackingTable(c.table), c.columns, c.offset, c.batchSize)
 	if err != nil {
+		// Snowflake library can return specific error for context cancel
+		// Connector can't return this error and connector replace to
+		// context cancel error
+		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {
+			return false, ctx.Err()
+		}
+
 		return false, err
 	}
 
@@ -114,7 +122,13 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 		record  sdk.Record
 	)
 
-	pos := position.NewPosition(position.TypeCDC, c.index, c.offset)
+	pos := position.Position{
+		IteratorType:             position.TypeCDC,
+		SnapshotLastProcessedVal: nil,
+		IndexInBatch:             c.index,
+		BatchID:                  c.offset,
+		Time:                     time.Now(),
+	}
 
 	action, err := getAction(c.currentBatch[c.index])
 	if err != nil {
@@ -143,15 +157,20 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 	metadata := sdk.Metadata(map[string]string{metadataTable: c.table})
 	metadata.SetCreatedAt(time.Now())
 
+	p, err := pos.ConvertToSDKPosition()
+	if err != nil {
+		return sdk.Record{}, fmt.Errorf("convert to sdk position:%w", err)
+	}
+
 	switch action {
 	case actionInsert:
-		return sdk.Util.Source.NewRecordCreate(pos.ConvertToSDKPosition(), metadata,
+		return sdk.Util.Source.NewRecordCreate(p, metadata,
 			sdk.StructuredData{c.key: key}, payload), nil
 	case actionUpdate:
-		return sdk.Util.Source.NewRecordUpdate(pos.ConvertToSDKPosition(), metadata,
+		return sdk.Util.Source.NewRecordUpdate(p, metadata,
 			sdk.StructuredData{c.key: key}, nil, payload), nil
 	case actionDelete:
-		return sdk.Util.Source.NewRecordDelete(pos.ConvertToSDKPosition(), metadata,
+		return sdk.Util.Source.NewRecordDelete(p, metadata,
 			sdk.StructuredData{c.key: key}), nil
 	default:
 		return record, ErrCantFindActionType

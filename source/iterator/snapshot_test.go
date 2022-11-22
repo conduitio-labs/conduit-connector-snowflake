@@ -16,54 +16,66 @@ package iterator
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator/mock"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
-func TestIterator_HasNext(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
+var (
+	table          = "test"
+	orderingColumn = "id"
+	key            = "id"
+	batchSize      = 1000
+	maxValue       = 12
+	pos            = &position.Position{
+		IteratorType:             position.TypeSnapshot,
+		SnapshotLastProcessedVal: 12,
+		SnapshotMaxValue:         12,
+	}
+)
+
+func TestSnapshotIterator_HasNext(t *testing.T) {
+	t.Run("success_nil_position", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		rp.EXPECT().GetMaxValue(ctx, table, orderingColumn).Return(maxValue, nil)
 
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, nil, 12, batchSize).Return(nil, nil)
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
 			t.Errorf("has next error = \"%s\"", err.Error())
 		}
 
-		if !reflect.DeepEqual(hasNext, true) {
-			t.Errorf("got = %v, want %v", hasNext, true)
+		if !reflect.DeepEqual(hasNext, false) {
+			t.Errorf("got = %v, want %v", hasNext, false)
 		}
 	})
 
-	t.Run("success_return_false", func(t *testing.T) {
+	t.Run("success_with_position", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+		rp := mock.NewMockRepository(ctrl)
+
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, nil)
-
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, 12, batchSize).Return(nil, nil)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -79,135 +91,43 @@ func TestIterator_HasNext(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
+		rp := mock.NewMockRepository(ctrl)
+
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		rp := mock.NewMockRepository(ctrl)
-		rp.EXPECT().GetData(ctx, "test", "ID", nil, 0, 10).Return(res, errors.New("some error"))
+		rp.EXPECT().GetRows(ctx, table, orderingColumn, nil, pos, maxValue, batchSize).
+			Return(nil, errors.New("error"))
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
-
-		_, err := i.HasNext(ctx)
+		hasNext, err := i.HasNext(ctx)
 		if err == nil {
 			t.Errorf("want error")
 		}
-	})
-}
 
-func TestIterator_Next(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		var (
-			rawData sdk.RawData
-			key     sdk.StructuredData
-		)
-
-		ctrl := gomock.NewController(t)
-		ctx := context.Background()
-
-		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
-		}
-
-		rawData, _ = json.Marshal(map[string]interface{}{"ID": "1", "NAME": "foo"})
-		key = map[string]interface{}{"ID": "1"}
-		change := sdk.Change{
-			Before: nil,
-			After:  rawData,
-		}
-
-		rp := mock.NewMockRepository(ctrl)
-
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 0, 0, 10, res)
-
-		rec, err := i.Next(ctx)
-		if err != nil {
-			t.Errorf("has next error = \"%s\"", err.Error())
-		}
-
-		if !reflect.DeepEqual(rec.Payload, change) {
-			t.Errorf("got = %v, want %v", rec.Payload, change)
-		}
-
-		if !reflect.DeepEqual(rec.Key, key) {
-			t.Errorf("got = %v, want %v", rec.Key, key)
-		}
-	})
-	t.Run("success next record", func(t *testing.T) {
-		var (
-			rawData sdk.RawData
-			key     sdk.StructuredData
-		)
-
-		ctrl := gomock.NewController(t)
-		ctx := context.Background()
-
-		res := []map[string]interface{}{
-			{"ID": "1", "NAME": "foo"},
-			{"ID": "2", "NAME": "bar"},
-		}
-
-		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "bar"})
-		key = map[string]interface{}{"ID": "2"}
-		change := sdk.Change{
-			Before: nil,
-			After:  rawData,
-		}
-
-		rp := mock.NewMockRepository(ctrl)
-
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 1, 0, 10, res)
-
-		rec, err := i.Next(ctx)
-		if err != nil {
-			t.Errorf("has next error = \"%s\"", err.Error())
-		}
-
-		if !reflect.DeepEqual(rec.Payload, change) {
-			t.Errorf("got = %v, want %v", rec.Payload, change)
-		}
-
-		if !reflect.DeepEqual(rec.Key, key) {
-			t.Errorf("got = %v, want %v", rec.Key, key)
-		}
-	})
-	t.Run("error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		ctx := context.Background()
-
-		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
-		}
-
-		rp := mock.NewMockRepository(ctrl)
-
-		i := NewSnapshotIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
-
-		_, err := i.Next(ctx)
-		if err == nil {
-			t.Errorf("want error")
+		if !reflect.DeepEqual(hasNext, false) {
+			t.Errorf("got = %v, want %v", hasNext, false)
 		}
 	})
 }
 
 func TestIterator_Stop(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
-		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
+
 		rp.EXPECT().Close().Return(nil)
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		err := i.Stop()
+		err = i.Stop()
 		if err != nil {
 			t.Errorf("stop \"%s\"", err.Error())
 		}
@@ -215,17 +135,16 @@ func TestIterator_Stop(t *testing.T) {
 	t.Run("failed", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
-		res := []map[string]interface{}{
-			{"key": "value", "key_1": "value_1"},
-			{"key_2": "value_2", "key_3": "value_3"},
-		}
-
 		rp := mock.NewMockRepository(ctrl)
+
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := NewSnapshotIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		err := i.Stop()
+		err = i.Stop()
 		if err == nil {
 			t.Errorf("want error")
 		}

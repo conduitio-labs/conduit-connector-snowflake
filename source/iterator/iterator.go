@@ -17,6 +17,7 @@ package iterator
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
@@ -26,7 +27,7 @@ import (
 
 // Iterator combined iterator.
 type Iterator struct {
-	snapshotIterator *SnapshotIterator
+	snapshotIterator *snapshotIterator
 	cdcIterator      *CDCIterator
 
 	pos sdk.Position
@@ -40,17 +41,16 @@ type Iterator struct {
 func New(
 	ctx context.Context,
 	conn, table,
-	key string,
+	key, orderingColumn string,
 	columns []string,
 	batchSize int,
 	pos sdk.Position,
 ) (*Iterator, error) {
 	var (
-		snapshotIterator *SnapshotIterator
+		snapshotIterator *snapshotIterator
 		cdcIterator      *CDCIterator
 		posType          position.IteratorType
-		isFirstStart     bool
-		p                position.Position
+		p                *position.Position
 		er               error
 	)
 
@@ -64,18 +64,9 @@ func New(
 		// Snapshot iterator starts work first.
 		posType = position.TypeSnapshot
 
-		isFirstStart = true
-
-		// Prepare stream for cdc iterator.
-		err = snowflake.CreateStream(ctx, getStreamName(table), table)
+		err = prepareCDC(ctx, snowflake, table)
 		if err != nil {
-			return nil, fmt.Errorf("create stream: %w", err)
-		}
-
-		// Prepare tracking table for consume stream.
-		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
-		if err != nil {
-			return nil, fmt.Errorf("create tracking table: %w", err)
+			return nil, fmt.Errorf("prepare cdc: %w", err)
 		}
 	} else {
 		p, er = position.ParseSDKPosition(pos)
@@ -88,8 +79,7 @@ func New(
 
 	switch posType {
 	case position.TypeSnapshot:
-		snapshotIterator, err = setupSnapshotIterator(ctx, snowflake, table, key,
-			columns, p.IndexInBatch, p.BatchID, batchSize, isFirstStart)
+		snapshotIterator, err = newSnapshotIterator(ctx, snowflake, table, orderingColumn, key, columns, batchSize, p)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
@@ -110,29 +100,28 @@ func New(
 	}, nil
 }
 
-func setupSnapshotIterator(
-	ctx context.Context,
-	snowflake Repository,
-	table, key string,
-	columns []string,
-	element, offset, batchSize int,
-	isFirstStart bool,
-) (*SnapshotIterator, error) {
-	var (
-		index int
-	)
-
-	if !isFirstStart {
-		index = element + 1
-	}
-
-	data, err := snowflake.GetData(ctx, table, key, columns, offset, batchSize)
+func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table string) error {
+	// Check if table tracking table exist.
+	isTableExist, err := snowflake.TableExists(ctx, getTrackingTable(table))
 	if err != nil {
-		return nil, fmt.Errorf("get currentBatch: %w", err)
+		return fmt.Errorf("check if table exist: %w", err)
 	}
 
-	return NewSnapshotIterator(snowflake, table,
-		columns, key, index, offset, batchSize, data), nil
+	if !isTableExist {
+		// Prepare tracking table for consume stream.
+		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
+		if err != nil {
+			return fmt.Errorf("create tracking table: %w", err)
+		}
+	}
+
+	// Prepare stream for cdc iterator.
+	err = snowflake.CreateStream(ctx, getStreamName(table), table)
+	if err != nil {
+		return fmt.Errorf("create stream: %w", err)
+	}
+
+	return nil
 }
 
 func setupCDCIterator(
@@ -151,6 +140,17 @@ func setupCDCIterator(
 	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns,
 		offset, batchSize)
 	if err != nil {
+		// Snowflake library sends request to abort query with query and to server when get context cancel.
+		// But sometimes query was executed or didn't start execution.
+		// On this case snowflake server return specific error:
+		// 000605: Identified SQL statement is not currently executing.
+		// Connector can't return this error and connector replace to
+		// context cancel error
+		// https://github.com/snowflakedb/gosnowflake/blob/master/restful.go#L449
+		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {
+			return nil, ctx.Err()
+		}
+
 		return nil, fmt.Errorf("get stream currentBatch: %w", err)
 	}
 
