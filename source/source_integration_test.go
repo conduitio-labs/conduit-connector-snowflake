@@ -30,11 +30,13 @@ import (
 
 const (
 	testTable         = "CONDUIT_INTEGRATION_TEST_TABLE"
+	testStream        = "CONDUIT_STREAM_CONDUIT_INTEGRATION_TEST_TABLE"
 	testTrackingTable = "CONDUIT_TRACKING_CONDUIT_INTEGRATION_TEST_TABLE"
 
 	queryCreateTable        = "CREATE OR REPLACE TABLE %s (ID INT, NAME STRING)"
 	queryInsertSnapshotData = "INSERT INTO %s VALUES (1, 'Petro'), (2, 'Olena')"
 	queryDeleteTable        = "DROP TABLE %s"
+	queryDeleteStream       = "DROP STREAM %s"
 	queryDeleteRow          = "DELETE FROM %s WHERE ID = 1"
 	queryUpdateRow          = "UPDATE %s set NAME = 'test' WHERE ID = 2"
 )
@@ -283,6 +285,59 @@ func TestSource_CDC_Empty_Stream(t *testing.T) {
 	}
 }
 
+func TestSource_Snapshot_Off(t *testing.T) {
+	ctx := context.Background()
+
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	// turn off snapshot
+	cfg[config.KeySnapshot] = "false"
+
+	err = prepareData(ctx, cfg[config.KeyConnection])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg[config.KeyConnection]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start first time with nil position.
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// load data for cdc.
+	err = prepareCDCData(ctx, cfg[config.KeyConnection])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check read. Snapshot data must be missed.
+	r, err := s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(r.Operation, sdk.OperationUpdate) {
+		t.Fatal(errors.New("not wanted type"))
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func prepareConfig() (map[string]string, error) {
 	connection := os.Getenv("SNOWFLAKE_CONNECTION")
 
@@ -391,6 +446,11 @@ func clearData(ctx context.Context, conn string) error {
 	}
 
 	_, err = db.Exec(fmt.Sprintf(queryDeleteTable, testTrackingTable))
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf(queryDeleteStream, testStream))
 	if err != nil {
 		return err
 	}
