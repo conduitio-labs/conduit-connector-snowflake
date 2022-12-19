@@ -40,7 +40,7 @@ When the connector first starts, snapshot mode is enabled.
 
 
 A "snapshot" is the state of a table data at a particular point in time when connector starts work. All changes after this
-(delete, update, insert operations) will capture Change Data Captured (CDC) iterator.
+(delete, update, insert operations) will be captured by the Change Data Capture (CDC) iterator.
 
 First time when the snapshot iterator starts work, it is get max value from `orderingColumn` and saves this value to position.
 The snapshot iterator reads all rows, where `orderingColumn` values less or equal maxValue, from the table in batches
