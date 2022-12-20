@@ -20,8 +20,9 @@ The config passed to `Configure` can contain the following fields.
 | `connection`     | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
 | `table`          | The table name in snowflake db.                                                                                                                                                                                                                 | yes      | "users"                                                |
 | `columns`        | Comma separated list of column names that should be included in each Record's payload. By default: all columns.                                                                                                                                 | no       | "id,name,age"                                          |
-| `primaryKeys`    | Column names that records should use for their `Key` fields.                                                                                                                                                                                    | yes      | "id"                                                   |
+| `primaryKeys`    | Column names that records should use for their `Key` fields.                                                                                                                                                                                    | no       | "id,name"                                              |
 | `orderingColumn` | The name of a column that the connector will use for ordering rows. Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.                                                                           | no       | "id"                                                   |
+| `snapshot`       | Whether or not the plugin will take a snapshot of the entire table before starting cdc mode, by default true.                                                                                                                                   | no       | "false"                                                |
 | `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                          | no       | "1000"                                                 |
 
 ### How to build it
@@ -35,9 +36,11 @@ Run `make test`.
 ### Snowflake Source
 
 #### Snapshot Iterator
+When the connector first starts, snapshot mode is enabled.
+
 
 A "snapshot" is the state of a table data at a particular point in time when connector starts work. All changes after this
-(delete, update, insert operations) will capture Change Data Captured (CDC) iterator.
+(delete, update, insert operations) will be captured by the Change Data Capture (CDC) iterator.
 
 First time when the snapshot iterator starts work, it is get max value from `orderingColumn` and saves this value to position.
 The snapshot iterator reads all rows, where `orderingColumn` values less or equal maxValue, from the table in batches
@@ -50,6 +53,9 @@ If snapshot stops it will parse position from last record and will try gets row 
 
 
 When all records are returned, the connector switches to the CDC iterator.
+
+
+This behavior is enabled by default, but can be turned off by adding "snapshot":"false" to the Source configuration.
 
 #### CDC Iterator
 

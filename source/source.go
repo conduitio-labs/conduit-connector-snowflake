@@ -66,6 +66,12 @@ func (s *Source) Parameters() map[string]sdk.Parameter {
 			Required:    false,
 			Description: "The list of the column names that records should use for their `Key` fields.",
 		},
+		config.KeySnapshot: {
+			Default:  "true",
+			Required: false,
+			Description: "Whether or not the plugin will take a snapshot of the entire table before starting cdc " +
+				"mode, by default true.",
+		},
 		config.KeyBatchSize: {
 			Default:     "1000",
 			Required:    false,
@@ -88,8 +94,8 @@ func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error 
 
 // Open prepare the plugin to start sending records from the given position.
 func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
-	it, err := iterator.New(ctx, s.config.Connection, s.config.Table,
-		s.config.OrderingColumn, s.config.Keys, s.config.Columns, s.config.BatchSize, rp)
+	it, err := iterator.New(ctx, s.config.Connection, s.config.Table, s.config.OrderingColumn, s.config.Keys,
+		s.config.Columns, s.config.BatchSize, s.config.Snapshot, rp)
 	if err != nil {
 		return fmt.Errorf("create iterator: %w", err)
 	}
