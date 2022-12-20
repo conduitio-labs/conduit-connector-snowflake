@@ -29,7 +29,7 @@ import (
 var (
 	table          = "test"
 	orderingColumn = "id"
-	key            = "id"
+	keys           = []string{"id"}
 	batchSize      = 1000
 	maxValue       = 12
 	pos            = &position.Position{
@@ -48,7 +48,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 
 		rp.EXPECT().GetMaxValue(ctx, table, orderingColumn).Return(maxValue, nil)
 
-		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, nil)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, keys, nil, batchSize, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, keys, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +93,7 @@ func TestSnapshotIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, keys, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -122,7 +122,7 @@ func TestIterator_Stop(t *testing.T) {
 
 		rp.EXPECT().Close().Return(nil)
 
-		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, keys, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,7 +139,7 @@ func TestIterator_Stop(t *testing.T) {
 
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, key, nil, batchSize, pos)
+		i, err := newSnapshotIterator(ctx, rp, table, orderingColumn, keys, nil, batchSize, pos)
 		if err != nil {
 			t.Fatal(err)
 		}

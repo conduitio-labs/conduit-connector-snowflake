@@ -31,10 +31,13 @@ import (
 const (
 	testTable         = "CONDUIT_INTEGRATION_TEST_TABLE"
 	testTrackingTable = "CONDUIT_TRACKING_CONDUIT_INTEGRATION_TEST_TABLE"
+	testStream        = "CONDUIT_STREAM_CONDUIT_INTEGRATION_TEST_TABLE"
 
 	queryCreateTable        = "CREATE OR REPLACE TABLE %s (ID INT, NAME STRING)"
+	queryCreateTableWithPKs = "CREATE OR REPLACE TABLE %s (ID INT, NAME STRING, PRIMARY KEY (ID, NAME))"
 	queryInsertSnapshotData = "INSERT INTO %s VALUES (1, 'Petro'), (2, 'Olena')"
 	queryDeleteTable        = "DROP TABLE %s"
+	queryDropStream         = "DROP STREAM IF EXISTS %s"
 	queryDeleteRow          = "DELETE FROM %s WHERE ID = 1"
 	queryUpdateRow          = "UPDATE %s set NAME = 'test' WHERE ID = 2"
 )
@@ -283,6 +286,226 @@ func TestSource_CDC_Empty_Stream(t *testing.T) {
 	}
 }
 
+func TestSource_keysFromConfig(t *testing.T) {
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	cfg[config.KeyPrimaryKeys] = "name"
+
+	ctx := context.Background()
+
+	err = prepareData(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start first time with nil position.
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check first read.
+	r, err := s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wantedKey sdk.StructuredData
+	wantedKey = map[string]interface{}{"NAME": "Petro"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	// Check teardown.
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start from previous position.
+	err = s.Open(ctx, r.Position)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check read after teardown.
+	r, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantedKey = map[string]interface{}{"NAME": "Olena"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSource_keyColumnsFromTableMetadata(t *testing.T) {
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	cfg[config.KeyPrimaryKeys] = ""
+
+	ctx := context.Background()
+
+	err = prepareDataInTableWithPKs(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start first time with nil position.
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check first read.
+	r, err := s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wantedKey sdk.StructuredData
+	wantedKey = map[string]interface{}{"ID": "1", "NAME": "Petro"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	// Check teardown.
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start from previous position.
+	err = s.Open(ctx, r.Position)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check read after teardown.
+	r, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantedKey = map[string]interface{}{"ID": "2", "NAME": "Olena"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
+	cfg, err := prepareConfig()
+	if err != nil {
+		t.Skip()
+	}
+
+	cfg[config.KeyPrimaryKeys] = ""
+	cfg[config.KeyOrderingColumn] = "name"
+
+	ctx := context.Background()
+
+	err = prepareData(ctx, cfg["connection"])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
+
+	s := new(Source)
+
+	err = s.Configure(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start first time with nil position.
+	err = s.Open(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check first read.
+	r, err := s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wantedKey sdk.StructuredData
+	wantedKey = map[string]interface{}{"NAME": "Olena"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	// Check teardown.
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start from previous position.
+	err = s.Open(ctx, r.Position)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check read after teardown.
+	r, err = s.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantedKey = map[string]interface{}{"NAME": "Petro"}
+
+	if !reflect.DeepEqual(r.Key, wantedKey) {
+		t.Fatal(errors.New("wrong record key"))
+	}
+
+	err = s.Teardown(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func prepareConfig() (map[string]string, error) {
 	connection := os.Getenv("SNOWFLAKE_CONNECTION")
 
@@ -294,7 +517,7 @@ func prepareConfig() (map[string]string, error) {
 		config.KeyConnection:     connection,
 		config.KeyTable:          testTable,
 		config.KeyColumns:        "",
-		config.KeyPrimaryKey:     "id",
+		config.KeyPrimaryKeys:    "id",
 		config.KeyOrderingColumn: "id",
 	}, nil
 }
@@ -372,6 +595,32 @@ func prepareCDCData(ctx context.Context, conn string) error {
 	return nil
 }
 
+func prepareDataInTableWithPKs(ctx context.Context, conn string) error {
+	db, err := sql.Open("snowflake", conn)
+	if err != nil {
+		return err
+	}
+
+	defer db.Close()
+
+	err = db.PingContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf(queryCreateTableWithPKs, testTable))
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf(queryInsertSnapshotData, testTable))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func clearData(ctx context.Context, conn string) error {
 	db, err := sql.Open("snowflake", conn)
 	if err != nil {
@@ -391,6 +640,11 @@ func clearData(ctx context.Context, conn string) error {
 	}
 
 	_, err = db.Exec(fmt.Sprintf(queryDeleteTable, testTrackingTable))
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(fmt.Sprintf(queryDropStream, testStream))
 	if err != nil {
 		return err
 	}

@@ -37,8 +37,8 @@ type CDCIterator struct {
 	// columns list of table columns for record payload
 	// if empty - will get all columns.
 	columns []string
-	// Name of column what iterator use for setting key in record.
-	key string
+	// keys is the list of the column names that iterator use for setting key in record.
+	keys []string
 
 	// index - current index of element in current batch which iterator converts to record.
 	index int
@@ -53,8 +53,7 @@ type CDCIterator struct {
 func NewCDCIterator(
 	snowflake Repository,
 	table string,
-	columns []string,
-	key string,
+	keys, columns []string,
 	index, offset, butchSize int,
 	currentBatch []map[string]interface{},
 ) *CDCIterator {
@@ -62,7 +61,7 @@ func NewCDCIterator(
 		snowflake:    snowflake,
 		table:        table,
 		columns:      columns,
-		key:          key,
+		keys:         keys,
 		index:        index,
 		offset:       offset,
 		batchSize:    butchSize,
@@ -146,11 +145,15 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 		return record, fmt.Errorf("marshal error : %w", err)
 	}
 
-	if _, ok := c.currentBatch[c.index][c.key]; !ok {
-		return record, ErrKeyIsNotExist
-	}
+	key := make(sdk.StructuredData)
+	for i := range c.keys {
+		val, ok := c.currentBatch[c.index][c.keys[i]]
+		if !ok {
+			return sdk.Record{}, fmt.Errorf("key column %q not found", c.keys[i])
+		}
 
-	key := c.currentBatch[c.index][c.key]
+		key[c.keys[i]] = val
+	}
 
 	c.index++
 
@@ -164,14 +167,11 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	switch action {
 	case actionInsert:
-		return sdk.Util.Source.NewRecordCreate(p, metadata,
-			sdk.StructuredData{c.key: key}, payload), nil
+		return sdk.Util.Source.NewRecordCreate(p, metadata, key, payload), nil
 	case actionUpdate:
-		return sdk.Util.Source.NewRecordUpdate(p, metadata,
-			sdk.StructuredData{c.key: key}, nil, payload), nil
+		return sdk.Util.Source.NewRecordUpdate(p, metadata, key, nil, payload), nil
 	case actionDelete:
-		return sdk.Util.Source.NewRecordDelete(p, metadata,
-			sdk.StructuredData{c.key: key}), nil
+		return sdk.Util.Source.NewRecordDelete(p, metadata, key), nil
 	default:
 		return record, ErrCantFindActionType
 	}

@@ -41,7 +41,7 @@ func TestSource_Configure(t *testing.T) {
 			cfg: map[string]string{
 				config.KeyConnection:     "user:password@my_organization-my_account/mydb",
 				config.KeyTable:          "customer",
-				config.KeyPrimaryKey:     "id",
+				config.KeyPrimaryKeys:    "id",
 				config.KeyOrderingColumn: "id",
 			},
 			expectedErr: nil,
@@ -51,7 +51,7 @@ func TestSource_Configure(t *testing.T) {
 			cfg: map[string]string{
 				config.KeyTable:          "customer",
 				config.KeyColumns:        "",
-				config.KeyPrimaryKey:     "id",
+				config.KeyPrimaryKeys:    "id",
 				config.KeyOrderingColumn: "id",
 			},
 			expectedErr: errors.New("validate config: Connection value must be set"),

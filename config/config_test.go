@@ -32,14 +32,12 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb/public",
 				KeyTable:          "customer",
-				KeyPrimaryKey:     "id",
 				KeyBatchSize:      "100",
 				KeyOrderingColumn: "id",
 			},
 			want: Config{
 				Connection:     "user:password@my_organization-my_account/mydb/public",
 				Table:          "customer",
-				Key:            "ID",
 				BatchSize:      100,
 				OrderingColumn: "ID",
 			},
@@ -51,13 +49,13 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb/public",
 				KeyTable:          "customer",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id",
 				KeyOrderingColumn: "id",
 			},
 			want: Config{
 				Connection:     "user:password@my_organization-my_account/mydb/public",
 				Table:          "customer",
-				Key:            "ID",
+				Keys:           []string{"ID"},
 				BatchSize:      defaultBatchSize,
 				OrderingColumn: "ID",
 			},
@@ -69,7 +67,7 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb/public",
 				KeyTable:          "customer",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id,name",
 				KeyBatchSize:      "100",
 				KeyOrderingColumn: "id",
 				KeyColumns:        "id,name",
@@ -77,7 +75,7 @@ func TestParse(t *testing.T) {
 			want: Config{
 				Connection:     "user:password@my_organization-my_account/mydb/public",
 				Table:          "customer",
-				Key:            "ID",
+				Keys:           []string{"ID", "NAME"},
 				BatchSize:      100,
 				OrderingColumn: "ID",
 				Columns:        []string{"ID", "NAME"},
@@ -90,7 +88,7 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				KeyTable:          "customer",
 				KeyColumns:        "",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id",
 				KeyOrderingColumn: "id",
 			},
 			want:        Config{},
@@ -102,7 +100,7 @@ func TestParse(t *testing.T) {
 			cfg: map[string]string{
 				KeyConnection:     "user:password@my_organization-my_account/mydb",
 				KeyColumns:        "",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id",
 				KeyOrderingColumn: "id",
 			},
 			want:        Config{},
@@ -110,24 +108,12 @@ func TestParse(t *testing.T) {
 			expectedErr: `validate config: Table value must be set`,
 		},
 		{
-			name: "missing key field",
-			cfg: map[string]string{
-				KeyConnection:     "user:password@my_organization-my_account/mydb",
-				KeyTable:          "customer",
-				KeyColumns:        "",
-				KeyOrderingColumn: "id",
-			},
-			want:        Config{},
-			wantErr:     true,
-			expectedErr: `validate config: Key value must be set`,
-		},
-		{
 			name: "missing orderingColumn field",
 			cfg: map[string]string{
-				KeyConnection: "user:password@my_organization-my_account/mydb",
-				KeyTable:      "customer",
-				KeyColumns:    "",
-				KeyPrimaryKey: "id",
+				KeyConnection:  "user:password@my_organization-my_account/mydb",
+				KeyTable:       "customer",
+				KeyColumns:     "",
+				KeyPrimaryKeys: "id",
 			},
 			want:        Config{},
 			wantErr:     true,
@@ -143,7 +129,7 @@ func TestParse(t *testing.T) {
 					"some_specific_really_big_name_with_additional_not_needed_things_" +
 					"_additional_not_needed_things_some_specific_really_big_name_with_additional_not_needed_things",
 				KeyColumns:        "",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id",
 				KeyOrderingColumn: "id",
 			},
 			want:        Config{},
@@ -157,11 +143,11 @@ func TestParse(t *testing.T) {
 				KeyTable:          "customer",
 				KeyColumns:        "name",
 				KeyOrderingColumn: "id",
-				KeyPrimaryKey:     "id",
+				KeyPrimaryKeys:    "id",
 			},
 			want:        Config{},
 			wantErr:     true,
-			expectedErr: `validate config: "Columns" value must contains values of these fields: "Key OrderingColumn"`,
+			expectedErr: `validate config: "Columns" value must contains values of these fields: "Keys OrderingColumn"`,
 		},
 	}
 

@@ -39,4 +39,6 @@ type Repository interface {
 	GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error)
 	// Close - shutdown repository.
 	Close() error
+	// GetPrimaryKeys returns all primary keys of the table.
+	GetPrimaryKeys(ctx context.Context, table string) ([]string, error)
 }

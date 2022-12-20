@@ -43,7 +43,7 @@ type driver struct {
 
 // WriteToSource - write data to table.
 func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
-	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
+	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION")
 
 	db, err := sql.Open("snowflake", connectionURL)
 	if err != nil {
@@ -99,14 +99,14 @@ func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Recor
 }
 
 func TestAcceptance(t *testing.T) {
-	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION_URL")
+	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION")
 	if connectionURL == "" {
-		t.Skip("SNOWFLAKE_CONNECTION_URL env var must be set")
+		t.Skip("SNOWFLAKE_CONNECTION env var must be set")
 	}
 
 	cfg := map[string]string{
 		config.KeyConnection:     connectionURL,
-		config.KeyPrimaryKey:     "ID",
+		config.KeyPrimaryKeys:    "ID",
 		config.KeyOrderingColumn: "ID",
 	}
 

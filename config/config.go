@@ -31,8 +31,8 @@ const (
 	// KeyColumns is a config name for columns.
 	KeyColumns = "columns"
 
-	// KeyPrimaryKey name of column.
-	KeyPrimaryKey string = "primaryKey"
+	// KeyPrimaryKeys is the list of the column names.
+	KeyPrimaryKeys string = "primaryKeys"
 
 	// KeyBatchSize is a config name for a batch size.
 	KeyBatchSize = "batchSize"
@@ -54,10 +54,10 @@ type Config struct {
 	Table string `validate:"required,max=255"`
 
 	// List of columns from table, by default read all columns.
-	Columns []string `validate:"contains_or_default=Key OrderingColumn,dive,max=128"`
+	Columns []string `validate:"contains_or_default=Keys OrderingColumn,dive,max=128"`
 
-	// Key - Column name that records should use for their `Key` fields.
-	Key string `validate:"required,max=251"`
+	// Keys is the list of the column names that records should use for their `Key` fields.
+	Keys []string `validate:"dive,max=251"`
 
 	// OrderingColumn is a name of a column that the connector will use for ordering rows.
 	OrderingColumn string `key:"orderingColumn" validate:"required,max=251"`
@@ -71,7 +71,6 @@ func Parse(cfg map[string]string) (Config, error) {
 	config := Config{
 		Connection:     cfg[KeyConnection],
 		Table:          cfg[KeyTable],
-		Key:            cfg[KeyPrimaryKey],
 		OrderingColumn: cfg[KeyOrderingColumn],
 		BatchSize:      defaultBatchSize,
 	}
@@ -80,9 +79,8 @@ func Parse(cfg map[string]string) (Config, error) {
 		config.Columns = strings.Split(strings.ToUpper(colsRaw), ",")
 	}
 
-	// Columns in snowflake is uppercase.
-	if cfg[KeyPrimaryKey] != "" {
-		config.Key = strings.ToUpper(config.Key)
+	if keysRaw := cfg[KeyPrimaryKeys]; keysRaw != "" {
+		config.Keys = strings.Split(strings.ToUpper(keysRaw), ",")
 	}
 
 	if cfg[KeyOrderingColumn] != "" {

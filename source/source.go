@@ -50,15 +50,21 @@ func (s *Source) Parameters() map[string]sdk.Parameter {
 			Required:    true,
 			Description: "The table name that the connector should read.",
 		},
+		config.KeyOrderingColumn: {
+			Default:  "",
+			Required: true,
+			Description: "The name of a column that the connector will use for ordering rows. " +
+				"Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.",
+		},
 		config.KeyColumns: {
 			Default:     "",
 			Required:    false,
 			Description: "Comma separated list of column names that should be included in each Record's payload.",
 		},
-		config.KeyPrimaryKey: {
+		config.KeyPrimaryKeys: {
 			Default:     "",
-			Required:    true,
-			Description: "Column name that records should use for their `Key` fields.",
+			Required:    false,
+			Description: "The list of the column names that records should use for their `Key` fields.",
 		},
 		config.KeyBatchSize: {
 			Default:     "1000",
@@ -83,7 +89,7 @@ func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error 
 // Open prepare the plugin to start sending records from the given position.
 func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 	it, err := iterator.New(ctx, s.config.Connection, s.config.Table,
-		s.config.Key, s.config.OrderingColumn, s.config.Columns, s.config.BatchSize, rp)
+		s.config.OrderingColumn, s.config.Keys, s.config.Columns, s.config.BatchSize, rp)
 	if err != nil {
 		return fmt.Errorf("create iterator: %w", err)
 	}
