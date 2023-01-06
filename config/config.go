@@ -72,6 +72,7 @@ func Parse(cfg map[string]string) (Config, error) {
 		Snapshot:       snapshotDefault,
 	}
 
+	// Columns in snowflake is uppercase.
 	if colsRaw := cfg[KeyColumns]; colsRaw != "" {
 		config.Columns = strings.Split(strings.ToUpper(colsRaw), ",")
 	}
