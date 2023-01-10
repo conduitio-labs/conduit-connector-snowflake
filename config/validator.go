@@ -125,11 +125,19 @@ func containsOrDefault(fl validator.FieldLevel) bool {
 	valuesMap := make(map[string]struct{})
 	for _, param := range strings.Split(fl.Param(), " ") {
 		value, kind, _, ok := fl.GetStructFieldOKAdvanced2(fl.Parent(), param)
-		if !ok || kind != reflect.String {
+		if !ok {
 			return false
 		}
 
-		valuesMap[value.String()] = struct{}{}
+		switch kind {
+		case reflect.String:
+			valuesMap[value.String()] = struct{}{}
+		case reflect.Slice:
+			keys := value.Interface().([]string)
+			for i := range keys {
+				valuesMap[keys[i]] = struct{}{}
+			}
+		}
 	}
 
 	for _, input := range inputs {

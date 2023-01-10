@@ -39,8 +39,8 @@ type snapshotIterator struct {
 	// columns list of table columns for record payload
 	// if empty - will get all columns.
 	columns []string
-	// Name of column what iterator use for setting key in record.
-	key string
+	// keys is the list of the column names that iterator use for setting key in record.
+	keys []string
 	// batchSize size of batch.
 	batchSize int
 	// orderingColumn Name of column what iterator using for sorting data.
@@ -54,8 +54,8 @@ type snapshotIterator struct {
 func newSnapshotIterator(
 	ctx context.Context,
 	snowflake Repository,
-	table, orderingColumn, key string,
-	columns []string,
+	table, orderingColumn string,
+	keys, columns []string,
 	batchSize int,
 	position *position.Position,
 ) (*snapshotIterator, error) {
@@ -67,7 +67,7 @@ func newSnapshotIterator(
 		snowflake:      snowflake,
 		table:          table,
 		columns:        columns,
-		key:            key,
+		keys:           keys,
 		orderingColumn: orderingColumn,
 		batchSize:      batchSize,
 		position:       position,
@@ -137,8 +137,14 @@ func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 		return sdk.Record{}, fmt.Errorf("convert position %w", err)
 	}
 
-	if _, ok := row[i.key]; !ok {
-		return sdk.Record{}, ErrKeyIsNotExist
+	key := make(sdk.StructuredData)
+	for n := range i.keys {
+		val, ok := row[i.keys[n]]
+		if !ok {
+			return sdk.Record{}, fmt.Errorf("key column %q not found", i.keys[n])
+		}
+
+		key[i.keys[n]] = val
 	}
 
 	transformedRowBytes, err := json.Marshal(row)
@@ -151,8 +157,7 @@ func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 	metadata := sdk.Metadata(map[string]string{metadataTable: i.table})
 	metadata.SetCreatedAt(time.Now())
 
-	return sdk.Util.Source.NewRecordSnapshot(sdkPos, metadata,
-		sdk.StructuredData{i.key: row[i.key]}, sdk.RawData(transformedRowBytes)), nil
+	return sdk.Util.Source.NewRecordSnapshot(sdkPos, metadata, key, sdk.RawData(transformedRowBytes)), nil
 }
 
 // Stop shutdown iterator.

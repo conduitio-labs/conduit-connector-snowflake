@@ -93,6 +93,21 @@ func (mr *MockRepositoryMockRecorder) GetMaxValue(ctx, table, orderingColumn int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxValue", reflect.TypeOf((*MockRepository)(nil).GetMaxValue), ctx, table, orderingColumn)
 }
 
+// GetPrimaryKeys mocks base method.
+func (m *MockRepository) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPrimaryKeys", ctx, table)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPrimaryKeys indicates an expected call of GetPrimaryKeys.
+func (mr *MockRepositoryMockRecorder) GetPrimaryKeys(ctx, table interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrimaryKeys", reflect.TypeOf((*MockRepository)(nil).GetPrimaryKeys), ctx, table)
+}
+
 // GetRows mocks base method.
 func (m *MockRepository) GetRows(ctx context.Context, table, orderingColumn string, fields []string, pos *position.Position, maxValue any, limit int) (*sqlx.Rows, error) {
 	m.ctrl.T.Helper()

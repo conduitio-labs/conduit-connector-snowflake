@@ -34,15 +34,15 @@ type Iterator struct {
 
 	table   string
 	columns []string
-	key     string
+	keys    []string
 }
 
 // New iterator.
 func New(
 	ctx context.Context,
 	conn, table,
-	key, orderingColumn string,
-	columns []string,
+	orderingColumn string,
+	keys, columns []string,
 	batchSize int,
 	snapshot bool,
 	pos sdk.Position,
@@ -50,7 +50,7 @@ func New(
 	it := &Iterator{
 		table:   table,
 		columns: columns,
-		key:     key,
+		keys:    keys,
 		pos:     pos,
 	}
 
@@ -72,13 +72,18 @@ func New(
 		return nil, fmt.Errorf("parse sdk position: %w", err)
 	}
 
+	err = it.populateKeyColumns(ctx, snowflake, orderingColumn)
+	if err != nil {
+		return nil, fmt.Errorf("populate keys: %w", err)
+	}
+
 	if snapshot && (p == nil || p.IteratorType == position.TypeSnapshot) {
-		it.snapshotIterator, err = newSnapshotIterator(ctx, snowflake, table, orderingColumn, key, columns, batchSize, p)
+		it.snapshotIterator, err = newSnapshotIterator(ctx, snowflake, table, orderingColumn, it.keys, columns, batchSize, p)
 		if err != nil {
 			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
 	} else {
-		it.cdcIterator, err = setupCDCIterator(ctx, snowflake, table, key, columns, p, batchSize)
+		it.cdcIterator, err = setupCDCIterator(ctx, snowflake, table, it.keys, columns, p, batchSize)
 		if err != nil {
 			return nil, fmt.Errorf("setup cdc iterator: %w", err)
 		}
@@ -114,8 +119,8 @@ func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table stri
 func setupCDCIterator(
 	ctx context.Context,
 	snowflake Repository,
-	table, key string,
-	columns []string,
+	table string,
+	keys, columns []string,
 	p *position.Position,
 	batchSize int,
 ) (*CDCIterator, error) {
@@ -145,8 +150,7 @@ func setupCDCIterator(
 		return nil, fmt.Errorf("get stream currentBatch: %w", err)
 	}
 
-	return NewCDCIterator(snowflake, table,
-		columns, key, index, offset, batchSize, data), nil
+	return NewCDCIterator(snowflake, table, keys, columns, index, offset, batchSize, data), nil
 }
 
 // HasNext check ability to get next record.
@@ -163,7 +167,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 		// Setup cdc iterator.
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
-			i.table, i.key, i.columns, nil, i.snapshotIterator.batchSize)
+			i.table, i.keys, i.columns, nil, i.snapshotIterator.batchSize)
 		if err != nil {
 			return false, fmt.Errorf("setup cdc iterator: %w", err)
 		}
@@ -226,6 +230,33 @@ func (i *Iterator) Stop() error {
 	if i.cdcIterator != nil {
 		return i.cdcIterator.Stop()
 	}
+
+	return nil
+}
+
+// populates keyColumn from the database's metadata
+// or from the orderingColumn configuration field.
+func (i *Iterator) populateKeyColumns(
+	ctx context.Context,
+	snowflake Repository,
+	orderingColumn string,
+) error {
+	if len(i.keys) != 0 {
+		return nil
+	}
+
+	var err error
+
+	i.keys, err = snowflake.GetPrimaryKeys(ctx, i.table)
+	if err != nil {
+		return fmt.Errorf("get primary keys: %w", err)
+	}
+
+	if len(i.keys) != 0 {
+		return nil
+	}
+
+	i.keys = []string{orderingColumn}
 
 	return nil
 }

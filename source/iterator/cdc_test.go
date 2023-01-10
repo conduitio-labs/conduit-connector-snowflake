@@ -39,7 +39,7 @@ func TestCDCIterator_HasNext(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"ID"}, nil, 0, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -64,7 +64,7 @@ func TestCDCIterator_HasNext(t *testing.T) {
 		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
 			nil, 0, 10).Return(nil, nil)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"ID"}, nil, 2, 0, 10, res)
 
 		hasNext, err := i.HasNext(ctx)
 		if err != nil {
@@ -89,7 +89,7 @@ func TestCDCIterator_HasNext(t *testing.T) {
 		rp.EXPECT().GetTrackingData(ctx, "conduit_stream_test", "conduit_tracking_test",
 			nil, 0, 10).Return(nil, errors.New("some error"))
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 2, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"ID"}, nil, 2, 0, 10, res)
 
 		_, err := i.HasNext(ctx)
 		if err == nil {
@@ -122,7 +122,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"ID"}, nil, 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -160,7 +160,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "ID", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"ID"}, nil, 0, 0, 10, res)
 
 		rec, err := i.Next(ctx)
 		if err != nil {
@@ -186,7 +186,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rp := mock.NewMockRepository(ctrl)
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"missing_key"}, nil, 0, 0, 10, res)
 
 		_, err := i.Next(ctx)
 		if err == nil {
@@ -207,7 +207,7 @@ func TestCDCIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(nil)
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"missing_key"}, nil, 0, 0, 10, res)
 
 		err := i.Stop()
 		if err != nil {
@@ -225,7 +225,7 @@ func TestCDCIterator_Stop(t *testing.T) {
 		rp := mock.NewMockRepository(ctrl)
 		rp.EXPECT().Close().Return(errors.New("some error"))
 
-		i := NewCDCIterator(rp, "test", nil, "missing_key", 0, 0, 10, res)
+		i := NewCDCIterator(rp, "test", []string{"missing_key"}, nil, 0, 0, 10, res)
 
 		err := i.Stop()
 		if err == nil {

@@ -251,6 +251,28 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	return maxValue, nil
 }
 
+// GetPrimaryKeys returns all primary keys of the table.
+func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
+	var columns []string
+
+	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
+	if err != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
+	}
+	defer rows.Close()
+
+	dest := make(map[string]any)
+	for rows.Next() {
+		if err = rows.MapScan(dest); err != nil {
+			return nil, fmt.Errorf("scan primary key row: %w", err)
+		}
+
+		columns = append(columns, dest[columnName].(string))
+	}
+
+	return columns, nil
+}
+
 func buildGetTrackingData(table string, fields []string, offset, limit int) string {
 	sb := sqlbuilder.NewSelectBuilder()
 	if len(fields) == 0 {
