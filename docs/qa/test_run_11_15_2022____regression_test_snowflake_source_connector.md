@@ -1,3 +1,9 @@
+**Test Run 11/15/2022 - Regression Test Snowflake Source connector**
+
+**branch:** https://github.com/conduitio-labs/conduit-connector-snowflake/tree/add_snaphot_mode
+
+**commit** 41638307baafd95d654c677a0f3fad2d3c3d6d1a
+
 | ID       | Title                                                                                                                                                                                                                                                   | Status  | Comment                                       |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------- |
 | T3156330 | The user can't create Snowflake source connector with empty the "connection" key -> the system is returned an error \`"connection" config value must be set\`                                                                                           | Passed  |                                               |
