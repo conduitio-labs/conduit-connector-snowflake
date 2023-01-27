@@ -1,3 +1,9 @@
+**Test Run 12/1/2022 - Testing Snowflake source connector ability working in modes**
+
+**branch:** https://github.com/conduitio-labs/conduit-connector-snowflake/tree/add_snaphot_mode
+
+**commit** 41638307baafd95d654c677a0f3fad2d3c3d6d1a
+
 | ID       | Title                                                                                                                                                                                                                                                | Status | Comment                                       |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------- |
 | T3204403 | \------- snapshot config                                                                                                                                                                                                                             | Passed |                                               |
