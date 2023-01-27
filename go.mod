@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.19.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/snowflakedb/gosnowflake v1.6.16
+	github.com/snowflakedb/gosnowflake v1.6.17
 	go.uber.org/goleak v1.2.0
 	go.uber.org/multierr v1.9.0
 )
@@ -69,10 +69,10 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be // indirect
 	golang.org/x/exp v0.0.0-20221114191408-850992195362 // indirect
-	golang.org/x/net v0.3.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/term v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/term v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/genproto v0.0.0-20211104193956-4c6863e31247 // indirect
