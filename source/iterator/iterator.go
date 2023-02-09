@@ -129,7 +129,7 @@ func setupCDCIterator(
 		offset = p.BatchID
 	}
 
-	if p != nil && p.IndexInBatch != 0 {
+	if p != nil {
 		index = p.IndexInBatch + 1
 	}
 
