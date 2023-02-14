@@ -10,7 +10,7 @@ require (
 	github.com/huandu/go-sqlbuilder v1.19.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/snowflakedb/gosnowflake v1.6.17
-	go.uber.org/goleak v1.2.0
+	go.uber.org/goleak v1.2.1
 	go.uber.org/multierr v1.9.0
 )
 
