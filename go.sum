@@ -258,8 +258,8 @@ github.com/shopspring/decimal v1.2.0 h1:abSATXmQEYyShuxI4/vyW3tV1MrKAJzCZ/0zLUXY
 github.com/shopspring/decimal v1.2.0/go.mod h1:DKyhrW/HYNuLGql+MJL6WCR6knT2jwCFRcu2hWCYk4o=
 github.com/sirupsen/logrus v1.9.0 h1:trlNQbNUG3OdDrDil03MCb1H2o9nJ1x4/5LYw7byDE0=
 github.com/sirupsen/logrus v1.9.0/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
-github.com/snowflakedb/gosnowflake v1.6.17 h1:npFUsPPUoHX1JERa1zQmHFzlt7D2JEieEhshOl2R0F0=
-github.com/snowflakedb/gosnowflake v1.6.17/go.mod h1:BhNDWNSUY+t4T8GBuOg3ckWC4v5hhGlLovqGcF8Rkac=
+github.com/snowflakedb/gosnowflake v1.6.18 h1:mm4KYvp3LWGHIuACwX/tHv9qDs2NdLDXuK0Rep+vfJc=
+github.com/snowflakedb/gosnowflake v1.6.18/go.mod h1:BhNDWNSUY+t4T8GBuOg3ckWC4v5hhGlLovqGcF8Rkac=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spf13/cast v1.3.1 h1:nFm6S0SMdyzrzcmThSipiEubIDy8WEXKNZ0UOgiRpng=
 github.com/spf13/cast v1.3.1/go.mod h1:Qx5cxh0v+4UWYiBimWS+eyWzqEqokIECu5etghLkUJE=
