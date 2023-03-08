@@ -11,7 +11,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/snowflakedb/gosnowflake v1.6.18
 	go.uber.org/goleak v1.2.1
-	go.uber.org/multierr v1.9.0
+	go.uber.org/multierr v1.10.0
 )
 
 require (
@@ -74,7 +74,6 @@ require (
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	go.buf.build/grpc/go/conduitio/conduit-connector-protocol v1.4.5 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/crypto v0.5.0 // indirect
 	golang.org/x/exp v0.0.0-20221114191408-850992195362 // indirect
 	golang.org/x/net v0.5.0 // indirect
