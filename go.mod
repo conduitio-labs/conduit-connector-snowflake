@@ -3,7 +3,7 @@ module github.com/conduitio-labs/conduit-connector-snowflake
 go 1.20
 
 require (
-	github.com/conduitio/conduit-connector-sdk v0.5.2
+	github.com/conduitio/conduit-connector-sdk v0.6.0
 	github.com/go-playground/validator/v10 v10.12.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
@@ -39,7 +39,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.13.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.27.11 // indirect
 	github.com/aws/smithy-go v1.13.4 // indirect
-	github.com/conduitio/conduit-connector-protocol v0.4.1 // indirect
+	github.com/conduitio/conduit-connector-protocol v0.5.0 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
