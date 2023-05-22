@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/conduitio/conduit-connector-sdk v0.6.0
-	github.com/go-playground/validator/v10 v10.13.0
+	github.com/go-playground/validator/v10 v10.14.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.21.0
@@ -44,7 +44,7 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
-	github.com/gabriel-vasile/mimetype v1.4.1 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/goccy/go-json v0.9.11 // indirect
@@ -63,7 +63,7 @@ require (
 	github.com/klauspost/asmfmt v1.3.2 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
-	github.com/leodido/go-urn v1.2.3 // indirect
+	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
