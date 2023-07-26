@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/huandu/go-sqlbuilder v1.22.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/snowflakedb/gosnowflake v1.6.22
+	github.com/snowflakedb/gosnowflake v1.6.23
 	go.uber.org/goleak v1.2.1
 	go.uber.org/multierr v1.11.0
 )
@@ -25,7 +25,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
-	github.com/apache/arrow/go/v12 v12.0.0 // indirect
+	github.com/apache/arrow/go/v12 v12.0.1 // indirect
 	github.com/apache/thrift v0.16.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.17.7 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
