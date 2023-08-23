@@ -6,7 +6,7 @@ require (
 	github.com/conduitio/conduit-connector-sdk v0.7.2
 	github.com/go-playground/validator/v10 v10.15.1
 	github.com/golang/mock v1.6.0
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/huandu/go-sqlbuilder v1.22.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/snowflakedb/gosnowflake v1.6.23
