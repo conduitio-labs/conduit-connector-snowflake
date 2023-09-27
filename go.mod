@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/huandu/go-sqlbuilder v1.22.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/snowflakedb/gosnowflake v1.6.24
+	github.com/snowflakedb/gosnowflake v1.6.25
 	go.uber.org/goleak v1.2.1
 	go.uber.org/multierr v1.11.0
 )
