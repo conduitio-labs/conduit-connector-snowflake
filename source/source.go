@@ -81,7 +81,7 @@ func (s *Source) Parameters() map[string]sdk.Parameter {
 }
 
 // Configure parses and stores configurations, returns an error in case of invalid configuration.
-func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error {
+func (s *Source) Configure(_ context.Context, cfgRaw map[string]string) error {
 	cfg, err := config.Parse(cfgRaw)
 	if err != nil {
 		return err
@@ -125,7 +125,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 }
 
 // Teardown gracefully shutdown connector.
-func (s *Source) Teardown(ctx context.Context) error {
+func (s *Source) Teardown(_ context.Context) error {
 	if s.iterator != nil {
 		err := s.iterator.Stop()
 		if err != nil {

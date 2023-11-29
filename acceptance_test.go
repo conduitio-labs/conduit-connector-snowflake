@@ -116,7 +116,7 @@ func TestAcceptance(t *testing.T) {
 				Connector:         Connector,
 				SourceConfig:      cfg,
 				DestinationConfig: cfg,
-				BeforeTest:        beforeTest(t, cfg),
+				BeforeTest:        beforeTest(cfg),
 				GoleakOptions: []goleak.Option{
 					// Snowflake driver has those leaks. Issue: https://github.com/snowflakedb/gosnowflake/issues/588
 					goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
@@ -251,7 +251,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 }
 
 // beforeTest creates new table before each test.
-func beforeTest(t *testing.T, cfg map[string]string) func(t *testing.T) {
+func beforeTest(cfg map[string]string) func(t *testing.T) {
 	return func(t *testing.T) {
 		table := randomIdentifier(t)
 		t.Logf("table under test: %v", table)

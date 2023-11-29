@@ -180,6 +180,9 @@ func (s *Snowflake) GetTrackingData(
 	}
 
 	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("run query: %w", rows.Err())
+	}
 	if err != nil {
 		return nil, fmt.Errorf("run query: %w", err)
 	}
@@ -223,6 +226,9 @@ func (s *Snowflake) GetTrackingData(
 // TableExists check if table exist.
 func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error) {
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsTableExist, strings.ToUpper(table)))
+	if rows.Err() != nil {
+		return false, fmt.Errorf("table exists: %w", err)
+	}
 	if err != nil {
 		return false, err
 	}
@@ -234,6 +240,9 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 // GetMaxValue get max value by ordering column.
 func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("query get max value: %w", err)
 	}

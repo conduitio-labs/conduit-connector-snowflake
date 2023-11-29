@@ -115,7 +115,7 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (i *snapshotIterator) Next(_ context.Context) (sdk.Record, error) {
 	row := make(map[string]any)
 	if err := i.rows.MapScan(row); err != nil {
 		return sdk.Record{}, fmt.Errorf("scan rows: %w", err)
