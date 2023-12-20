@@ -17,10 +17,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"github.com/huandu/go-sqlbuilder"
 	"reflect"
 	"strings"
 
-	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
@@ -244,9 +244,6 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	if err != nil {
 		return nil, fmt.Errorf("query get max value: %w", err)
 	}
-	if rows.Err() != nil {
-		return nil, fmt.Errorf("query get max value: %w", err)
-	}
 
 	defer rows.Close()
 
@@ -256,6 +253,10 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 		if er != nil {
 			return nil, er
 		}
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
 	}
 
 	return maxValue, nil
