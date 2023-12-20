@@ -7,8 +7,8 @@ snowflake connector.
 
 ### Prerequisites
 
-- [Go](https://go.dev/) 1.20
-- (optional) [golangci-lint](https://github.com/golangci/golangci-lint) 1.48.0
+- [Go](https://go.dev/) 1.21
+- (optional) [golangci-lint](https://github.com/golangci/golangci-lint) 1.55.2
 - (optional) [mock](https://github.com/golang/mock) 1.6.0
 
 ### Configuration

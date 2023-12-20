@@ -114,7 +114,7 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 	var (
 		payload sdk.RawData
 		err     error

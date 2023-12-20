@@ -20,12 +20,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
-
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 var (
@@ -212,6 +210,9 @@ func (s *Snowflake) GetTrackingData(
 
 		result = append(result, row)
 	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("run query: %w", rows.Err())
+	}
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
@@ -226,9 +227,16 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 	if err != nil {
 		return false, err
 	}
+
 	defer rows.Close()
 
-	return rows.Next(), nil
+	exists := rows.Next()
+
+	if rows.Err() != nil {
+		return false, fmt.Errorf("table exists: %w", err)
+	}
+
+	return exists, nil
 }
 
 // GetMaxValue get max value by ordering column.
@@ -246,6 +254,9 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 		if er != nil {
 			return nil, er
 		}
+	}
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
 	}
 
 	return maxValue, nil
