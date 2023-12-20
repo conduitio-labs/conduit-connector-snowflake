@@ -17,15 +17,13 @@ package repository
 import (
 	"context"
 	"fmt"
-	"github.com/huandu/go-sqlbuilder"
 	"reflect"
 	"strings"
 
-	"github.com/jmoiron/sqlx"
-
-	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
-
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/huandu/go-sqlbuilder"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
 )
 
 var (
