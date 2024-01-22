@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -28,6 +29,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/google/uuid"
 	builder "github.com/huandu/go-sqlbuilder"
+	"github.com/joho/godotenv"
 	"go.uber.org/goleak"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
@@ -99,6 +101,11 @@ func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Recor
 }
 
 func TestAcceptance(t *testing.T) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION")
 	if connectionURL == "" {
 		t.Skip("SNOWFLAKE_CONNECTION env var must be set")
