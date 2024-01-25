@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 const (
@@ -110,46 +108,4 @@ func Parse(cfg map[string]string) (Config, error) {
 	}
 
 	return config, nil
-}
-
-func (c *Config) SourceParameters() map[string]sdk.Parameter {
-	return map[string]sdk.Parameter{
-		KeyConnection: {
-			Default:     "",
-			Required:    true,
-			Description: "Snowflake connection string.",
-		},
-		KeyTable: {
-			Default:     "",
-			Required:    true,
-			Description: "The table name that the connector should read.",
-		},
-		KeyOrderingColumn: {
-			Default:  "",
-			Required: true,
-			Description: "The name of a column that the connector will use for ordering rows. " +
-				"Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.",
-		},
-		KeyColumns: {
-			Default:     "",
-			Required:    false,
-			Description: "Comma separated list of column names that should be included in each Record's payload.",
-		},
-		KeyPrimaryKeys: {
-			Default:     "",
-			Required:    false,
-			Description: "The list of the column names that records should use for their `Key` fields.",
-		},
-		KeySnapshot: {
-			Default:  "true",
-			Required: false,
-			Description: "Whether or not the plugin will take a snapshot of the entire table before starting cdc " +
-				"mode, by default true.",
-		},
-		KeyBatchSize: {
-			Default:     "1000",
-			Required:    false,
-			Description: "Size of batch",
-		},
-	}
 }

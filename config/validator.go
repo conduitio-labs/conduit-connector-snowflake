@@ -28,7 +28,7 @@ import (
 const (
 	keyStructTag = "key"
 
-	// containsStrFieldTag is a tag for a custom validation function, containsStrField.
+	// containsOrDefaultTag is a tag for a custom validation function, containsOrDefaultTag.
 	containsOrDefaultTag = "contains_or_default"
 )
 

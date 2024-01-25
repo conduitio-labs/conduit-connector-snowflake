@@ -1,24 +1,24 @@
 package destination
 
-//go:generate paramgen -output=paramgen_dest.go DestinationConfig
-
 import (
 	"context"
 	"fmt"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 type Destination struct {
 	sdk.UnimplementedDestination
 
-	config DestinationConfig
+	repository *repository.Snowflake
+	config     DestinationConfig
 }
 
 type DestinationConfig struct {
 	// Config includes parameters that are the same in the source and destination.
-	// DestinationConfigParam must be either yes or no (defaults to yes).
-	DestinationConfigParam string `validate:"inclusion=yes|no" default:"yes"`
+	config.Config
 }
 
 func NewDestination() sdk.Destination {
@@ -30,7 +30,45 @@ func (d *Destination) Parameters() map[string]sdk.Parameter {
 	// Parameters is a map of named Parameters that describe how to configure
 	// the Destination. Parameters can be generated from DestinationConfig with
 	// paramgen.
-	return nil
+	return map[string]sdk.Parameter{
+		config.KeyConnection: {
+			Default:     "",
+			Required:    true,
+			Description: "Snowflake connection string.",
+		},
+		config.KeyTable: {
+			Default:     "",
+			Required:    true,
+			Description: "The table name that the connector should read.",
+		},
+		config.KeyOrderingColumn: {
+			Default:  "",
+			Required: true,
+			Description: "The name of a column that the connector will use for ordering rows. " +
+				"Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.",
+		},
+		config.KeyColumns: {
+			Default:     "",
+			Required:    false,
+			Description: "Comma separated list of column names that should be included in each Record's payload.",
+		},
+		config.KeyPrimaryKeys: {
+			Default:     "",
+			Required:    false,
+			Description: "The list of the column names that records should use for their `Key` fields.",
+		},
+		config.KeySnapshot: {
+			Default:  "true",
+			Required: false,
+			Description: "Whether or not the plugin will take a snapshot of the entire table before starting cdc " +
+				"mode, by default true.",
+		},
+		config.KeyBatchSize: {
+			Default:     "1000",
+			Required:    false,
+			Description: "Size of batch",
+		},
+	}
 }
 
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
@@ -44,10 +82,14 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	// can do them manually here.
 
 	sdk.Logger(ctx).Info().Msg("Configuring Destination...")
-	err := sdk.Util.ParseConfig(cfg, &d.config)
+
+	parseConfig, err := config.Parse(cfg)
 	if err != nil {
-		return fmt.Errorf("invalid config: %w", err)
+		return err
 	}
+
+	d.config.Config = parseConfig
+
 	return nil
 }
 
@@ -55,6 +97,12 @@ func (d *Destination) Open(ctx context.Context) error {
 	// Open is called after Configure to signal the plugin it can prepare to
 	// start writing records. If needed, the plugin should open connections in
 	// this function.
+	var err error
+	d.repository, err = repository.Create(ctx, d.config.Connection)
+	if err != nil {
+		return fmt.Errorf("failed to create snowflake repository: %w", err)
+	}
+
 	return nil
 }
 
@@ -70,5 +118,9 @@ func (d *Destination) Teardown(ctx context.Context) error {
 	// Teardown signals to the plugin that all records were written and there
 	// will be no more calls to any other function. After Teardown returns, the
 	// plugin should be ready for a graceful shutdown.
+	if d.repository != nil {
+		d.repository.Close()
+	}
+
 	return nil
 }
