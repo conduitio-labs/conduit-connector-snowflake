@@ -114,7 +114,7 @@ func (s *Snowflake) CreateStream(ctx context.Context, stream, table string) erro
 	return err
 }
 
-// CreateTrackingTable create stream.
+// CreateTrackingTable creates a tracking table.
 func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, table string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {

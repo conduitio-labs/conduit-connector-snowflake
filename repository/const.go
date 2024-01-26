@@ -22,7 +22,7 @@ const (
 
 	queryCreateStream           = `CREATE STREAM IF NOT EXISTS %s on table %s`
 	queryCreateTrackingTable    = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
-	queryCreateDestinationTable = `CREATE TABLE IF NOT EXISTS %s`
+	queryCreateDestinationTable = `CREATE TABLE IF NOT EXISTS %s (%s)`
 	queryCreateTemporaryTable   = `CREATE TEMPORARY TABLE IF NOT EXISTS %s LIKE %s`
 	queryCreateStage            = `CREATE STAGE IF NOT EXISTS %s`
 	queryAddTimestampColumn     = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`

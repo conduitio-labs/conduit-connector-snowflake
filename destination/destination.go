@@ -45,7 +45,7 @@ func (d *Destination) Parameters() map[string]sdk.Parameter {
 		config.KeyTable: {
 			Default:     "",
 			Required:    true,
-			Description: "The table name that the connector should read.",
+			Description: "The table name that the connector should read or write to.",
 		},
 		config.KeyOrderingColumn: {
 			Default:  "",
@@ -130,6 +130,8 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	//d.repository.
 
 	// 2. create destination table
+	// https://docs.snowflake.com/en/sql-reference/sql/create-table#create-table-using-template
+	// can create table using template and reference the stage data maybe before using copy into?
 	// e.g: CREATE TABLE IF NOT EXISTS "test_data" (
 	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
 	//      )
