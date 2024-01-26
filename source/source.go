@@ -16,7 +16,9 @@ package source
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 
@@ -28,8 +30,8 @@ import (
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   config.Config
-	iterator Iterator
+	sourceConfig SourceConfig
+	iterator     Iterator
 }
 
 // New initialises a new source.
@@ -87,15 +89,36 @@ func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error 
 		return err
 	}
 
-	s.config = cfg
+	// parse source batch size and snapshot manually, set defaults
+	s.sourceConfig.BatchSize = 1000
+	s.sourceConfig.Snapshot = true
+	s.sourceConfig.Config = cfg
+
+	if cfgRaw[config.KeyBatchSize] != "" {
+		batchSize, err := strconv.Atoi(cfgRaw[config.KeyBatchSize])
+		if err != nil {
+			return errors.New(`"batchSize" config value must be int`)
+		}
+
+		s.sourceConfig.BatchSize = batchSize
+	}
+
+	if cfgRaw[config.KeySnapshot] != "" {
+		snapshot, err := strconv.ParseBool(cfgRaw[config.KeySnapshot])
+		if err != nil {
+			return fmt.Errorf("parse %q: %w", config.KeySnapshot, err)
+		}
+
+		s.sourceConfig.Snapshot = snapshot
+	}
 
 	return nil
 }
 
 // Open prepare the plugin to start sending records from the given position.
 func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
-	it, err := iterator.New(ctx, s.config.Connection, s.config.Table, s.config.OrderingColumn, s.config.Keys,
-		s.config.Columns, s.config.BatchSize, s.config.Snapshot, rp)
+	it, err := iterator.New(ctx, s.sourceConfig.Connection, s.sourceConfig.Table, s.sourceConfig.OrderingColumn, s.sourceConfig.Keys,
+		s.sourceConfig.Columns, s.sourceConfig.BatchSize, s.sourceConfig.Snapshot, rp)
 	if err != nil {
 		return fmt.Errorf("create iterator: %w", err)
 	}

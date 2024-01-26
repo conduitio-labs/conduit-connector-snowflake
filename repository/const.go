@@ -20,16 +20,27 @@ const (
 	MetadataColumnRow    = "METADATA$ROW_ID"
 	MetadataColumnTime   = "METADATA$TS"
 
-	queryCreateStream        = `CREATE STREAM IF NOT EXISTS %s on table %s`
-	queryCreateTrackingTable = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
-	queryAddTimestampColumn  = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
-	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s STRING`
-	queryAddBooleanColumn    = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
-	queryInsertInto          = `INSERT INTO %s %s`
-	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
-	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
-	queryGetMaxValue         = `SELECT MAX(%s) FROM %s`
-	queryGetPrimaryKeys      = `SHOW PRIMARY KEYS IN TABLE %s`
+	queryCreateStream           = `CREATE STREAM IF NOT EXISTS %s on table %s`
+	queryCreateTrackingTable    = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
+	queryCreateDestinationTable = `CREATE TABLE IF NOT EXISTS %s`
+	queryCreateTemporaryTable   = `CREATE TEMPORARY TABLE IF NOT EXISTS %s LIKE %s`
+	queryCreateStage            = `CREATE STAGE IF NOT EXISTS %s`
+	queryAddTimestampColumn     = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
+	queryAddStringColumn        = `ALTER TABLE %s ADD COLUMN %s STRING`
+	queryAddBooleanColumn       = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
+	queryInsertInto             = `INSERT INTO %s %s`
+	queryInsertIntoColumn       = `INSERT INTO %s (%s) %s`
+	queryIsTableExist           = `SHOW TABLES LIKE '%s'`
+	queryGetMaxValue            = `SELECT MAX(%s) FROM %s`
+	queryGetPrimaryKeys         = `SHOW PRIMARY KEYS IN TABLE %s`
+	queryPutFileInStage         = `PUT %s %s;`
+	queryCopyInto               = `COPY INTO %s FROM %s %s`
+	// TODO: support DELETE & read operation from column
+	queryMergeInto = `MERGE INTO %s as a USING %s AS b ON a.id = b.id
+		WHEN MATCHED THEN UPDATE SET %s
+		WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s)`
+	queryDropTable  = `DROP table %s`
+	queryRemoveFile = `REMOVE @%s/%s`
 
 	columnName = "column_name"
 )

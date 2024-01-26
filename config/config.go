@@ -15,9 +15,7 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -36,11 +34,11 @@ const (
 	KeyOrderingColumn = "orderingColumn"
 	// KeySnapshot is a config name for snapshotMode.
 	KeySnapshot = "snapshot"
-	// snapshotDefault is a default value for the Snapshot field.
-	snapshotDefault = true
+	// // snapshotDefault is a default value for the Snapshot field.
+	// snapshotDefault = true
 
-	// defaultBatchSize is a default value for a BatchSize field.
-	defaultBatchSize = 1000
+	// // defaultBatchSize is a default value for a BatchSize field.
+	// defaultBatchSize = 1000
 )
 
 // Config represents configuration needed for Snowflake.
@@ -56,10 +54,6 @@ type Config struct {
 	Keys []string `validate:"dive,max=251"`
 	// OrderingColumn is a name of a column that the connector will use for ordering rows.
 	OrderingColumn string `key:"orderingColumn" validate:"required,max=251"`
-	// Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.
-	Snapshot bool
-	// BatchSize - size of batch.
-	BatchSize int `validate:"gte=1,lte=100000"`
 }
 
 // Parse attempts to parse plugins.Config into a Config struct.
@@ -68,8 +62,6 @@ func Parse(cfg map[string]string) (Config, error) {
 		Connection:     cfg[KeyConnection],
 		Table:          cfg[KeyTable],
 		OrderingColumn: cfg[KeyOrderingColumn],
-		BatchSize:      defaultBatchSize,
-		Snapshot:       snapshotDefault,
 	}
 
 	// Columns in snowflake is uppercase.
@@ -83,24 +75,6 @@ func Parse(cfg map[string]string) (Config, error) {
 
 	if cfg[KeyOrderingColumn] != "" {
 		config.OrderingColumn = strings.ToUpper(config.OrderingColumn)
-	}
-
-	if cfg[KeyBatchSize] != "" {
-		batchSize, err := strconv.Atoi(cfg[KeyBatchSize])
-		if err != nil {
-			return Config{}, errors.New(`"batchSize" config value must be int`)
-		}
-
-		config.BatchSize = batchSize
-	}
-
-	if cfg[KeySnapshot] != "" {
-		snapshot, err := strconv.ParseBool(cfg[KeySnapshot])
-		if err != nil {
-			return Config{}, fmt.Errorf("parse %q: %w", KeySnapshot, err)
-		}
-
-		config.Snapshot = snapshot
 	}
 
 	if err := Validate(&config); err != nil {
