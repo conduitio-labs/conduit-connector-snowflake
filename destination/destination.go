@@ -135,21 +135,34 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 1. generate internal stage
 	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
+	// TODO: see if we can grab connector ID from the connector SDK.
 	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
-
-	// 2. create destination table
-	// e.g: CREATE TABLE IF NOT EXISTS "test_data" (
-	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	//      )
 	
 
 	// FOR EACH BATCH:
 
-	// 1. create temporary table:
-	// CREATE TABLE "temporary_data_g167gd92h" (
-	// 		id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	// );
+	// upon receiving first record:
 
+	// 1. intepret the "schema" of the data, and see whether that matches what we've cached
+	
+	// 1a. if the cache is empty, then we need to create destination table + create temporary table
+	//  create destination table + temp table
+	//  CREATE TABLE IF NOT EXISTS "test_data" (
+	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	//      )
+	//  CREATE TEMPORARY TABLE:
+	// 		  id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	//      );
+
+	// 1b.
+	// if the cache is not empty, but is different than the record (e.g. we have a new column),
+	// 	 then we need to execute an ALTER TABLE on destination table + 
+	//  CREATE TABLE IF NOT EXISTS "test_data" (
+	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	//      )
+	//  CREATE TEMPORARY TABLE:
+	// 		  id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	//      );
 
 	// 2. Create a CSV containing the batch of records to put into Snowflake
 
