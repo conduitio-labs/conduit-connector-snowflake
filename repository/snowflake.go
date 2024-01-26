@@ -276,22 +276,24 @@ func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string,
 // Destination methods
 
 // SetupDestination creates a stage in snowflake and returns the stage name
-func (s *Snowflake) SetupDestination(ctx context.Context) error {
+func (s *Snowflake) SetupDestination(ctx context.Context, connectorID string) (string, error) {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	return nil
+	stageName := buildStage(ctx, connectorID)
+
+	return stageName, nil
 }
 
 // buildStage builds a stage using the connector ID
 func buildStage(ctx context.Context, connectorID string) string {
-	stageTempName := fmt.Sprintf("stage_%s", connectorID)
+	stageName := fmt.Sprintf("stage_%s", connectorID)
 
-	sb := sqlbuilder.Build(queryCreateStage, stageTempName)
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateStage, stageName))
 	s, _ := sb.Build()
 
 	return s

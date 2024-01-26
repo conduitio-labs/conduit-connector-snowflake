@@ -127,7 +127,10 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// 1. generate internal stage
 	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
 	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
-	//d.repository.
+	stageName, err := d.repository.SetupDestination(ctx)
+	if err != nil {
+		return 0, err
+	}
 
 	// 2. create destination table
 	// https://docs.snowflake.com/en/sql-reference/sql/create-table#create-table-using-template
