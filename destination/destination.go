@@ -111,6 +111,74 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// caching. It should return the number of records written from r
 	// (0 <= n <= len(r)) and any error encountered that caused the write to
 	// stop early. Write must return a non-nil error if it returns n < len(r).
+
+
+	// General approach
+
+	// We should take the following config values
+	
+	// max batch record count
+	// max batch size (bytes)?
+	// batch time interval
+
+	//
+	// if either the max batch record count or size is reached, we will need to push the batch records into snowflake
+	// otherwise, we will default to the time interval to push batches to ensure steady movement of data.
+
+	
+
+	// general approach
+	// TODO: move this into another package.
+
+
+	// ON START OF CONNECTOR:
+
+	// 1. generate internal stage
+	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
+	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
+
+	// 2. create destination table
+	// e.g: CREATE TABLE IF NOT EXISTS "test_data" (
+	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	//      )
+	
+
+	// FOR EACH BATCH:
+
+	// 1. create temporary table:
+	// CREATE TABLE "temporary_data_g167gd92h" (
+	// 		id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
+	// );
+
+
+	// 2. Create a CSV containing the batch of records to put into Snowflake
+
+	// 3. Use snowflake's SQL PUT command to upload these files into the internal stage:
+	// PUT file:///Users/samir/batch-of-records.csv @conduit_connector:j9j2824;
+
+	// Keep in mind that the file will be compressed with GZIP, 
+	// so the filename in the stage is "batch-of-records.csv.gz"
+
+	// 4. execute the COPY INTO command to load the contents of the CSV into the temporary table:
+	// COPY INTO "temp_data1" FROM @test_stage1 pattern='.*/.*/snowflake1.csv.gz' 
+	//   FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);
+
+	// 5. MERGE the temporary table into the destination table, making sure to handle UPDATES and DELETES:
+	// MERGE INTO "test_data" as a USING "temp_data1" AS b ON a.id = b.id
+  	// WHEN MATCHED THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd
+  	// WHEN NOT MATCHED THEN INSERT (a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
+
+	// NOTE: we need to update the query above to actually read the record to find `UPDATE`/`DELETE`, and perform the action as recommended.
+	// This was just utilized for testing performance and cost.
+
+	// Now the destination table should be updated with the records from the batch. Let's clean up by:
+	
+	//	6. Drop the temporary table:
+	//  DROP table "temp_data1";
+
+	// 7. Remove the batch file:
+	// REMOVE @test_stage1/batch-of-records.csv.gz
+
 	return 0, nil
 }
 
