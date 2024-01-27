@@ -155,8 +155,9 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 	return err
 }
 
-// CreateTrackingTable create stream.
-func (s *Snowflake) SetupDestination(ctx context.Context, stage, table string) error {
+// SetupDestination creates the internal stage, temporary, and destination table if they don't exist already.
+// TODO: separate the stage creation from the temporary & destination table creation.
+func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName string, schema map[string]string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -164,17 +165,19 @@ func (s *Snowflake) SetupDestination(ctx context.Context, stage, table string) e
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	_, err = tx.ExecContext(ctx, buildStage(ctx, stage))
-	if err != nil {
+	if _, err = tx.ExecContext(ctx, buildStage(ctx, stage)); err != nil {
 		return fmt.Errorf("create stage table: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, buildStage(ctx, stage))
-	if err != nil {
-		return fmt.Errorf("create stage table: %w", err)
+	if _, err = tx.ExecContext(ctx, buildTemporaryTable(ctx, tableName, schema)); err != nil {
+		return fmt.Errorf("create temporary table: %w", err)
 	}
 
-	return nil
+	if _, err = tx.ExecContext(ctx, buildTable(ctx, tableName, schema)); err != nil {
+		return fmt.Errorf("create destination table: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // GetTrackingData get data from tracking table.
@@ -273,6 +276,21 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	return maxValue, nil
 }
 
+func (s *Snowflake) PutFileInStage(ctx context.Context, filepath, stage string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	if _, err = tx.ExecContext(ctx, buildPutFileQuery(ctx, filepath, stage)); err != nil {
+		return fmt.Errorf("PUT file %s in stage %s: %w", filepath, stage, err)
+	}
+
+	return tx.Commit()
+}
+
 // GetPrimaryKeys returns all primary keys of the table.
 func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	var columns []string
@@ -343,15 +361,31 @@ func toStr(fields []string) string {
 	return strings.Join(fields, ", ")
 }
 
-func buildStage(ctx context.Context, connectorID string) string {
-	sb := sqlbuilder.Build(queryCreateStage, fmt.Sprintf("conduit_%s", connectorID))
+func buildStage(ctx context.Context, stageName string) string {
+	sb := sqlbuilder.Build(queryCreateStage, stageName)
 	s, _ := sb.Build()
 
 	return s
 }
 
-func buildTemporaryTable(ctx context.Context, tableName string) string {
-	sb := sqlbuilder.Build(queryCreateTemporaryTable, fmt.Sprintf("%s_temp", tableName))
+func buildTemporaryTable(ctx context.Context, tableName string, schema map[string]string) string {
+	columnsSQL := buildSchema(schema)
+	sb := sqlbuilder.Build(queryCreateTemporaryTable, fmt.Sprintf("%s_temp", tableName), columnsSQL)
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildTable(ctx context.Context, tableName string, schema map[string]string) string {
+	columnsSQL := buildSchema(schema)
+	sb := sqlbuilder.Build(queryCreateTemporaryTable, tableName, columnsSQL)
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildPutFileQuery(ctx context.Context, filepath, stageName string) string {
+	sb := sqlbuilder.Build(queryPutFileInStage, filepath, fmt.Sprintf("@%s", stageName))
 	s, _ := sb.Build()
 
 	return s
@@ -365,7 +399,7 @@ func buildCreateStreamQuery(stream, table string) string {
 }
 
 func buildCreateTrackingTable(trackingTable, table string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTrackingTable, trackingTable, table))
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTable, trackingTable, table))
 	s, _ := sb.Build()
 
 	return s
@@ -394,4 +428,14 @@ func buildAddTimestampColumn(table, column string) string {
 
 func isNil(v interface{}) bool {
 	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
+}
+
+func buildSchema(schema map[string]string) string {
+	cols := make([]string, len(schema))
+	i := 0
+	for colName, sqlType := range schema {
+		cols[i] = fmt.Sprintf("%s %s", colName, sqlType)
+		i++;
+	}
+	return toStr(cols)
 }

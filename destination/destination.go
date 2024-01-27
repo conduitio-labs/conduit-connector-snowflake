@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/pkg/errors"
 )
 
 type Destination struct {
@@ -21,6 +23,9 @@ type Destination struct {
 type DestinationConfig struct {
 	// Config includes parameters that are the same in the source and destination.
 	config.Config
+	// StageName allows you to name the internal stage created in Snowflake.
+	// Not filling this field will result in an auto-generated stage name.
+	StageName string `json:"stageName" validate:"required"`
 }
 
 func NewDestination() sdk.Destination {
@@ -29,7 +34,7 @@ func NewDestination() sdk.Destination {
 }
 
 func (d *Destination) Parameters() map[string]sdk.Parameter {
-	return Config{}.Parameters()
+	return DestinationConfig{}.Parameters()
 }
 
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
@@ -57,25 +62,23 @@ func (d *Destination) Open(ctx context.Context) error {
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
-	// Write writes len(r) records from r to the destination right away without
-	// caching. It should return the number of records written from r
-	// (0 <= n <= len(r)) and any error encountered that caused the write to
-	// stop early. Write must return a non-nil error if it returns n < len(r).
+	// TLDR - we don't need to implement custom batching logic, it's already handled
+	// for us in the SDK, as long as we use sdk.batch.size / sdk.batch.delay.
+
+	// sdk.batch.size and sdk.batch.delay already handles batching and should
+	// control the size of records & timing of when Write() method is invoked.
+	// FYI - these are only implemented in the SDK for destinations
 
 	// General approach
 
-	// We should take the following config values
-
-	// max batch record count
-	// max batch size (bytes)?
-	// batch time interval
-
-	//
-	// if either the max batch record count or size is reached, we will need to push the batch records into snowflake
-	// otherwise, we will default to the time interval to push batches to ensure steady movement of data.
-
-	// general approach
 	// TODO: move this into another package.
+
+	csv, schema, err := format.MakeCSVRecords(records)
+	if err != nil {
+		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
+	}
+
+	// TODO (BEFORE MERGING): write CSV file, so we can execute PUT correctly.
 
 	// ON START OF CONNECTOR:
 
@@ -83,6 +86,10 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
 	// TODO: see if we can grab connector ID from the connector SDK.
 	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
+
+	if err := d.repository.SetupDestination(ctx, d.config.StageName, d.config.Table); err != nil {
+		return 0, errors.Errorf("failed to set up snowflake destination: %w", err)
+	}
 
 	// FOR EACH BATCH:
 
@@ -109,6 +116,11 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 2. Create a CSV containing the batch of records to put into Snowflake
 
+	
+	// write file somewhere locally? then we can 
+
+
+
 	// 3. Use snowflake's SQL PUT command to upload these files into the internal stage:
 	// PUT file:///Users/samir/batch-of-records.csv @conduit_connector:j9j2824;
 
@@ -134,6 +146,8 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 7. Remove the batch file:
 	// REMOVE @test_stage1/batch-of-records.csv.gz
+
+	// delete batch file locally too!
 
 	return 0, nil
 }

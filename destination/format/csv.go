@@ -13,7 +13,7 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func makeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
+func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 	columnMap := map[string]string{}
