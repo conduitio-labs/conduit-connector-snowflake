@@ -155,6 +155,28 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 	return err
 }
 
+// CreateTrackingTable create stream.
+func (s *Snowflake) SetupDestination(ctx context.Context, stage, table string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	_, err = tx.ExecContext(ctx, buildStage(ctx, stage))
+	if err != nil {
+		return fmt.Errorf("create stage table: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, buildStage(ctx, stage))
+	if err != nil {
+		return fmt.Errorf("create stage table: %w", err)
+	}
+
+	return nil
+}
+
 // GetTrackingData get data from tracking table.
 func (s *Snowflake) GetTrackingData(
 	ctx context.Context,
@@ -319,6 +341,20 @@ func buildConsumeDataQuery(trackingTable, stream string, fields []string) string
 
 func toStr(fields []string) string {
 	return strings.Join(fields, ", ")
+}
+
+func buildStage(ctx context.Context, connectorID string) string {
+	sb := sqlbuilder.Build(queryCreateStage, fmt.Sprintf("conduit_%s", connectorID))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildTemporaryTable(ctx context.Context, tableName string) string {
+	sb := sqlbuilder.Build(queryCreateTemporaryTable, fmt.Sprintf("%s_temp", tableName))
+	s, _ := sb.Build()
+
+	return s
 }
 
 func buildCreateStreamQuery(stream, table string) string {

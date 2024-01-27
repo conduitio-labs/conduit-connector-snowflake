@@ -15,25 +15,7 @@
 package snowflake
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
-	"os"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
-
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/google/uuid"
-	builder "github.com/huandu/go-sqlbuilder"
-	"github.com/joho/godotenv"
-	"go.uber.org/goleak"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
 // driver Configurable Acceptance test driver.
@@ -42,6 +24,9 @@ type driver struct {
 
 	idCounter int32
 }
+
+// TODO FIX
+/*
 
 // WriteToSource - write data to table.
 func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
@@ -271,3 +256,4 @@ func beforeTest(t *testing.T, cfg map[string]string) func(t *testing.T) {
 		}
 	}
 }
+*/

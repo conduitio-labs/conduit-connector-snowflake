@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 type Destination struct {
 	sdk.UnimplementedDestination
+	Writer writer.Writer
 
 	repository *repository.Snowflake
 	config     DestinationConfig
@@ -27,68 +29,16 @@ func NewDestination() sdk.Destination {
 }
 
 func (d *Destination) Parameters() map[string]sdk.Parameter {
-	// Parameters is a map of named Parameters that describe how to configure
-	// the Destination. Parameters can be generated from DestinationConfig with
-	// paramgen.
-	return map[string]sdk.Parameter{
-		config.KeyConnection: {
-			Default:     "",
-			Required:    true,
-			Description: "Snowflake connection string.",
-		},
-		config.KeyTable: {
-			Default:     "",
-			Required:    true,
-			Description: "The table name that the connector should read.",
-		},
-		config.KeyOrderingColumn: {
-			Default:  "",
-			Required: true,
-			Description: "The name of a column that the connector will use for ordering rows. " +
-				"Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.",
-		},
-		config.KeyColumns: {
-			Default:     "",
-			Required:    false,
-			Description: "Comma separated list of column names that should be included in each Record's payload.",
-		},
-		config.KeyPrimaryKeys: {
-			Default:     "",
-			Required:    false,
-			Description: "The list of the column names that records should use for their `Key` fields.",
-		},
-		config.KeySnapshot: {
-			Default:  "true",
-			Required: false,
-			Description: "Whether or not the plugin will take a snapshot of the entire table before starting cdc " +
-				"mode, by default true.",
-		},
-		config.KeyBatchSize: {
-			Default:     "1000",
-			Required:    false,
-			Description: "Size of batch",
-		},
-	}
+	return Config{}.Parameters()
 }
 
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
-	// Configure is the first function to be called in a connector. It provides
-	// the connector with the configuration that can be validated and stored.
-	// In case the configuration is not valid it should return an error.
-	// Testing if your connector can reach the configured data source should be
-	// done in Open, not in Configure.
-	// The SDK will validate the configuration and populate default values
-	// before calling Configure. If you need to do more complex validations you
-	// can do them manually here.
+	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
 
-	sdk.Logger(ctx).Info().Msg("Configuring Destination...")
-
-	parseConfig, err := config.Parse(cfg)
+	err := sdk.Util.ParseConfig(cfg, &d.config)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse destination config : %w", err)
 	}
-
-	d.config.Config = parseConfig
 
 	return nil
 }
@@ -112,11 +62,10 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// (0 <= n <= len(r)) and any error encountered that caused the write to
 	// stop early. Write must return a non-nil error if it returns n < len(r).
 
-
 	// General approach
 
 	// We should take the following config values
-	
+
 	// max batch record count
 	// max batch size (bytes)?
 	// batch time interval
@@ -125,11 +74,8 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// if either the max batch record count or size is reached, we will need to push the batch records into snowflake
 	// otherwise, we will default to the time interval to push batches to ensure steady movement of data.
 
-	
-
 	// general approach
 	// TODO: move this into another package.
-
 
 	// ON START OF CONNECTOR:
 
@@ -137,14 +83,13 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
 	// TODO: see if we can grab connector ID from the connector SDK.
 	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
-	
 
 	// FOR EACH BATCH:
 
 	// upon receiving first record:
 
 	// 1. intepret the "schema" of the data, and see whether that matches what we've cached
-	
+
 	// 1a. if the cache is empty, then we need to create destination table + create temporary table
 	//  create destination table + temp table
 	//  CREATE TABLE IF NOT EXISTS "test_data" (
@@ -156,10 +101,8 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 1b.
 	// if the cache is not empty, but is different than the record (e.g. we have a new column),
-	// 	 then we need to execute an ALTER TABLE on destination table + 
-	//  CREATE TABLE IF NOT EXISTS "test_data" (
-	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	//      )
+	// 	 then we need to execute an ALTER TABLE on destination table +
+	//  ALTER TABLE ....
 	//  CREATE TEMPORARY TABLE:
 	// 		  id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
 	//      );
@@ -169,23 +112,23 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// 3. Use snowflake's SQL PUT command to upload these files into the internal stage:
 	// PUT file:///Users/samir/batch-of-records.csv @conduit_connector:j9j2824;
 
-	// Keep in mind that the file will be compressed with GZIP, 
+	// Keep in mind that the file will be compressed with GZIP,
 	// so the filename in the stage is "batch-of-records.csv.gz"
 
 	// 4. execute the COPY INTO command to load the contents of the CSV into the temporary table:
-	// COPY INTO "temp_data1" FROM @test_stage1 pattern='.*/.*/snowflake1.csv.gz' 
+	// COPY INTO "temp_data1" FROM @test_stage1 pattern='.*/.*/snowflake1.csv.gz'
 	//   FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);
 
 	// 5. MERGE the temporary table into the destination table, making sure to handle UPDATES and DELETES:
 	// MERGE INTO "test_data" as a USING "temp_data1" AS b ON a.id = b.id
-  	// WHEN MATCHED THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd
-  	// WHEN NOT MATCHED THEN INSERT (a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
+	// WHEN MATCHED THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd
+	// WHEN NOT MATCHED THEN INSERT (a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
 
 	// NOTE: we need to update the query above to actually read the record to find `UPDATE`/`DELETE`, and perform the action as recommended.
 	// This was just utilized for testing performance and cost.
 
 	// Now the destination table should be updated with the records from the batch. Let's clean up by:
-	
+
 	//	6. Drop the temporary table:
 	//  DROP table "temp_data1";
 
