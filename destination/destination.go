@@ -39,6 +39,10 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	d.DefaultBatchSize = 1000
 	d.DefaultBatchDelay = time.Second * 5
 
+	// TODO: add configuration for ordering column (aka primary key)
+	// right now, we will automatically detect the key from the key within the record,
+	// but it would be great to have flexibility in case the user wants to key on a different
+
 	err := sdk.Util.ParseConfig(cfg, &d.config)
 	if err != nil {
 		return fmt.Errorf("failed to parse destination config : %w", err)
@@ -72,7 +76,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// TODO: move this into another package.
 
-	csv, schema, cols, err := format.MakeCSVRecords(records)
+	csv, schema, cols, orderingCols, err := format.MakeCSVRecords(records)
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
@@ -110,7 +114,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
 
-	if err := d.repository.CopyMergeDrop(ctx, d.config.Table, tempTable, d.config.Stage, fileName, schema, cols); err != nil {
+	if err := d.repository.CopyMergeDrop(ctx, d.config.Table, tempTable, d.config.Stage, fileName, schema, cols, orderingCols); err != nil {
 		return 0, errors.Errorf("failed copy and merge: %w", err)
 	}
 

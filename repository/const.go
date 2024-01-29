@@ -35,7 +35,7 @@ const (
 	queryPutFileInStage       = `PUT file://%s @%s;`
 	queryCopyInto             = `COPY INTO %s FROM @%s pattern='%s.gz' FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' ;`
 	// TODO: support DELETE & read operation from column
-	queryMergeInto = `MERGE INTO %s as a USING %s AS b ON a.id = b.id
+	queryMergeInto = `MERGE INTO %s as a USING %s AS b ON %s
 		WHEN MATCHED THEN UPDATE SET %s
 		WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s)`
 	queryDropTable  = `DROP table %s`

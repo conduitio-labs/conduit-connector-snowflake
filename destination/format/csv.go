@@ -8,21 +8,39 @@ import (
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
+	"golang.org/x/exp/maps"
 )
 
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, error) {
+func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, []string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 	columnMap := map[string]string{}
 	columnNames := []string{}
+	// TODO: see whether we need to support a compound key here
+	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
+	orderingColumns := []string{}
 	for _, r := range records {
+		// infer ordering column from first record
+		if len(orderingColumns) == 0 {
+			var recordKeyMap map[string]interface{}
+			// we are making an assumption here that it's structured data
+			if err := json.Unmarshal(r.Key.Bytes(), &recordKeyMap); err != nil {
+				return nil, nil, nil, nil, 
+				errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
+			}
+			orderingColumns = maps.Keys(recordKeyMap)
+		}
+
 		var cols map[string]interface{}
 		a := r.Payload.After
+		// we are making an assumption here that it's structured data
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, 
+			errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 		for key, val := range cols {
 			if columnMap[key] == "" {
@@ -54,7 +72,8 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, 
 		var cols map[string]interface{}
 		a := val.Payload.After
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, 
+			errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
 		for _, c := range columnNames {
@@ -70,16 +89,16 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, 
 
 		err := writer.Write(record)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		if err := writer.Error(); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	return buf.Bytes(), columnMap, columnNames, nil
+	return buf.Bytes(), columnMap, columnNames, orderingColumns, nil
 }

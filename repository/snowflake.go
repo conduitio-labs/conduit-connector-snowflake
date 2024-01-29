@@ -294,7 +294,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, filepath, stage string) 
 	return tx.Commit()
 }
 
-func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, fileName string, schema map[string]string, cols []string) error {
+func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, fileName string, schema map[string]string, cols, orderingCols []string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -305,7 +305,7 @@ func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, 
 	if _, err = tx.ExecContext(ctx, buildCopyIntoQuery(ctx, tempTable, stage, fileName)); err != nil {
 		return fmt.Errorf("failed to copy file %s in temp %s: %w", fileName, tempTable, err)
 	}
-	if _, err = tx.ExecContext(ctx, buildMergeQuery(ctx, table, tempTable, schema)); err != nil {
+	if _, err = tx.ExecContext(ctx, buildMergeQuery(ctx, table, tempTable, schema, orderingCols)); err != nil {
 		return fmt.Errorf("failed to merge into table %s from %s: %w", table, tempTable, err)
 	}
 	// if _, err = tx.ExecContext(ctx, buildRemoveQuery(ctx, stage, fileName)); err != nil {
@@ -420,12 +420,14 @@ func buildCopyIntoQuery(ctx context.Context, tempTable, stageName, filepath stri
 	return s
 }
 
-func buildMergeQuery(ctx context.Context, tableName, tempTable string, schema map[string]string) string {
+func buildMergeQuery(ctx context.Context, tableName, tempTable string, schema map[string]string, orderingCols []string) string {
 	updateSet := buildUpdateSet(schema)
 	cols := maps.Keys(schema)
+
+	orderingColumnList := buildOrderingColumnList("a", "b", orderingCols)
 	insertColumnList := buildFinalColumnList("a", cols)
 	valuesColumnList := buildFinalColumnList("b", cols)
-	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto, tableName, tempTable, updateSet, insertColumnList, valuesColumnList))
+	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto, tableName, tempTable, orderingColumnList, updateSet, insertColumnList, valuesColumnList))
 	s, _ := sb.Build()
 	return s
 }
@@ -501,4 +503,12 @@ func buildFinalColumnList(table string, cols []string) string {
 		ret[i] = fmt.Sprintf("%s.%s", table, colName)
 	}
 	return toStr(ret)
+}
+
+func buildOrderingColumnList(tableFrom, tableTo string, orderingCols []string) string {
+	ret := make([]string, len(orderingCols))
+	for i, colName := range orderingCols {
+		ret[i] = fmt.Sprintf("%s.%s = %s.%s", tableFrom, colName, tableTo, colName)
+	}
+	return strings.Join(ret, " AND")
 }
