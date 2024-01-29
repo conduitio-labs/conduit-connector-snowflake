@@ -7,8 +7,14 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-func (DestinationConfig) Parameters() map[string]sdk.Parameter {
+func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.stage": {
+			Default:     "0",
+			Description: "Snowflake snowflake.stage data is copied into before merge",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.table": {
 			Default:     "",
 			Description: "snowflake.table name.",
@@ -24,12 +30,6 @@ func (DestinationConfig) Parameters() map[string]sdk.Parameter {
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},
 			},
-		},
-		"stageName": {
-			Default:     "",
-			Description: "stageName allows you to name the internal stage created in Snowflake. Not filling this field will result in an auto-generated stage name.",
-			Type:        sdk.ParameterTypeString,
-			Validations: []sdk.Validation{},
 		},
 	}
 }

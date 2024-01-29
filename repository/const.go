@@ -22,7 +22,7 @@ const (
 
 	queryCreateStream         = `CREATE STREAM IF NOT EXISTS %s on table %s`
 	queryCreateTable          = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
-	queryCreateTemporaryTable = `CREATE TEMPORARY TABLE IF NOT EXISTS %s LIKE %s`
+	queryCreateTemporaryTable = `CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`
 	queryCreateStage          = `CREATE STAGE IF NOT EXISTS %s`
 	queryAddTimestampColumn   = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
 	queryAddStringColumn      = `ALTER TABLE %s ADD COLUMN %s STRING`
@@ -32,8 +32,8 @@ const (
 	queryIsTableExist         = `SHOW TABLES LIKE '%s'`
 	queryGetMaxValue          = `SELECT MAX(%s) FROM %s`
 	queryGetPrimaryKeys       = `SHOW PRIMARY KEYS IN TABLE %s`
-	queryPutFileInStage       = `PUT %s %s;`
-	queryCopyInto             = `COPY INTO %s FROM %s %s`
+	queryPutFileInStage       = `PUT file://%s @%s;`
+	queryCopyInto             = `COPY INTO %s FROM @%s pattern='%s.gz' FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' ;`
 	// TODO: support DELETE & read operation from column
 	queryMergeInto = `MERGE INTO %s as a USING %s AS b ON a.id = b.id
 		WHEN MATCHED THEN UPDATE SET %s

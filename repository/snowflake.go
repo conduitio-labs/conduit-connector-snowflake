@@ -20,8 +20,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
+	"golang.org/x/exp/maps"
 
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
 
@@ -157,27 +159,28 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 
 // SetupDestination creates the internal stage, temporary, and destination table if they don't exist already.
 // TODO: separate the stage creation from the temporary & destination table creation.
-func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName string, schema map[string]string) error {
+func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName string, schema map[string]string) (string, error) {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
 	if _, err = tx.ExecContext(ctx, buildStage(ctx, stage)); err != nil {
-		return fmt.Errorf("create stage table: %w", err)
+		return "", fmt.Errorf("create stage table: %w", err)
 	}
 
-	if _, err = tx.ExecContext(ctx, buildTemporaryTable(ctx, tableName, schema)); err != nil {
-		return fmt.Errorf("create temporary table: %w", err)
+	tempTable := fmt.Sprintf("%s_temp_%s", tableName, strings.Replace(uuid.NewString(), "-", "", -1))
+	if _, err = tx.ExecContext(ctx, buildTemporaryTable(ctx, tempTable, schema)); err != nil {
+		return "", fmt.Errorf("create temporary table: %w", err)
 	}
 
-	if _, err = tx.ExecContext(ctx, buildTable(ctx, tableName, schema)); err != nil {
-		return fmt.Errorf("create destination table: %w", err)
+	if _, err = tx.ExecContext(ctx, buildTable(ctx, tableName, tempTable)); err != nil {
+		return "", fmt.Errorf("create destination table: %w", err)
 	}
 
-	return tx.Commit()
+	return tempTable, tx.Commit()
 }
 
 // GetTrackingData get data from tracking table.
@@ -291,6 +294,27 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, filepath, stage string) 
 	return tx.Commit()
 }
 
+func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, fileName string, schema map[string]string, cols []string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	if _, err = tx.ExecContext(ctx, buildCopyIntoQuery(ctx, tempTable, stage, fileName)); err != nil {
+		return fmt.Errorf("failed to copy file %s in temp %s: %w", fileName, tempTable, err)
+	}
+	if _, err = tx.ExecContext(ctx, buildMergeQuery(ctx, table, tempTable, schema)); err != nil {
+		return fmt.Errorf("failed to merge into table %s from %s: %w", table, tempTable, err)
+	}
+	// if _, err = tx.ExecContext(ctx, buildRemoveQuery(ctx, stage, fileName)); err != nil {
+	// 	return fmt.Errorf("failed to remove  %s from %s: %w", table, tempTable, err)
+	// }
+
+	return tx.Commit()
+}
+
 // GetPrimaryKeys returns all primary keys of the table.
 func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	var columns []string
@@ -362,7 +386,7 @@ func toStr(fields []string) string {
 }
 
 func buildStage(ctx context.Context, stageName string) string {
-	sb := sqlbuilder.Build(queryCreateStage, stageName)
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateStage, stageName))
 	s, _ := sb.Build()
 
 	return s
@@ -370,24 +394,45 @@ func buildStage(ctx context.Context, stageName string) string {
 
 func buildTemporaryTable(ctx context.Context, tableName string, schema map[string]string) string {
 	columnsSQL := buildSchema(schema)
-	sb := sqlbuilder.Build(queryCreateTemporaryTable, fmt.Sprintf("%s_temp", tableName), columnsSQL)
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTemporaryTable, tableName, columnsSQL))
 	s, _ := sb.Build()
 
 	return s
 }
 
-func buildTable(ctx context.Context, tableName string, schema map[string]string) string {
-	columnsSQL := buildSchema(schema)
-	sb := sqlbuilder.Build(queryCreateTemporaryTable, tableName, columnsSQL)
+func buildTable(ctx context.Context, tableName, tempTable string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTable, tableName, tempTable))
 	s, _ := sb.Build()
 
 	return s
 }
 
 func buildPutFileQuery(ctx context.Context, filepath, stageName string) string {
-	sb := sqlbuilder.Build(queryPutFileInStage, filepath, fmt.Sprintf("@%s", stageName))
+	sb := sqlbuilder.Build(fmt.Sprintf(queryPutFileInStage, filepath, stageName))
 	s, _ := sb.Build()
 
+	return s
+}
+func buildCopyIntoQuery(ctx context.Context, tempTable, stageName, filepath string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryCopyInto, tempTable, stageName, filepath))
+	s, _ := sb.Build()
+
+	return s
+}
+
+func buildMergeQuery(ctx context.Context, tableName, tempTable string, schema map[string]string) string {
+	updateSet := buildUpdateSet(schema)
+	cols := maps.Keys(schema)
+	insertColumnList := buildFinalColumnList("a", cols)
+	valuesColumnList := buildFinalColumnList("b", cols)
+	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto, tableName, tempTable, updateSet, insertColumnList, valuesColumnList))
+	s, _ := sb.Build()
+	return s
+}
+
+func buildRemoveQuery(ctx context.Context, stage, filepath string) string {
+	sb := sqlbuilder.Build(fmt.Sprintf(queryRemoveFile, stage, filepath))
+	s, _ := sb.Build()
 	return s
 }
 
@@ -435,7 +480,25 @@ func buildSchema(schema map[string]string) string {
 	i := 0
 	for colName, sqlType := range schema {
 		cols[i] = fmt.Sprintf("%s %s", colName, sqlType)
-		i++;
+		i++
 	}
 	return toStr(cols)
+}
+
+func buildUpdateSet(schema map[string]string) string {
+	cols := make([]string, len(schema))
+	i := 0
+	for colName := range schema {
+		cols[i] = fmt.Sprintf("a.%s =  b.%s", colName, colName)
+		i++
+	}
+	return toStr(cols)
+}
+
+func buildFinalColumnList(table string, cols []string) string {
+	ret := make([]string, len(cols))
+	for i, colName := range cols {
+		ret[i] = fmt.Sprintf("%s.%s", table, colName)
+	}
+	return toStr(ret)
 }

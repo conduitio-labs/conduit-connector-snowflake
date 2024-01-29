@@ -13,7 +13,7 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
+func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 	columnMap := map[string]string{}
@@ -22,7 +22,7 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
 		var cols map[string]interface{}
 		a := r.Payload.After
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for key, val := range cols {
 			if columnMap[key] == "" {
@@ -31,7 +31,7 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
 				case int, int8, int16, int32, int64:
 					columnMap[key] = "INTEGER"
 				case float32, float64:
-					columnMap[key] = "FLOAT"
+					columnMap[key] = "INTEGER"
 				case time.Time:
 					columnMap[key] = "DATETIME"
 				case bool:
@@ -54,7 +54,7 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
 		var cols map[string]interface{}
 		a := val.Payload.After
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		for _, c := range columnNames {
@@ -70,16 +70,16 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, error) {
 
 		err := writer.Write(record)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if err := writer.Error(); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return buf.Bytes(), columnMap, nil
+	return buf.Bytes(), columnMap, columnNames, nil
 }
