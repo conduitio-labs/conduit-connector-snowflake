@@ -79,7 +79,6 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
-	// TODO (BEFORE MERGING): write CSV file, so we can execute PUT correctly.
 	file, err := os.CreateTemp(os.TempDir(), "snowflake_*.csv")
 	if err != nil {
 		log.Fatal(err)
@@ -94,9 +93,6 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// ON START OF CONNECTOR:
 
 	// 1. generate internal stage
-	// we should try to do this by prepending something like `CONDUIT_`, and then appending the connector ID afterwards.
-	// TODO: see if we can grab connector ID from the connector SDK.
-	// e.g: CREATE STAGE IF NOT EXISTS conduit_connector:j9j2824;
 
 	fullFilePath := file.Name()
 	fileName := filepath.Base(file.Name())
@@ -108,6 +104,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to set up snowflake destination: %w", err)
 	}
 
+	//TODO - send file stream instead of whole file
 	if err := d.repository.PutFileInStage(ctx, fullFilePath, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
