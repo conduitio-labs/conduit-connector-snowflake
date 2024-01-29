@@ -76,7 +76,9 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// TODO: move this into another package.
 
-	csv, schema, cols, orderingCols, err := format.MakeCSVRecords(records)
+	// TODO: read naming prefix from config
+
+	csv, schema, cols, orderingCols, err := format.MakeCSVRecords(records, "meroxa")
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
@@ -157,8 +159,9 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 5. MERGE the temporary table into the destination table, making sure to handle UPDATES and DELETES:
 	// MERGE INTO "test_data" as a USING "temp_data1" AS b ON a.id = b.id
-	// WHEN MATCHED THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd
-	// WHEN NOT MATCHED THEN INSERT (a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
+	// WHEN MATCHED AND meroxa_operation = "OPERATION_UPDATE" THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd, a.meroxa_updated_at = CURRENT_TIMESTAMP()
+	// WHEN MATCHED AND meroxa_operation = "OPERATION_DELETE" THEN UPDATE SET a.meroxa_deleted_at = CURRENT_TIMESTAMP();
+	// WHEN NOT MATCHED THEN INSERT (a.meroxa_created_at,a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (CURRENT_TIMESTAMP(), b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
 
 	// NOTE: we need to update the query above to actually read the record to find `UPDATE`/`DELETE`, and perform the action as recommended.
 	// This was just utilized for testing performance and cost.

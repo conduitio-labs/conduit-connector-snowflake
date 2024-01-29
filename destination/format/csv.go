@@ -15,11 +15,14 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, []string, error) {
+func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[string]string, []string, []string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
-	columnMap := map[string]string{}
-	columnNames := []string{}
+
+	// we need to store the operation in a column, to detect updates & deletes
+	operationColumn := fmt.Sprintf("%s_operation", namingPrefix)
+	columnMap := map[string]string{operationColumn: "VARCHAR"}
+	columnNames := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 	orderingColumns := []string{}
@@ -67,7 +70,6 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, 
 	writer.Write(columnNames)
 
 	for _, val := range records {
-
 		record := []string{}
 		var cols map[string]interface{}
 		a := val.Payload.After
@@ -84,6 +86,8 @@ func MakeCSVRecords(records []sdk.Record) ([]byte, map[string]string, []string, 
 				default:
 					record = append(record, fmt.Sprint(cols[c]))
 				}
+			} else if c == operationColumn {
+				record = append(record, val.Operation.String())
 			}
 		}
 
