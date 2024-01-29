@@ -25,26 +25,38 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 	columnNames := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
+
 	orderingColumns := []string{}
 	for _, r := range records {
-		// infer ordering column from first record
+
+		// get Primary Key(s)
 		if len(orderingColumns) == 0 {
 			var recordKeyMap map[string]interface{}
 			// we are making an assumption here that it's structured data
 			if err := json.Unmarshal(r.Key.Bytes(), &recordKeyMap); err != nil {
-				return nil, nil, nil, nil, 
-				errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
+				return nil, nil, nil, nil,
+					errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
 			}
 			orderingColumns = maps.Keys(recordKeyMap)
 		}
 
+		var a sdk.Data
+		//create a column map if we are updating or creating records
+		if r.Operation != sdk.OperationDelete {
+			a = r.Payload.After
+		} else {
+			a = r.Payload.Before
+		}
+
+		// infer ordering column from first record
 		var cols map[string]interface{}
-		a := r.Payload.After
+
 		// we are making an assumption here that it's structured data
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil, 
-			errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
+			return nil, nil, nil, nil,
+				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
+
 		for key, val := range cols {
 			if columnMap[key] == "" {
 				columnNames = append(columnNames, key)
@@ -66,29 +78,41 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 				}
 			}
 		}
+
 	}
 	writer.Write(columnNames)
 
 	for _, val := range records {
+
 		record := []string{}
 		var cols map[string]interface{}
-		a := val.Payload.After
+		var a sdk.Data
+		if val.Operation != sdk.OperationDelete {
+			a = val.Payload.After
+		} else {
+			a = val.Payload.Before
+		}
+
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil, 
-			errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
+			return nil, nil, nil, nil,
+				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
 		for _, c := range columnNames {
-			if cols[c] != nil {
-				switch cols[c].(type) {
-				case nil:
-					record = append(record, "")
-				default:
-					record = append(record, fmt.Sprint(cols[c]))
-				}
-			} else if c == operationColumn {
-				record = append(record, val.Operation.String())
+			if val.Operation == sdk.OperationDelete {
+				fmt.Printf("@@@@@@@@ Value %s Column Name %s \n", fmt.Sprint(cols[c]), c)
 			}
+			if c == operationColumn {
+				record = append(record, val.Operation.String())
+				continue
+			}
+			switch cols[c].(type) {
+			case nil:
+				record = append(record, "")
+			default:
+				record = append(record, fmt.Sprint(cols[c]))
+			}
+
 		}
 
 		err := writer.Write(record)

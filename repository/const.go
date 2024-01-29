@@ -21,7 +21,7 @@ const (
 	MetadataColumnTime   = "METADATA$TS"
 
 	queryCreateStream         = `CREATE STREAM IF NOT EXISTS %s on table %s`
-	queryCreateTable          = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
+	queryCreateTable          = `CREATE TABLE IF NOT EXISTS %s (%s, meroxa_deleted_at TIMESTAMP_LTZ, meroxa_created_at TIMESTAMP_LTZ, meroxa_updated_at TIMESTAMP_LTZ )`
 	queryCreateTemporaryTable = `CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`
 	queryCreateStage          = `CREATE STAGE IF NOT EXISTS %s`
 	queryAddTimestampColumn   = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
@@ -36,8 +36,9 @@ const (
 	queryCopyInto             = `COPY INTO %s FROM @%s pattern='%s.gz' FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' ;`
 	// TODO: support DELETE & read operation from column
 	queryMergeInto = `MERGE INTO %s as a USING %s AS b ON %s
-		WHEN MATCHED THEN UPDATE SET %s
-		WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s)`
+		WHEN MATCHED AND b.meroxa_operation = 'update' THEN UPDATE SET %s, a.meroxa_updated_at = CURRENT_TIMESTAMP()
+	    WHEN MATCHED AND b.meroxa_operation = 'delete' THEN UPDATE SET a.meroxa_deleted_at = CURRENT_TIMESTAMP()
+		WHEN NOT MATCHED THEN INSERT (%s , a.meroxa_created_at) VALUES (%s, CURRENT_TIMESTAMP())`
 	queryDropTable  = `DROP table %s`
 	queryRemoveFile = `REMOVE @%s/%s`
 

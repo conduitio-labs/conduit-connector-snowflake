@@ -172,11 +172,11 @@ func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName strin
 	}
 
 	tempTable := fmt.Sprintf("%s_temp_%s", tableName, strings.Replace(uuid.NewString(), "-", "", -1))
-	if _, err = tx.ExecContext(ctx, buildTemporaryTable(ctx, tempTable, schema)); err != nil {
+	if _, err = tx.ExecContext(ctx, buildTable(ctx, queryCreateTemporaryTable, tempTable, schema)); err != nil {
 		return "", fmt.Errorf("create temporary table: %w", err)
 	}
 
-	if _, err = tx.ExecContext(ctx, buildTable(ctx, tableName, tempTable)); err != nil {
+	if _, err = tx.ExecContext(ctx, buildTable(ctx, queryCreateTable, tableName, schema)); err != nil {
 		return "", fmt.Errorf("create destination table: %w", err)
 	}
 
@@ -392,16 +392,10 @@ func buildStage(ctx context.Context, stageName string) string {
 	return s
 }
 
-func buildTemporaryTable(ctx context.Context, tableName string, schema map[string]string) string {
+func buildTable(ctx context.Context, query, tableName string, schema map[string]string) string {
+
 	columnsSQL := buildSchema(schema)
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTemporaryTable, tableName, columnsSQL))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildTable(ctx context.Context, tableName, tempTable string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTable, tableName, tempTable))
+	sb := sqlbuilder.Build(fmt.Sprintf(query, tableName, columnsSQL))
 	s, _ := sb.Build()
 
 	return s
@@ -421,12 +415,12 @@ func buildCopyIntoQuery(ctx context.Context, tempTable, stageName, filepath stri
 }
 
 func buildMergeQuery(ctx context.Context, tableName, tempTable string, schema map[string]string, orderingCols []string) string {
-	updateSet := buildUpdateSet(schema)
 	cols := maps.Keys(schema)
 
-	orderingColumnList := buildOrderingColumnList("a", "b", orderingCols)
-	insertColumnList := buildFinalColumnList("a", cols)
-	valuesColumnList := buildFinalColumnList("b", cols)
+	updateSet := buildOrderingColumnList("a", "b", ",", cols)
+	orderingColumnList := buildOrderingColumnList("a", "b", " AND ", orderingCols)
+	insertColumnList := buildFinalColumnList("a", ".", cols)
+	valuesColumnList := buildFinalColumnList("b", ".", cols)
 	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto, tableName, tempTable, orderingColumnList, updateSet, insertColumnList, valuesColumnList))
 	s, _ := sb.Build()
 	return s
@@ -477,6 +471,14 @@ func isNil(v interface{}) bool {
 	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
 }
 
+func buildFinalColumnList(table, delimiter string, cols []string) string {
+	ret := make([]string, len(cols))
+	for i, colName := range cols {
+		ret[i] = fmt.Sprintf("%s%s%s", table, delimiter, colName)
+	}
+	return toStr(ret)
+}
+
 func buildSchema(schema map[string]string) string {
 	cols := make([]string, len(schema))
 	i := 0
@@ -487,28 +489,10 @@ func buildSchema(schema map[string]string) string {
 	return toStr(cols)
 }
 
-func buildUpdateSet(schema map[string]string) string {
-	cols := make([]string, len(schema))
-	i := 0
-	for colName := range schema {
-		cols[i] = fmt.Sprintf("a.%s =  b.%s", colName, colName)
-		i++
-	}
-	return toStr(cols)
-}
-
-func buildFinalColumnList(table string, cols []string) string {
-	ret := make([]string, len(cols))
-	for i, colName := range cols {
-		ret[i] = fmt.Sprintf("%s.%s", table, colName)
-	}
-	return toStr(ret)
-}
-
-func buildOrderingColumnList(tableFrom, tableTo string, orderingCols []string) string {
+func buildOrderingColumnList(tableFrom, tableTo, delimiter string, orderingCols []string) string {
 	ret := make([]string, len(orderingCols))
 	for i, colName := range orderingCols {
 		ret[i] = fmt.Sprintf("%s.%s = %s.%s", tableFrom, colName, tableTo, colName)
 	}
-	return strings.Join(ret, " AND")
+	return strings.Join(ret, delimiter)
 }

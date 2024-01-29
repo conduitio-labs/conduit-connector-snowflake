@@ -21,10 +21,6 @@ type Destination struct {
 	config     Config
 }
 
-const (
-	tempDir = "/temp/conduit-snowflake"
-)
-
 func NewDestination() sdk.Destination {
 	// Create Destination and wrap it in the default middleware.
 	return sdk.DestinationWithMiddleware(&Destination{}, sdk.DefaultDestinationMiddleware()...)
