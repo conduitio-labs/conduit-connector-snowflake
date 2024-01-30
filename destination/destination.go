@@ -14,16 +14,30 @@ import (
 	"github.com/go-errors/errors"
 )
 
+const (
+	defaultBatchDelay = time.Second * 5
+	defaultBatchSize = 1000
+)
+
 type Destination struct {
 	sdk.UnimplementedDestination
-	sdk.DestinationWithBatch
 	repository *repository.Snowflake
 	config     Config
 }
 
+// NewDestination creates the Destination and wraps it in the default middleware.
 func NewDestination() sdk.Destination {
-	// Create Destination and wrap it in the default middleware.
-	return sdk.DestinationWithMiddleware(&Destination{}, sdk.DefaultDestinationMiddleware()...)
+	// This is needed to override the default batch size and delay defaults for this destination connector.
+	middlewares := sdk.DefaultDestinationMiddleware()
+	for i, m := range middlewares {
+		switch dest := m.(type) {
+		case sdk.DestinationWithBatch:
+			dest.DefaultBatchDelay = defaultBatchDelay
+			dest.DefaultBatchSize = defaultBatchSize
+			middlewares[i] = dest
+		}
+	}
+	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
 }
 
 func (d *Destination) Parameters() map[string]sdk.Parameter {
@@ -32,8 +46,6 @@ func (d *Destination) Parameters() map[string]sdk.Parameter {
 
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
-	d.DefaultBatchSize = 1000
-	d.DefaultBatchDelay = time.Second * 5
 
 	// TODO: add configuration for ordering column (aka primary key)
 	// right now, we will automatically detect the key from the key within the record,
