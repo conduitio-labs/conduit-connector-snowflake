@@ -14,6 +14,19 @@
 
 package source
 
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"reflect"
+	"testing"
+
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
+)
+
 const (
 	testTable         = "CONDUIT_INTEGRATION_TEST_TABLE"
 	testStream        = "CONDUIT_STREAM_CONDUIT_INTEGRATION_TEST_TABLE"
@@ -29,14 +42,12 @@ const (
 )
 
 // TODO FIX
-/*
 func TestSource_Snapshot(t *testing.T) {
+	ctx := context.Background()
 	cfg, err := prepareConfig()
 	if err != nil {
 		t.Skip()
 	}
-
-	ctx := context.Background()
 
 	err = prepareData(ctx, cfg["connection"])
 	if err != nil {
@@ -45,7 +56,7 @@ func TestSource_Snapshot(t *testing.T) {
 
 	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
 
-	s := new(Source)
+	s := New()
 
 	err = s.Configure(ctx, cfg)
 	if err != nil {
@@ -100,6 +111,8 @@ func TestSource_Snapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+/*
 
 func TestSource_CDC(t *testing.T) {
 	cfg, err := prepareConfig()
@@ -547,6 +560,8 @@ func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
 	}
 }
 
+*/
+
 func prepareConfig() (map[string]string, error) {
 	connection := os.Getenv("SNOWFLAKE_CONNECTION")
 
@@ -555,11 +570,11 @@ func prepareConfig() (map[string]string, error) {
 	}
 
 	return map[string]string{
-		config.KeyConnection:     connection,
-		config.KeyTable:          testTable,
-		config.KeyColumns:        "",
-		config.KeyPrimaryKeys:    "id",
-		config.KeyOrderingColumn: "id",
+		config.KeyConnection: connection,
+		config.KeyTable:      testTable,
+		KeyColumns:           "",
+		KeyPrimaryKeys:       "id",
+		KeyOrderingColumn:    "id",
 	}, nil
 }
 
@@ -692,4 +707,3 @@ func clearData(ctx context.Context, conn string) error {
 
 	return nil
 }
-*/
