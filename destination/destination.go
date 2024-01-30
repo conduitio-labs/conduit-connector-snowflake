@@ -3,6 +3,7 @@ package destination
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
@@ -87,18 +88,16 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	fmt.Printf(" @@@ CSV DATA  %s \n ", string(csv.Bytes()))
 
-	// ON START OF CONNECTOR:
-
-	// 1. generate internal stage
-
-	fileName := fmt.Sprintf("%s.csv", uuid.NewString())
+	// generate a UUID used for the temporary table and filename in internal stage
+	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
+	fileName := fmt.Sprintf("%s.csv", batchUUID)
 	fmt.Printf("@@@@ FILE NAME %s \n", fileName)
 
 	if err = d.repository.SetupStage(ctx, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed to set up snowflake stage: %w", err)
 	}
 
-	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, schema)
+	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, batchUUID, schema)
 	if err != nil {
 		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}

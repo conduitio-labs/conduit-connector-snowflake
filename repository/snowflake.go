@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/exp/maps"
@@ -176,7 +175,7 @@ func (s *Snowflake) SetupStage(ctx context.Context, stage string) error {
 }
 
 // creates temporary, and destination table if they don't exist already.
-func (s *Snowflake) SetupTables(ctx context.Context, tableName string, schema map[string]string) (string, error) {
+func (s *Snowflake) SetupTables(ctx context.Context, tableName, batchUUID string, schema map[string]string) (string, error) {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -184,7 +183,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, tableName string, schema ma
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	tempTable := fmt.Sprintf("%s_temp_%s", tableName, strings.Replace(uuid.NewString(), "-", "", -1))
+	tempTable := fmt.Sprintf("%s_temp_%s", tableName, batchUUID)
 	columnsSQL := buildSchema(schema)
 
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTemporaryTable, tempTable, columnsSQL))); err != nil {
