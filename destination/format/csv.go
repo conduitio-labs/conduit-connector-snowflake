@@ -15,18 +15,17 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[string]string, []string, []string, error) {
+func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) ([]byte, map[string]string, []string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 
 	// we need to store the operation in a column, to detect updates & deletes
-	operationColumn := fmt.Sprintf("%s_operation", namingPrefix)
+	operationColumn := fmt.Sprintf("%s_operation", prefix)
 	columnMap := map[string]string{operationColumn: "VARCHAR"}
 	columnNames := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
-	orderingColumns := []string{}
 	for _, r := range records {
 
 		// get Primary Key(s)
@@ -34,7 +33,7 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 			var recordKeyMap map[string]interface{}
 			// we are making an assumption here that it's structured data
 			if err := json.Unmarshal(r.Key.Bytes(), &recordKeyMap); err != nil {
-				return nil, nil, nil, nil,
+				return nil, nil, nil,
 					errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
 			}
 			orderingColumns = maps.Keys(recordKeyMap)
@@ -53,7 +52,7 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 
 		// we are making an assumption here that it's structured data
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil,
+			return nil, nil, nil,
 				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
@@ -94,7 +93,7 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 		}
 
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil,
+			return nil, nil, nil,
 				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
@@ -117,16 +116,16 @@ func MakeCSVRecords(records []sdk.Record, namingPrefix string) ([]byte, map[stri
 
 		err := writer.Write(record)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, err
 		}
 		if err := writer.Error(); err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return buf.Bytes(), columnMap, columnNames, orderingColumns, nil
+	return buf.Bytes(), columnMap, orderingColumns, nil
 }

@@ -112,7 +112,7 @@ func (s *Snowflake) GetRows(
 
 // CreateStream create stream.
 func (s *Snowflake) CreateStream(ctx context.Context, stream, table string) error {
-	_, err := s.conn.ExecContext(ctx, buildCreateStreamQuery(stream, table))
+	_, err := s.conn.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateStream, stream, table)))
 
 	return err
 }
@@ -126,27 +126,27 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	_, err = tx.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
+	_, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTable, trackingTable, table)))
 	if err != nil {
 		return fmt.Errorf("create tracking table: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnAction))
+	_, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryAddStringColumn, trackingTable, MetadataColumnAction)))
 	if err != nil {
 		return fmt.Errorf("add metadata action column: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, buildAddBoolColumn(trackingTable, MetadataColumnUpdate))
+	_, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryAddStringColumn, trackingTable, MetadataColumnUpdate)))
 	if err != nil {
 		return fmt.Errorf("add metadata update column: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnRow))
+	_, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryAddStringColumn, trackingTable, MetadataColumnRow)))
 	if err != nil {
 		return fmt.Errorf("add metadata row column: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, buildAddTimestampColumn(trackingTable, MetadataColumnTime))
+	_, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryAddStringColumn, trackingTable, MetadataColumnTime)))
 	if err != nil {
 		return fmt.Errorf("add metadata timestamp column: %w", err)
 	}
@@ -158,9 +158,25 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 	return err
 }
 
-// SetupDestination creates the internal stage, temporary, and destination table if they don't exist already.
-// TODO: separate the stage creation from the temporary & destination table creation.
-func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName string, schema map[string]string) (string, error) {
+// creates the internal stage,
+func (s *Snowflake) SetupStage(ctx context.Context, stage string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateStage, stage))); err != nil {
+		return fmt.Errorf("create stage table: %w", err)
+	}
+
+	return tx.Commit()
+
+}
+
+// creates temporary, and destination table if they don't exist already.
+func (s *Snowflake) SetupTables(ctx context.Context, tableName string, schema map[string]string) (string, error) {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
@@ -168,16 +184,14 @@ func (s *Snowflake) SetupDestination(ctx context.Context, stage, tableName strin
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	if _, err = tx.ExecContext(ctx, buildStage(ctx, stage)); err != nil {
-		return "", fmt.Errorf("create stage table: %w", err)
-	}
-
 	tempTable := fmt.Sprintf("%s_temp_%s", tableName, strings.Replace(uuid.NewString(), "-", "", -1))
-	if _, err = tx.ExecContext(ctx, buildTable(ctx, queryCreateTemporaryTable, tempTable, schema)); err != nil {
+	columnsSQL := buildSchema(schema)
+
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTemporaryTable, tempTable, columnsSQL))); err != nil {
 		return "", fmt.Errorf("create temporary table: %w", err)
 	}
 
-	if _, err = tx.ExecContext(ctx, buildTable(ctx, queryCreateTable, tableName, schema)); err != nil {
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTemporaryTable, tableName, columnsSQL))); err != nil {
 		return "", fmt.Errorf("create destination table: %w", err)
 	}
 
@@ -288,14 +302,14 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, fileStream *os.File, sta
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	if _, err = tx.ExecContext(sf.WithFileStream(ctx, fileStream), buildPutFileQuery(ctx, fileStream.Name(), stage),); err != nil {
+	if _, err = tx.ExecContext(sf.WithFileStream(ctx, fileStream), buildQuery(ctx, fmt.Sprintf(queryPutFileInStage, fileStream.Name(), stage))); err != nil {
 		return fmt.Errorf("PUT file %s in stage %s: %w", fileStream.Name(), stage, err)
 	}
 
 	return tx.Commit()
 }
 
-func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, fileName string, schema map[string]string, cols, orderingCols []string) error {
+func (s *Snowflake) Copy(ctx context.Context, tempTable, stage, fileName string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -303,15 +317,36 @@ func (s *Snowflake) CopyMergeDrop(ctx context.Context, table, tempTable, stage, 
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	if _, err = tx.ExecContext(ctx, buildCopyIntoQuery(ctx, tempTable, stage, fileName)); err != nil {
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCopyInto, tempTable, stage, fileName))); err != nil {
 		return fmt.Errorf("failed to copy file %s in temp %s: %w", fileName, tempTable, err)
 	}
-	if _, err = tx.ExecContext(ctx, buildMergeQuery(ctx, table, tempTable, schema, orderingCols)); err != nil {
+
+	return tx.Commit()
+}
+
+func (s *Snowflake) Merge(ctx context.Context, table, tempTable, prefix string, schema map[string]string, orderingCols []string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+
+	if _, err = tx.ExecContext(ctx, buildMergeQuery(ctx, table, tempTable, prefix, schema, orderingCols)); err != nil {
 		return fmt.Errorf("failed to merge into table %s from %s: %w", table, tempTable, err)
 	}
-	// if _, err = tx.ExecContext(ctx, buildRemoveQuery(ctx, stage, fileName)); err != nil {
-	// 	return fmt.Errorf("failed to remove  %s from %s: %w", table, tempTable, err)
-	// }
+
+	return tx.Commit()
+}
+func (s *Snowflake) Cleanup(ctx context.Context, stage, fileName string) error {
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryRemoveFile, stage, fileName))); err != nil {
+		return fmt.Errorf("failed to remove  %s from %s: %w", fileName, stage, err)
+	}
 
 	return tx.Commit()
 }
@@ -386,90 +421,38 @@ func toStr(fields []string) string {
 	return strings.Join(fields, ", ")
 }
 
-func buildStage(ctx context.Context, stageName string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateStage, stageName))
+func buildQuery(ctx context.Context, query string) string {
+	sb := sqlbuilder.Build(query)
 	s, _ := sb.Build()
 
 	return s
 }
 
-func buildTable(ctx context.Context, query, tableName string, schema map[string]string) string {
-
-	columnsSQL := buildSchema(schema)
-	sb := sqlbuilder.Build(fmt.Sprintf(query, tableName, columnsSQL))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildPutFileQuery(ctx context.Context, filepath, stageName string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryPutFileInStage, filepath, stageName))
-	s, _ := sb.Build()
-
-	return s
-}
-func buildCopyIntoQuery(ctx context.Context, tempTable, stageName, filepath string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCopyInto, tempTable, stageName, filepath))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildMergeQuery(ctx context.Context, tableName, tempTable string, schema map[string]string, orderingCols []string) string {
+func buildMergeQuery(ctx context.Context, tableName, tempTable, prefix string, schema map[string]string, orderingCols []string) string {
 	cols := maps.Keys(schema)
 
 	updateSet := buildOrderingColumnList("a", "b", ",", cols)
 	orderingColumnList := buildOrderingColumnList("a", "b", " AND ", orderingCols)
 	insertColumnList := buildFinalColumnList("a", ".", cols)
 	valuesColumnList := buildFinalColumnList("b", ".", cols)
-	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto, tableName, tempTable, orderingColumnList, updateSet, insertColumnList, valuesColumnList))
+	//`MERGE INTO %s{tableName} as a USING %s{tempTable} AS b ON %s{orderingColumnList}
+	// 	WHEN MATCHED AND b.%s{prefix}_operation = 'update' THEN UPDATE SET %s{updateSet}, a.%s{prefix}_updated_at = CURRENT_TIMESTAMP()
+	//     WHEN MATCHED AND b.%s{prefix}_operation = 'delete' THEN UPDATE SET a.%s{prefix}_deleted_at = CURRENT_TIMESTAMP()
+	// 	WHEN NOT MATCHED THEN INSERT (%s , a.%s_created_at) VALUES (%s, CURRENT_TIMESTAMP())`
+	sb := sqlbuilder.Build(fmt.Sprintf(queryMergeInto,
+		tableName,
+		tempTable,
+		orderingColumnList,
+		prefix,
+		updateSet,
+		prefix,
+		prefix,
+		prefix,
+		insertColumnList,
+		prefix,
+		valuesColumnList))
 	s, _ := sb.Build()
 	return s
-}
-
-func buildRemoveQuery(ctx context.Context, stage, filepath string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryRemoveFile, stage, filepath))
-	s, _ := sb.Build()
-	return s
-}
-
-func buildCreateStreamQuery(stream, table string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateStream, stream, table))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildCreateTrackingTable(trackingTable, table string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryCreateTable, trackingTable, table))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildAddStringColumn(table, column string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryAddStringColumn, table, column))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildAddBoolColumn(table, column string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryAddBooleanColumn, table, column))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func buildAddTimestampColumn(table, column string) string {
-	sb := sqlbuilder.Build(fmt.Sprintf(queryAddTimestampColumn, table, column))
-	s, _ := sb.Build()
-
-	return s
-}
-
-func isNil(v interface{}) bool {
-	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
 }
 
 func buildFinalColumnList(table, delimiter string, cols []string) string {
@@ -496,4 +479,8 @@ func buildOrderingColumnList(tableFrom, tableTo, delimiter string, orderingCols 
 		ret[i] = fmt.Sprintf("%s.%s = %s.%s", tableFrom, colName, tableTo, colName)
 	}
 	return strings.Join(ret, delimiter)
+}
+
+func isNil(v interface{}) bool {
+	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
 }

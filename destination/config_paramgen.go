@@ -9,6 +9,18 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.namingPrefix": {
+			Default:     "meroxa",
+			Description: "",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
+		"snowflake.primaryKey": {
+			Default:     "",
+			Description: "",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.stage": {
 			Default:     "0",
 			Description: "Snowflake snowflake.stage data is copied into before merge",

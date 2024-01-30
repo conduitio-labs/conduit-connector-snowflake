@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultBatchDelay = time.Second * 5
-	defaultBatchSize = 1000
+	defaultBatchSize  = 1000
 )
 
 type Destination struct {
@@ -82,11 +82,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// General approach
 
-	// TODO: move this into another package.
-
-	// TODO: read naming prefix from config
-
-	csv, schema, cols, orderingCols, err := format.MakeCSVRecords(records, "meroxa")
+	csv, schema, orderingCols, err := format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
@@ -111,9 +107,13 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	fmt.Printf("@@@@ FILE NAME %s \n", fileName)
 	fmt.Printf("@@@@ FILE PATH %s \n", fullFilePath)
 
-	tempTable, err := d.repository.SetupDestination(ctx, d.config.Stage, d.config.Table, schema)
+	if err = d.repository.SetupStage(ctx, d.config.Stage); err != nil {
+		return 0, errors.Errorf("failed to set up snowflake stage: %w", err)
+	}
+
+	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, schema)
 	if err != nil {
-		return 0, errors.Errorf("failed to set up snowflake destination: %w", err)
+		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}
 
 	fileStream, _ := os.Open(fullFilePath)
@@ -121,13 +121,21 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		if fileStream != nil {
 			fileStream.Close()
 		}
-	} ()
+	}()
 	if err := d.repository.PutFileInStage(ctx, fileStream, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
 
-	if err := d.repository.CopyMergeDrop(ctx, d.config.Table, tempTable, d.config.Stage, fileName, schema, cols, orderingCols); err != nil {
-		return 0, errors.Errorf("failed copy and merge: %w", err)
+	if err := d.repository.Copy(ctx, tempTable, d.config.Stage, fileName); err != nil {
+		return 0, errors.Errorf("failed copy file to temporary table: %w", err)
+	}
+
+	if err := d.repository.Merge(ctx, d.config.Table, tempTable, d.config.NamingPrefix, schema, orderingCols); err != nil {
+		return 0, errors.Errorf("failed merge temp to prod : %w", err)
+	}
+
+	if err := d.repository.Cleanup(ctx, d.config.Stage, fileName); err != nil {
+		return 0, errors.Errorf("failed remove files from stage: %w", err)
 	}
 
 	// FOR EACH BATCH:

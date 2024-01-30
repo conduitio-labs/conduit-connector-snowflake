@@ -7,9 +7,13 @@ import "github.com/conduitio-labs/conduit-connector-snowflake/config"
 type Config struct {
 	config.Config
 	// Snowflake Stage data is copied into before merge
-	Stage string `json:"snowflake.stage" default:"0"`
+	Stage        string   `json:"snowflake.stage" default:"0"`
+	PrimaryKey   []string `json:"snowflake.primaryKey"`
+	NamingPrefix string   `json:"snowflake.namingPrefix" default:"meroxa"`
 }
 
 const (
-	SnowflakeStage = "snowflake.stage"
+	SnowflakeStage        = "snowflake.stage"
+	SnowflakePrimaryKey   = "snowflake.primaryKey"
+	SnowflakeNamingPrefix = "snowflake.namingPrefix"
 )

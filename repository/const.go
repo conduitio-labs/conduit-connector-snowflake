@@ -35,9 +35,9 @@ const (
 	queryPutFileInStage       = `PUT file://%s @%s parallel=30;` // TODO: make parallelism configurable.
 	queryCopyInto             = `COPY INTO %s FROM @%s pattern='%s.gz' FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' ;`
 	queryMergeInto            = `MERGE INTO %s as a USING %s AS b ON %s
-		WHEN MATCHED AND b.meroxa_operation = 'update' THEN UPDATE SET %s, a.meroxa_updated_at = CURRENT_TIMESTAMP()
-	    WHEN MATCHED AND b.meroxa_operation = 'delete' THEN UPDATE SET a.meroxa_deleted_at = CURRENT_TIMESTAMP()
-		WHEN NOT MATCHED THEN INSERT (%s , a.meroxa_created_at) VALUES (%s, CURRENT_TIMESTAMP())`
+		WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
+	    WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()
+		WHEN NOT MATCHED THEN INSERT (%s , a.%s_created_at) VALUES (%s, CURRENT_TIMESTAMP())`
 	queryDropTable  = `DROP table %s`
 	queryRemoveFile = `REMOVE @%s/%s`
 
