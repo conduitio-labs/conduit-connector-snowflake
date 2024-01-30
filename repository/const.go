@@ -23,7 +23,6 @@ const (
 	queryCreateStream         = `CREATE STREAM IF NOT EXISTS %s on table %s`
 	queryCreateTable          = `CREATE TABLE IF NOT EXISTS %s (%s, meroxa_deleted_at TIMESTAMP_LTZ, meroxa_created_at TIMESTAMP_LTZ, meroxa_updated_at TIMESTAMP_LTZ )`
 	queryCreateTemporaryTable = `CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`
-	queryCreateStage          = `CREATE STAGE IF NOT EXISTS %s`
 	queryAddTimestampColumn   = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
 	queryAddStringColumn      = `ALTER TABLE %s ADD COLUMN %s STRING`
 	queryAddBooleanColumn     = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`

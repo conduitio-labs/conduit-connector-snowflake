@@ -158,20 +158,28 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 }
 
 // creates the internal stage,
-func (s *Snowflake) SetupStage(ctx context.Context, stage string) error {
+func (s *Snowflake) InitStage(ctx context.Context, stage string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	defer tx.Rollback() // nolint:errcheck,nolintlint
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateStage, stage))); err != nil {
-		return fmt.Errorf("create stage table: %w", err)
+	if _, err = tx.ExecContext(
+		ctx,
+		fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", stage),
+	); err != nil {
+		return fmt.Errorf("failed to initialize stage: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit tx: %w", err)
+	}
 
+	return nil
 }
 
 // creates temporary, and destination table if they don't exist already.
@@ -300,7 +308,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, fileN
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
-	
+
 	if _, err = tx.ExecContext(sf.WithFileStream(ctx, buf), buildQuery(ctx, fmt.Sprintf(queryPutFileInStage, fileName, stage))); err != nil {
 		return fmt.Errorf("PUT file %s in stage %s: %w", fileName, stage, err)
 	}

@@ -58,15 +58,19 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	return nil
 }
 
+// Open prepoares the plugin to receive data from given position by
+// initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-	// Open is called after Configure to signal the plugin it can prepare to
-	// start writing records. If needed, the plugin should open connections in
-	// this function.
-	var err error
-	d.repository, err = repository.Create(ctx, d.config.Connection)
+	r, err := repository.Create(ctx, d.config.Connection)
 	if err != nil {
 		return fmt.Errorf("failed to create snowflake repository: %w", err)
 	}
+
+	if err := r.InitStage(ctx, d.config.Stage); err != nil {
+		return fmt.Errorf("failed to create stage: %w", err)
+	}
+
+	d.repository = r
 
 	return nil
 }
@@ -92,10 +96,6 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
 	fileName := fmt.Sprintf("%s.csv", batchUUID)
 	fmt.Printf("@@@@ FILE NAME %s \n", fileName)
-
-	if err = d.repository.SetupStage(ctx, d.config.Stage); err != nil {
-		return 0, errors.Errorf("failed to set up snowflake stage: %w", err)
-	}
 
 	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, batchUUID, schema)
 	if err != nil {
