@@ -191,7 +191,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, tableName string, schema ma
 		return "", fmt.Errorf("create temporary table: %w", err)
 	}
 
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTemporaryTable, tableName, columnsSQL))); err != nil {
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTable, tableName, columnsSQL))); err != nil {
 		return "", fmt.Errorf("create destination table: %w", err)
 	}
 
