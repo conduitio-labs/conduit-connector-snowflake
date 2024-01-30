@@ -104,8 +104,13 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to set up snowflake destination: %w", err)
 	}
 
-	//TODO - send file stream instead of whole file
-	if err := d.repository.PutFileInStage(ctx, fullFilePath, d.config.Stage); err != nil {
+	fileStream, _ := os.Open(fullFilePath)
+	defer func() {
+		if fileStream != nil {
+			fileStream.Close()
+		}
+	} ()
+	if err := d.repository.PutFileInStage(ctx, fileStream, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
 

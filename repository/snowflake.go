@@ -17,6 +17,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -25,7 +26,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/exp/maps"
 
-	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
+	sf "github.com/snowflakedb/gosnowflake"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
@@ -279,7 +280,7 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	return maxValue, nil
 }
 
-func (s *Snowflake) PutFileInStage(ctx context.Context, filepath, stage string) error {
+func (s *Snowflake) PutFileInStage(ctx context.Context, fileStream *os.File, stage string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -287,8 +288,8 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, filepath, stage string) 
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	if _, err = tx.ExecContext(ctx, buildPutFileQuery(ctx, filepath, stage)); err != nil {
-		return fmt.Errorf("PUT file %s in stage %s: %w", filepath, stage, err)
+	if _, err = tx.ExecContext(sf.WithFileStream(ctx, fileStream), buildPutFileQuery(ctx, fileStream.Name(), stage),); err != nil {
+		return fmt.Errorf("PUT file %s in stage %s: %w", fileStream.Name(), stage, err)
 	}
 
 	return tx.Commit()

@@ -32,7 +32,7 @@ const (
 	queryIsTableExist         = `SHOW TABLES LIKE '%s'`
 	queryGetMaxValue          = `SELECT MAX(%s) FROM %s`
 	queryGetPrimaryKeys       = `SHOW PRIMARY KEYS IN TABLE %s`
-	queryPutFileInStage       = `PUT file://%s @%s;`
+	queryPutFileInStage       = `PUT file://%s @%s parallel=30;` // TODO: make parallelism configurable.
 	queryCopyInto             = `COPY INTO %s FROM @%s pattern='%s.gz' FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' ;`
 	queryMergeInto            = `MERGE INTO %s as a USING %s AS b ON %s
 		WHEN MATCHED AND b.meroxa_operation = 'update' THEN UPDATE SET %s, a.meroxa_updated_at = CURRENT_TIMESTAMP()
