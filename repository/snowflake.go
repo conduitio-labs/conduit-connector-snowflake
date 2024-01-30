@@ -15,9 +15,9 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
@@ -294,16 +294,16 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 	return maxValue, nil
 }
 
-func (s *Snowflake) PutFileInStage(ctx context.Context, fileStream *os.File, stage string) error {
+func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, fileName, stage string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
-
-	if _, err = tx.ExecContext(sf.WithFileStream(ctx, fileStream), buildQuery(ctx, fmt.Sprintf(queryPutFileInStage, fileStream.Name(), stage))); err != nil {
-		return fmt.Errorf("PUT file %s in stage %s: %w", fileStream.Name(), stage, err)
+	
+	if _, err = tx.ExecContext(sf.WithFileStream(ctx, buf), buildQuery(ctx, fmt.Sprintf(queryPutFileInStage, fileName, stage))); err != nil {
+		return fmt.Errorf("PUT file %s in stage %s: %w", fileName, stage, err)
 	}
 
 	return tx.Commit()

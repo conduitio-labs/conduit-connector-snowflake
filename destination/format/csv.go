@@ -15,7 +15,7 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) ([]byte, map[string]string, []string, error) {
+func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, map[string]string, []string, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 
@@ -127,5 +127,5 @@ func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		return nil, nil, nil, err
 	}
 
-	return buf.Bytes(), columnMap, orderingColumns, nil
+	return &buf, columnMap, orderingColumns, nil
 }

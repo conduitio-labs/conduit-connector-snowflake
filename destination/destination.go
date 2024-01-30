@@ -3,15 +3,13 @@ package destination
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"github.com/google/uuid"
 )
 
 const (
@@ -87,25 +85,14 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
-	file, err := os.CreateTemp(os.TempDir(), "snowflake_*.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf(" @@@ CSV DATA  %s \n ", string(csv))
-
-	if _, err := file.Write(csv); err != nil {
-		return 0, errors.Errorf("failed to write csv %w", err)
-	}
+	fmt.Printf(" @@@ CSV DATA  %s \n ", string(csv.Bytes()))
 
 	// ON START OF CONNECTOR:
 
 	// 1. generate internal stage
 
-	fullFilePath := file.Name()
-	fileName := filepath.Base(file.Name())
+	fileName := fmt.Sprintf("%s.csv", uuid.NewString())
 	fmt.Printf("@@@@ FILE NAME %s \n", fileName)
-	fmt.Printf("@@@@ FILE PATH %s \n", fullFilePath)
 
 	if err = d.repository.SetupStage(ctx, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed to set up snowflake stage: %w", err)
@@ -116,15 +103,13 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}
 
-	fileStream, _ := os.Open(fullFilePath)
-	defer func() {
-		if fileStream != nil {
-			fileStream.Close()
-		}
-	}()
-	if err := d.repository.PutFileInStage(ctx, fileStream, d.config.Stage); err != nil {
+	fmt.Println("set up tables just fine")
+
+	if err := d.repository.PutFileInStage(ctx, csv, fileName, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
+
+	fmt.Println("put files in stage")
 
 	if err := d.repository.Copy(ctx, tempTable, d.config.Stage, fileName); err != nil {
 		return 0, errors.Errorf("failed copy file to temporary table: %w", err)
