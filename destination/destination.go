@@ -1,6 +1,7 @@
 package destination
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -84,13 +85,24 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// FYI - these are only implemented in the SDK for destinations
 
 	// General approach
+	mode := "csv"
+	var schema map[string]string
+	var orderingCols []string
+	var dataBuf *bytes.Buffer
+	var err error
 
-	csv, schema, orderingCols, err := format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
-	if err != nil {
-		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
+	switch mode {
+	case "json":
+	case "parquet":
+	default:
+		//this is csv
+		dataBuf, schema, orderingCols, err = format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
+		if err != nil {
+			return 0, errors.Errorf("failed to convert records to CSV: %w", err)
+		}
 	}
 
-	fmt.Printf(" @@@ CSV DATA  %s \n ", string(csv.Bytes()))
+	fmt.Printf(" @@@ CSV DATA  %s \n ", string(dataBuf.Bytes()))
 
 	// generate a UUID used for the temporary table and filename in internal stage
 	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
@@ -104,7 +116,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	fmt.Println("set up tables just fine")
 
-	if err := d.repository.PutFileInStage(ctx, csv, fileName, d.config.Stage); err != nil {
+	if err := d.repository.PutFileInStage(ctx, dataBuf, fileName, d.config.Stage); err != nil {
 		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 	}
 
