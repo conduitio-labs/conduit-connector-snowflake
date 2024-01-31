@@ -6,16 +6,16 @@ import "github.com/conduitio-labs/conduit-connector-snowflake/config"
 
 type Config struct {
 	config.Config
-	// Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.
-	Columns []string `json:"snowflake.columns" default:"false"`
+	// Columns are the list of columns that should be read from the source
+	Columns []string `json:"snowflake.columns"`
 	// Primary keys
-	Keys []string `json:"snowflake.primaryKeys" `
+	Keys []string `json:"snowflake.primaryKeys"`
 	// OrderingColumn is a name of a column that the connector will use for ordering rows.
-	OrderingColumn string `json:"snowflake.orderingColumn" `
+	OrderingColumn string `json:"snowflake.orderingColumn"`
 	// BatchSize - size of batch.
 	BatchSize int `json:"snowflake.batchsize" default:"0"`
-	// Snapshot
-	Snapshot bool `json:"snowflake.snapshot" default:"false"`
+	// Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.
+	Snapshot bool `json:"snowflake.snapshot" default:"true"`
 }
 
 const (

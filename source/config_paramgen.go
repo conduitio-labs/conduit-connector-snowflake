@@ -16,7 +16,7 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Validations: []sdk.Validation{},
 		},
 		"snowflake.columns": {
-			Default:     "false",
+			Default:     "",
 			Description: "Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
@@ -34,7 +34,7 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Validations: []sdk.Validation{},
 		},
 		"snowflake.snapshot": {
-			Default:     "false",
+			Default:     "true",
 			Description: "snowflake.snapshot",
 			Type:        sdk.ParameterTypeBool,
 			Validations: []sdk.Validation{},

@@ -1,4 +1,5 @@
 GOLINT := golangci-lint
+GOTEST_FLAGS := -v
 
 .PHONY: build test
 

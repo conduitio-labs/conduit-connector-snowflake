@@ -10,7 +10,9 @@ import (
 
 // TODO - Finish test
 func TestParseConfig(t *testing.T) {
-	exampleConfig := map[string]string{}
+	exampleConfig := map[string]string{
+		KeySnapshot: "true",
+	}
 
 	want := Config{
 		Config: config.Config{

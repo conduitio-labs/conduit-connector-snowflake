@@ -112,8 +112,6 @@ func TestSource_Snapshot(t *testing.T) {
 	}
 }
 
-/*
-
 func TestSource_CDC(t *testing.T) {
 	cfg, err := prepareConfig()
 	if err != nil {
@@ -296,7 +294,7 @@ func TestSource_Snapshot_Off(t *testing.T) {
 	}
 
 	// turn off snapshot
-	cfg[config.KeySnapshot] = "false"
+	cfg[KeySnapshot] = "false"
 
 	err = prepareData(ctx, cfg[config.KeyConnection])
 	if err != nil {
@@ -346,7 +344,7 @@ func TestSource_keysFromConfig(t *testing.T) {
 		t.Skip()
 	}
 
-	cfg[config.KeyPrimaryKeys] = "name"
+	cfg[KeyPrimaryKeys] = "name"
 
 	ctx := context.Background()
 
@@ -419,7 +417,7 @@ func TestSource_keyColumnsFromTableMetadata(t *testing.T) {
 		t.Skip()
 	}
 
-	cfg[config.KeyPrimaryKeys] = ""
+	cfg[KeyPrimaryKeys] = ""
 
 	ctx := context.Background()
 
@@ -492,8 +490,8 @@ func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
 		t.Skip()
 	}
 
-	cfg[config.KeyPrimaryKeys] = ""
-	cfg[config.KeyOrderingColumn] = "name"
+	cfg[KeyPrimaryKeys] = ""
+	cfg[KeyOrderingColumn] = "name"
 
 	ctx := context.Background()
 
@@ -559,8 +557,6 @@ func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-*/
 
 func prepareConfig() (map[string]string, error) {
 	connection := os.Getenv("SNOWFLAKE_CONNECTION")
