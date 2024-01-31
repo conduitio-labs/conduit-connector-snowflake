@@ -86,51 +86,64 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// General approach
 	mode := "csv"
-	var schema map[string]string
-	var orderingCols []string
-	var dataBuf *bytes.Buffer
-	var err error
+	var (
+		schema map[string]string
+		orderingCols []string
+		insertsBuf *bytes.Buffer
+		updatesBuf *bytes.Buffer
+		err error
+	)
 
 	switch mode {
 	case "json":
-	case "parquet":
 	default:
 		//this is csv
-		dataBuf, schema, orderingCols, err = format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
+		insertsBuf, updatesBuf, schema, orderingCols, err = format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
 		if err != nil {
 			return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 		}
 	}
 
-	fmt.Printf(" @@@ CSV DATA  %s \n ", string(dataBuf.Bytes()))
+	fmt.Printf(" @@@ CSV DATA INSERTS  %s \n ", string(insertsBuf.Bytes()))
+	fmt.Printf(" @@@ CSV DATA UPDATES/DELETES  %s \n ", string(updatesBuf.Bytes()))
 
 	// generate a UUID used for the temporary table and filename in internal stage
 	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
-	fileName := fmt.Sprintf("%s.csv", batchUUID)
-	fmt.Printf("@@@@ FILE NAME %s \n", fileName)
+	insertsFileName := fmt.Sprintf("inserts_%s.csv", batchUUID)
+	updatesFileName := fmt.Sprintf("updates_%s.csv", batchUUID)
+	fmt.Printf("@@@@ INSERTS FILE NAME %s \n", insertsFileName)
+	fmt.Printf("@@@@ UPDATES FILE NAME %s \n", updatesFileName)
 
 	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, batchUUID, schema)
 	if err != nil {
 		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}
 
-	fmt.Println("set up tables just fine")
-
-	if err := d.repository.PutFileInStage(ctx, dataBuf, fileName, d.config.Stage); err != nil {
-		return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
+	if insertsBuf.Len() != 0 {
+		if err := d.repository.PutFileInStage(ctx, insertsBuf, insertsFileName, d.config.Stage); err != nil {
+			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
+		}
+		if err := d.repository.Copy(ctx, d.config.Table, d.config.Stage, insertsFileName); err != nil {
+			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
+		}
+	}
+	
+	if updatesBuf.Len() != 0 {
+		if err := d.repository.PutFileInStage(ctx, updatesBuf, updatesFileName, d.config.Stage); err != nil {
+			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
+		}
+	
+		if err := d.repository.Copy(ctx, tempTable, d.config.Stage, updatesFileName); err != nil {
+			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
+		}
+	
+		if err := d.repository.Merge(ctx, d.config.Table, tempTable, d.config.NamingPrefix, schema, orderingCols); err != nil {
+			return 0, errors.Errorf("failed merge temp to prod : %w", err)
+		}
 	}
 
-	fmt.Println("put files in stage")
 
-	if err := d.repository.Copy(ctx, tempTable, d.config.Stage, fileName); err != nil {
-		return 0, errors.Errorf("failed copy file to temporary table: %w", err)
-	}
-
-	if err := d.repository.Merge(ctx, d.config.Table, tempTable, d.config.NamingPrefix, schema, orderingCols); err != nil {
-		return 0, errors.Errorf("failed merge temp to prod : %w", err)
-	}
-
-	if err := d.repository.Cleanup(ctx, d.config.Stage, fileName); err != nil {
+	if err := d.repository.Cleanup(ctx, d.config.Stage, insertsFileName); err != nil {
 		return 0, errors.Errorf("failed remove files from stage: %w", err)
 	}
 
@@ -169,6 +182,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 
 	// 4. execute the COPY INTO command to load the contents of the CSV into the temporary table:
 	// COPY INTO "temp_data1" FROM @test_stage1 pattern='.*/.*/snowflake1.csv.gz'
+	//	FROM SELECT (CURRENT_TIMESTAMP(), <rest of columns>)
 	//   FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);
 
 	// 5. MERGE the temporary table into the destination table, making sure to handle UPDATES and DELETES:
