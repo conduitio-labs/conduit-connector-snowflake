@@ -345,18 +345,6 @@ func (s *Snowflake) Merge(ctx context.Context, table, tempTable, prefix string, 
 
 	return tx.Commit()
 }
-func (s *Snowflake) Cleanup(ctx context.Context, stage, fileName string) error {
-	tx, err := s.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryRemoveFile, stage, fileName))); err != nil {
-		return fmt.Errorf("failed to remove  %s from %s: %w", fileName, stage, err)
-	}
-
-	return tx.Commit()
-}
 
 // GetPrimaryKeys returns all primary keys of the table.
 func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {

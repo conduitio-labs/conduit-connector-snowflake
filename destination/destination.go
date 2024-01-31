@@ -142,65 +142,6 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		}
 	}
 
-
-	if err := d.repository.Cleanup(ctx, d.config.Stage, insertsFileName); err != nil {
-		return 0, errors.Errorf("failed remove files from stage: %w", err)
-	}
-
-	// FOR EACH BATCH:
-
-	// upon receiving first record:
-
-	// 1. intepret the "schema" of the data, and see whether that matches what we've cached
-
-	// 1a. if the cache is empty, then we need to create destination table + create temporary table
-	//  create destination table + temp table
-	//  CREATE TABLE IF NOT EXISTS "test_data" (
-	//        id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	//      )
-	//  CREATE TEMPORARY TABLE:
-	// 		  id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	//      );
-
-	// 1b.
-	// if the cache is not empty, but is different than the record (e.g. we have a new column),
-	// 	 then we need to execute an ALTER TABLE on destination table +
-	//  ALTER TABLE ....
-	//  CREATE TEMPORARY TABLE:
-	// 		  id INT, descr varchar, hello varchar, ajkd varchar, jdlsjd varchar
-	//      );
-
-	// 2. Create a CSV containing the batch of records to put into Snowflake
-
-	// write file somewhere locally? then we can
-
-	// 3. Use snowflake's SQL PUT command to upload these files into the internal stage:
-	// PUT file:///Users/samir/batch-of-records.csv @conduit_connector:j9j2824;
-
-	// Keep in mind that the file will be compressed with GZIP,
-	// so the filename in the stage is "batch-of-records.csv.gz"
-
-	// 4. execute the COPY INTO command to load the contents of the CSV into the temporary table:
-	// COPY INTO "temp_data1" FROM @test_stage1 pattern='.*/.*/snowflake1.csv.gz'
-	//	FROM SELECT (CURRENT_TIMESTAMP(), <rest of columns>)
-	//   FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);
-
-	// 5. MERGE the temporary table into the destination table, making sure to handle UPDATES and DELETES:
-	// MERGE INTO "test_data" as a USING "temp_data1" AS b ON a.id = b.id
-	// WHEN MATCHED AND meroxa_operation = "OPERATION_UPDATE" THEN UPDATE SET a.descr = b.descr, a.hello = b.hello, a.ajkd = b.ajkd, a.jdlsjd = b.jdlsjd, a.meroxa_updated_at = CURRENT_TIMESTAMP()
-	// WHEN MATCHED AND meroxa_operation = "OPERATION_DELETE" THEN UPDATE SET a.meroxa_deleted_at = CURRENT_TIMESTAMP();
-	// WHEN NOT MATCHED THEN INSERT (a.meroxa_created_at,a.id, a.descr, a.hello, a.ajkd, a.jdlsjd) VALUES (CURRENT_TIMESTAMP(), b.id, b.descr, b.hello, b.ajkd, b.jdlsjd);
-
-	// NOTE: we need to update the query above to actually read the record to find `UPDATE`/`DELETE`, and perform the action as recommended.
-	// This was just utilized for testing performance and cost.
-
-	// Now the destination table should be updated with the records from the batch. Let's clean up by:
-
-	// 6. Remove the batch file:
-	// REMOVE @test_stage1/batch-of-records.csv.gz
-
-	// delete batch file locally too!
-
 	return 0, nil
 }
 
