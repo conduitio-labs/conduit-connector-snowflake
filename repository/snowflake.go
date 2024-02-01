@@ -20,18 +20,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
-var (
-	MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
-)
+var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
 // Snowflake repository.
 type Snowflake struct {

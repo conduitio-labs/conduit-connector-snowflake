@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/go-errors/errors"
-
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/multierr"
 )

@@ -13,6 +13,11 @@ test:
 lint:
 	$(GOLINT) run --timeout=5m -c .golangci.yml
 
+.PHONY: fmt
+fmt: ## Format Go files using gofumpt and gci.
+	gofumpt -l -w .
+	gci write --skip-generated  .
+
 mockgen:
 	mockgen -package mock -source source/interface.go -destination source/mock/source.go
 	mockgen -package mock -source source/iterator/interface.go -destination source/iterator/mock/iterator.go

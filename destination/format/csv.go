@@ -12,11 +12,8 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-// TODO Check mapping, we are assuming its structured atm
-
-// OPTIMIZE THIS OMG
-func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
-	fmt.Println(" @@@@@ MAKING CSV FROM RECORDS")
+func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (
+	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
 	var (
 		insertsBuf    bytes.Buffer
 		insertRecords int
@@ -34,7 +31,6 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
 	for _, r := range records {
-
 		// get Primary Key(s)
 		if len(orderingColumns) == 0 {
 			var recordKeyMap map[string]interface{}
@@ -47,7 +43,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		}
 
 		var a sdk.Data
-		//create a column map if we are updating or creating records
+		// create a column map if we are updating or creating records
 		if r.Operation != sdk.OperationDelete {
 			a = r.Payload.After
 		} else {
@@ -76,21 +72,19 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 				case bool:
 					columnMap[key] = "BOOLEAN"
 				case nil:
-					//WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-					//IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
 					columnMap[key] = "VARIANT"
 				default:
 					columnMap[key] = "VARCHAR"
 				}
 			}
 		}
-
 	}
 	insertsWriter.Write(csvColumnOrder)
 	updatesWriter.Write(csvColumnOrder)
 
 	for _, val := range records {
-
 		record := []string{}
 		var cols map[string]interface{}
 		var a sdk.Data
@@ -108,6 +102,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		for _, c := range csvColumnOrder {
 			if c == operationColumn {
 				record = append(record, val.Operation.String())
+
 				continue
 			}
 			switch cols[c].(type) {
@@ -116,7 +111,6 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 			default:
 				record = append(record, fmt.Sprint(cols[c]))
 			}
-
 		}
 
 		switch val.Operation {

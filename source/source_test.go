@@ -20,10 +20,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 )
 
 func TestSource_Read(t *testing.T) {

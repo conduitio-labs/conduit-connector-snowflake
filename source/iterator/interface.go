@@ -17,9 +17,8 @@ package iterator
 import (
 	"context"
 
-	"github.com/jmoiron/sqlx"
-
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/jmoiron/sqlx"
 )
 
 // Repository interface.

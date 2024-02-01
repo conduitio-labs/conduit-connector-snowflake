@@ -41,7 +41,7 @@ func Parse(r sdk.Record) (Schema, error) {
 
 func (s Schema) OrderedFields() []string {
 	fields := make([]string, 0, len(s))
-	for k, _ := range s {
+	for k := range s {
 		fields = append(fields, k)
 	}
 

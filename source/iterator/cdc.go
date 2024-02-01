@@ -21,11 +21,10 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/pkg/errors"
-
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/pkg/errors"
 )
 
 // CDCIterator to iterate snowflake objects.

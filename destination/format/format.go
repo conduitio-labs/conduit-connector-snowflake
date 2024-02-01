@@ -21,7 +21,7 @@ import (
 	"github.com/go-errors/errors"
 )
 
-// Format defines the format the data will be persisted in by Destination
+// Format defines the format the data will be persisted in by Destination.
 type Format string
 
 const (
@@ -29,7 +29,7 @@ const (
 	CSV Format = "csv"
 )
 
-// All is a variable containing all supported format for enumeration
+// All is a variable containing all supported format for enumeration.
 var All = []Format{
 	CSV,
 }
@@ -43,8 +43,9 @@ func Parse(name string) (Format, error) {
 	}
 }
 
-// MakeBytes returns a slice of bytes representing records in a given format
-func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
+// MakeBytes returns a slice of bytes representing records in a given format.
+func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []string) (
+	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
 	switch f {
 	case CSV:
 		return makeCSVRecords(records, prefix, indexColumns)

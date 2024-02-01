@@ -20,11 +20,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 )
 
 // snapshotIterator to iterate snowflake objects.
@@ -59,9 +58,7 @@ func newSnapshotIterator(
 	batchSize int,
 	position *position.Position,
 ) (*snapshotIterator, error) {
-	var (
-		err error
-	)
+	var err error
 
 	iterator := &snapshotIterator{
 		snowflake:      snowflake,

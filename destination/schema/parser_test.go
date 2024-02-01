@@ -9,8 +9,6 @@ import (
 	"github.com/matryer/is"
 )
 
-type unsupported interface{}
-
 func Test_Parse_UnsupportedTypes(t *testing.T) {
 	v := []struct {
 		kind  reflect.Kind

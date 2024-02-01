@@ -22,7 +22,7 @@ import (
 type driver struct {
 	sdk.ConfigurableAcceptanceTestDriver
 
-	idCounter int32
+	// idCounter int32
 }
 
 // TODO FIX

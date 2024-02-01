@@ -17,10 +17,9 @@ package source
 import (
 	"context"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/pkg/errors"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
 // Source connector.
