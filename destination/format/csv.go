@@ -30,8 +30,8 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
 ) {
 	var (
-		insertsBuf    bytes.Buffer
-		updatesBuf    bytes.Buffer
+		insertsBuf bytes.Buffer
+		updatesBuf bytes.Buffer
 	)
 	insertsWriter := csv.NewWriter(&insertsBuf)
 	updatesWriter := csv.NewWriter(&updatesBuf)
@@ -112,7 +112,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 	if insertCount == 0 {
 		insertsBuf = bytes.Buffer{}
 	}
-	
+
 	// If there are no updates/deletes, empty the buffer to remove CSV headers
 	if updateCount == 0 {
 		updatesBuf = bytes.Buffer{}
@@ -145,7 +145,7 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 		}
 
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return 0, 0, errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w",  err)
+			return 0, 0, errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
 		for _, c := range csvColumnOrder {
@@ -177,6 +177,6 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
 		}
 	}
-	
+
 	return insertCount, updateCount, err
 }
