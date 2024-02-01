@@ -3,11 +3,13 @@ package destination
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
-	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
 )
 
 const (
@@ -17,9 +19,10 @@ const (
 
 type Destination struct {
 	sdk.UnimplementedDestination
-	repository *repository.Snowflake
-	config     Config
-	Writer     writer.Writer
+
+	Config Config
+	Writer writer.Writer
+	Schema schema.Schema
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
@@ -48,9 +51,9 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	// right now, we will automatically detect the key from the key within the record,
 	// but it would be great to have flexibility in case the user wants to key on a different
 
-	err := sdk.Util.ParseConfig(cfg, &d.config)
+	err := sdk.Util.ParseConfig(cfg, &d.Config)
 	if err != nil {
-		return fmt.Errorf("failed to parse destination config : %w", err)
+		return fmt.Errorf("failed to parse destination config: %w", err)
 	}
 
 	return nil
@@ -59,22 +62,30 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 // Open prepares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-
 	writer, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
-		Prefix:     d.config.NamingPrefix,
-		PrimaryKey: d.config.PrimaryKey,
-		Stage:      d.config.Stage,
-		TableName:  d.config.Table,
-		Connection: d.config.Connection,
-		Format:     d.config.Format,
+		Prefix:     d.Config.NamingPrefix,
+		PrimaryKey: d.Config.PrimaryKey,
+		Stage:      d.Config.Stage,
+		TableName:  d.Config.Table,
+		Connection: d.Config.Connection,
+		Format:     d.Config.Format,
 	})
+	if err != nil {
+		return errors.Errorf("failed to open connection to snowflake: %w", err)
+	}
 
 	d.Writer = writer
 
-	return err
+	return nil
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
+	if d.Schema == nil {
+		if err := d.initSchema(records); err != nil {
+			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
+		}
+	}
+
 	// TLDR - we don't need to implement custom batching logic, it's already handled
 	// for us in the SDK, as long as we use sdk.batch.size / sdk.batch.delay.
 
@@ -82,20 +93,41 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// control the size of records & timing of when Write() method is invoked.
 	// FYI - these are only implemented in the SDK for destinations
 
-	// General approach
-	fmt.Println(" @@@@@@@@@ START WRITE - ")
 	len, err := d.Writer.Write(ctx, records)
+	if err != nil {
+		return 0, errors.Errorf("failed to write records: %w", err)
+	}
 
-	return len, err
+	return len, nil
 }
 
 func (d *Destination) Teardown(ctx context.Context) error {
-	// Teardown signals to the plugin that all records were written and there
-	// will be no more calls to any other function. After Teardown returns, the
-	// plugin should be ready for a graceful shutdown.
-	if d.repository != nil {
-		d.repository.Close()
+	if d.Writer == nil {
+		return nil
 	}
+
+	if err := d.Writer.Close(); err != nil {
+		return errors.Errorf("failed to gracefully close connection: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Destination) initSchema(records []sdk.Record) error {
+	i := slices.IndexFunc(records, func(r sdk.Record) bool {
+		return r.Operation == sdk.OperationSnapshot || r.Operation == sdk.OperationCreate
+	})
+
+	if i < 0 {
+		return errors.New("failed to find suitable record to infer schema")
+	}
+
+	s, err := schema.Parse(records[i])
+	if err != nil {
+		return errors.Errorf("failed to infer schema from record: %w", err)
+	}
+
+	d.Schema = s
 
 	return nil
 }

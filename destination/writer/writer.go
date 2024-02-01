@@ -22,6 +22,7 @@ import (
 // SnowflakeWriter, others exists to test local behavior.
 type Writer interface {
 	Write(context.Context, []sdk.Record) (int, error)
+	Close() error
 }
 
 // Snowflake writer stores batch bytes into an Snowflake bucket as a file.
@@ -67,6 +68,14 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 		TableName:   cfg.TableName,
 		Format:      cfg.Format,
 	}, nil
+}
+
+func (w *Snowflake) Close() error {
+	if err := w.SnowflakeDB.Close(); err != nil {
+		return errors.Errorf("failed to gracefully close the connection: %w", err)
+	}
+
+	return nil
 }
 
 // Write stores the batch on AWS Snowflake as a file

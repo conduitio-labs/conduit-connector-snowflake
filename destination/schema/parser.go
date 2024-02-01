@@ -2,6 +2,7 @@ package schema
 
 import (
 	"reflect"
+	"sort"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -36,4 +37,15 @@ func Parse(r sdk.Record) (Schema, error) {
 	}
 
 	return schema, nil
+}
+
+func (s Schema) OrderedFields() []string {
+	fields := make([]string, 0, len(s))
+	for k, _ := range s {
+		fields = append(fields, k)
+	}
+
+	sort.Strings(fields)
+
+	return fields
 }
