@@ -56,7 +56,7 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 	return nil
 }
 
-// Open prepoares the plugin to receive data from given position by
+// Open prepares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
 

@@ -15,12 +15,13 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, error) {
-
+func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
 	fmt.Println(" @@@@@ MAKING CSV FROM RECORDS")
 	var (
 		insertsBuf bytes.Buffer
+		insertRecords int
 		updatesBuf bytes.Buffer
+		updateRecords int
 	)
 	insertsWriter := csv.NewWriter(&insertsBuf)
 	updatesWriter := csv.NewWriter(&updatesBuf)
@@ -28,7 +29,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 	// we need to store the operation in a column, to detect updates & deletes
 	operationColumn := fmt.Sprintf("%s_operation", prefix)
 	columnMap := map[string]string{operationColumn: "VARCHAR"}
-	columnNames := []string{operationColumn}
+	csvColumnOrder := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
@@ -39,7 +40,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 			var recordKeyMap map[string]interface{}
 			// we are making an assumption here that it's structured data
 			if err := json.Unmarshal(r.Key.Bytes(), &recordKeyMap); err != nil {
-				return nil, nil, nil, nil,
+				return nil, nil, nil, nil, nil,
 					errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
 			}
 			orderingColumns = maps.Keys(recordKeyMap)
@@ -58,13 +59,13 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 
 		// we are making an assumption here that it's structured data
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil,
+			return nil, nil, nil, nil, nil,
 				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
 		for key, val := range cols {
 			if columnMap[key] == "" {
-				columnNames = append(columnNames, key)
+				csvColumnOrder = append(csvColumnOrder, key)
 				switch val.(type) {
 				case int, int8, int16, int32, int64:
 					columnMap[key] = "INTEGER"
@@ -85,7 +86,8 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		}
 
 	}
-	insertsWriter.Write(columnNames)
+	insertsWriter.Write(csvColumnOrder)
+	updatesWriter.Write(csvColumnOrder)
 
 	for _, val := range records {
 
@@ -99,14 +101,11 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		}
 
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil,
+			return nil, nil, nil, nil, nil,
 				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
 		}
 
-		for _, c := range columnNames {
-			if val.Operation == sdk.OperationDelete {
-				fmt.Printf("@@@@@@@@ Value %s Column Name %s \n", fmt.Sprint(cols[c]), c)
-			}
+		for _, c := range csvColumnOrder {
 			if c == operationColumn {
 				record = append(record, val.Operation.String())
 				continue
@@ -123,26 +122,38 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		switch val.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			if err := insertsWriter.Write(record); err != nil {
-				return nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, err
 			}
+			insertRecords++
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			if err := updatesWriter.Write(record); err != nil {
-				return nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, err
 			}
+			updateRecords++
 		default:
-			return nil, nil, nil, nil, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
+			return nil, nil, nil, nil, nil, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
 		}
 	}
 
 	insertsWriter.Flush()
 	if err := insertsWriter.Error(); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	updatesWriter.Flush()
 	if err := updatesWriter.Error(); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
-	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, nil
+	// If there are no inserts, then empty the buffer to remove CSV headers
+	if insertRecords == 0 {
+		insertsBuf = bytes.Buffer{}
+	}
+
+	// If there are no updates/deletes, empty the buffer to remove CSV headers
+	if updateRecords == 0 {
+		updatesBuf = bytes.Buffer{}
+	}
+
+	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
 }

@@ -50,13 +50,13 @@ func Parse(name string) (Format, error) {
 }
 
 // MakeBytes returns a slice of bytes representing records in a given format
-func (f Format) MakeBytes(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, error) {
+func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
 	switch f {
 	case CSV:
-		return makeCSVRecords(records, prefix, orderingColumns)
+		return makeCSVRecords(records, prefix, indexColumns)
 	case JSON:
-		return makeJSONBytes(records, prefix, orderingColumns)
+		return makeJSONBytes(records, prefix, indexColumns)
 	default:
-		return nil, nil, nil, nil, fmt.Errorf("unsupported format: %s", f)
+		return nil, nil, nil, nil, nil, fmt.Errorf("unsupported format: %s", f)
 	}
 }

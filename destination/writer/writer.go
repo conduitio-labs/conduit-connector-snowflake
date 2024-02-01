@@ -54,6 +54,11 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 		return nil, fmt.Errorf("failed to connect to snowflake db")
 	}
 
+	// create the stage if it doesn't exist
+	if _, err := db.Exec(fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", cfg.Stage)); err != nil {
+		return nil, err
+	}
+
 	return &Snowflake{
 		Prefix:      cfg.Prefix,
 		PrimaryKey:  cfg.PrimaryKey,
@@ -71,11 +76,12 @@ func (w *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	fmt.Printf(" @@@@@ MODE - %s", w.Format)
 
 	var (
-		schema       map[string]string
-		orderingCols []string
-		insertsBuf   *bytes.Buffer
-		updatesBuf   *bytes.Buffer
-		err          error
+		schema     map[string]string
+		indexCols  []string
+		colOrder   []string
+		insertsBuf *bytes.Buffer
+		updatesBuf *bytes.Buffer
+		err        error
 	)
 
 	switch w.Format {
@@ -84,7 +90,7 @@ func (w *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	case "csv":
 		//this is csv
 		fmt.Println("@@@@ Case CSV")
-		insertsBuf, updatesBuf, schema, orderingCols, err = w.Format.MakeBytes(records, w.Prefix, w.PrimaryKey)
+		insertsBuf, updatesBuf, schema, indexCols, colOrder, err = w.Format.MakeBytes(records, w.Prefix, w.PrimaryKey)
 		if err != nil {
 			return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 		}
@@ -92,42 +98,48 @@ func (w *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 		return 0, errors.Errorf("Mode not implemented.")
 	}
 
-	fmt.Printf(" @@@ CSV DATA INSERTS  %s \n ", string(insertsBuf.Bytes()))
-	fmt.Printf(" @@@ CSV DATA UPDATES/DELETES  %s \n ", string(updatesBuf.Bytes()))
-
 	// generate a UUID used for the temporary table and filename in internal stage
 	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
-	insertsFileName := fmt.Sprintf("inserts_%s.csv", batchUUID)
-	updatesFileName := fmt.Sprintf("updates_%s.csv", batchUUID)
-	fmt.Printf("@@@@ INSERTS FILE NAME %s \n", insertsFileName)
-	fmt.Printf("@@@@ UPDATES FILE NAME %s \n", updatesFileName)
+	insertsFilename := fmt.Sprintf("inserts_%s.csv", batchUUID)
+	updatesFilename := fmt.Sprintf("updates_%s.csv", batchUUID)
 
 	tempTable, err := w.SetupTables(ctx, batchUUID, schema)
 	if err != nil {
 		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}
 
-	if insertsBuf.Len() != 0 {
-		if err := w.PutFileInStage(ctx, insertsBuf, insertsFileName); err != nil {
+	fmt.Printf("@@@@ TABLES ARE SET UP %s \n", updatesFilename)
+
+	fmt.Printf("@@@@ insertsBuf.Len()=%d \n", insertsBuf.Len())
+	fmt.Printf("@@@@ updatesBuf.Len()=%d \n", updatesBuf.Len())
+
+	if insertsBuf != nil && insertsBuf.Len() > 0 {
+		if err := w.PutFileInStage(ctx, insertsBuf, insertsFilename); err != nil {
 			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 		}
-		if err := w.Copy(ctx, w.TableName, insertsFileName); err != nil {
-			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
+		fmt.Printf("@@@@ uploaded inserts file to stage %s \n", insertsFilename)
+
+		if err := w.CopyInserts(ctx, insertsFilename, colOrder); err != nil {
+			return 0, errors.Errorf("failed copy file to table: %w", err)
 		}
+		fmt.Println("@@@@ ran COPY INTO for inserts")
 	}
 
-	if updatesBuf.Len() != 0 {
-		if err := w.PutFileInStage(ctx, updatesBuf, updatesFileName); err != nil {
+	if updatesBuf != nil && updatesBuf.Len() > 0 {
+		if err := w.PutFileInStage(ctx, updatesBuf, updatesFilename); err != nil {
 			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 		}
+		fmt.Printf("@@@@ uploaded updates file to stage %s \n", insertsFilename)
 
-		if err := w.Copy(ctx, tempTable, updatesFileName); err != nil {
+		if err := w.CopyUpdates(ctx, tempTable, updatesFilename); err != nil {
 			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
 		}
+		fmt.Println("@@@@ ran COPY INTO for updates")
 
-		if err := w.Merge(ctx, tempTable, orderingCols, schema); err != nil {
+		if err := w.Merge(ctx, tempTable, indexCols, schema); err != nil {
 			return 0, errors.Errorf("failed merge temp to prod : %w", err)
 		}
+		fmt.Println("@@@@ ran MERGE for updates")
 	}
 
 	//w.Position = batch.LastPosition()
@@ -164,36 +176,85 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	return tempTable, tx.Commit()
 }
 
-func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, fileName string) error {
+func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
+	// nolint:errcheck,nolintlint
+	q := fmt.Sprintf(
+			"PUT file://%s @%s auto_compress=true parallel=30;", // TODO: make parallelism configurable.
+			filename, 
+			s.Stage,
+		)
+
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	defer tx.Rollback()
-	// nolint:errcheck,nolintlint
-	queryPutFileInStage := `PUT file://%s @%s parallel=30;` // TODO: make parallelism configurable.
-
-	if _, err = tx.ExecContext(sf.WithFileStream(ctx, buf), buildQuery(ctx, fmt.Sprintf(queryPutFileInStage, fileName, s.Stage))); err != nil {
-		return fmt.Errorf("PUT file %s in stage %s: %w", fileName, s.Stage, err)
+	ctxFs := sf.WithFileStream(ctx, buf)
+	ctxFs = sf.WithFileTransferOptions(ctxFs, &sf.SnowflakeFileTransferOptions{
+		RaisePutGetError: true,
+	})
+	
+	if _, err := tx.ExecContext(ctxFs, q); err != nil {
+		return fmt.Errorf("PUT file %s in stage %s: %w", filename, s.Stage, err)
 	}
 	return tx.Commit()
 }
 
-func (s *Snowflake) Copy(ctx context.Context, tempTable, fileName string) error {
+func (s *Snowflake) CopyInserts(ctx context.Context, filename string, colOrder []string) error {
+	query := ""
+	switch s.Format {
+	case format.CSV:
+		colList := buildFinalColumnList("", "", colOrder)
+		aliasFields := make([]string, len(colOrder))
+		for i := 0; i < len(colOrder); i++ {
+			aliasFields[i] = fmt.Sprintf(`f.$%d`, i+1)
+		}
+		aliasCols := toStr(aliasFields)
+		query = fmt.Sprintf(`
+			COPY INTO %s (%s, %s_created_at)
+			FROM (
+				SELECT %s, CURRENT_TIMESTAMP()
+				FROM @%s/%s f
+			)
+			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
+			s.TableName, colList, s.Prefix, aliasCols, s.Stage, filename,
+		)
+	case format.JSON:
+		// need to implement
+	default:
+		return errors.Errorf("invalid format: %s", s.Format)
+	}
+
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
-	queryCopyInto := `COPY INTO %s FROM @%s
-					FILES = ('%s.gz') 
-					FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) 
-					MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE PURGE = TRUE';`
 
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCopyInto, tempTable, s.Stage, fileName))); err != nil {
-		return fmt.Errorf("failed to copy file %s in temp %s: %w", fileName, tempTable, err)
+	if _, err = tx.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("failed to copy file %s in %s: %w", filename, s.TableName, err)
+	}
+
+	return tx.Commit()
+}
+
+
+func (s *Snowflake) CopyUpdates(ctx context.Context, tempTable, filename string) error {
+	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // nolint:errcheck,nolintlint
+	queryCopyInto := `
+		COPY INTO %s FROM @%s
+		FILES = ('%s.gz')
+		FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
+		MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' PURGE = TRUE;`
+
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCopyInto, tempTable, s.Stage, filename))); err != nil {
+		return fmt.Errorf("failed to copy file %s in temp %s: %w", filename, tempTable, err)
 	}
 
 	return tx.Commit()
@@ -210,13 +271,10 @@ func (s *Snowflake) Merge(ctx context.Context, tempTable string, orderingCols []
 	cols := maps.Keys(schema)
 	updateSet := buildOrderingColumnList("a", "b", ",", cols)
 	orderingColumnList := buildOrderingColumnList("a", "b", " AND ", orderingCols)
-	insertColumnList := buildFinalColumnList("a", ".", cols)
-	valuesColumnList := buildFinalColumnList("b", ".", cols)
 
 	queryMergeInto := `MERGE INTO %s as a USING %s AS b ON %s
 		WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
-	    WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()
-		WHEN NOT MATCHED THEN INSERT (%s , a.%s_created_at) VALUES (%s, CURRENT_TIMESTAMP())` // remove created_at from this
+	    WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()`
 
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryMergeInto,
 		s.TableName,
@@ -227,10 +285,7 @@ func (s *Snowflake) Merge(ctx context.Context, tempTable string, orderingCols []
 		s.Prefix,
 		s.Prefix,
 		s.Prefix,
-		insertColumnList,
-		s.Prefix,
-		valuesColumnList),
-	)); err != nil {
+	))); err != nil {
 		return fmt.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
 	}
 
