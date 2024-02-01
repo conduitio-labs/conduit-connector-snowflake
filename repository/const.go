@@ -20,28 +20,16 @@ const (
 	MetadataColumnRow    = "METADATA$ROW_ID"
 	MetadataColumnTime   = "METADATA$TS"
 
-	queryCreateStream         = `CREATE STREAM IF NOT EXISTS %s on table %s`
-	queryCreateTable          = `CREATE TABLE IF NOT EXISTS %s (%s, meroxa_deleted_at TIMESTAMP_LTZ, meroxa_created_at TIMESTAMP_LTZ, meroxa_updated_at TIMESTAMP_LTZ )`
-	queryCreateTemporaryTable = `CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`
-	queryAddTimestampColumn   = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
-	queryAddStringColumn      = `ALTER TABLE %s ADD COLUMN %s STRING`
-	queryAddBooleanColumn     = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
-	queryInsertInto           = `INSERT INTO %s %s`
-	queryInsertIntoColumn     = `INSERT INTO %s (%s) %s`
-	queryIsTableExist         = `SHOW TABLES LIKE '%s'`
-	queryGetMaxValue          = `SELECT MAX(%s) FROM %s`
-	queryGetPrimaryKeys       = `SHOW PRIMARY KEYS IN TABLE %s`
-	queryPutFileInStage       = `PUT file://%s @%s parallel=30;` // TODO: make parallelism configurable.
-	// TODO: add created_at timestamp for each COPY INTO for inserts
-	queryCopyInto             = `COPY INTO %s FROM @%s
-		FILES = ('%s.gz') 
-		FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE) 
-		MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE PURGE = TRUE';`
-	queryMergeInto            = `MERGE INTO %s as a USING %s AS b ON %s
-		WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
-	    WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()
-		WHEN NOT MATCHED THEN INSERT (%s , a.%s_created_at) VALUES (%s, CURRENT_TIMESTAMP())` // remove created_at from this
-	queryDropTable  = `DROP table %s`
+	queryCreateStream        = `CREATE STREAM IF NOT EXISTS %s on table %s`
+	queryCreateTrackingTable = `CREATE TABLE IF NOT EXISTS %s LIKE %s`
+	queryAddTimestampColumn  = `ALTER TABLE %s ADD COLUMN %s TIMESTAMP`
+	queryAddStringColumn     = `ALTER TABLE %s ADD COLUMN %s STRING`
+	queryAddBooleanColumn    = `ALTER TABLE %s ADD COLUMN %s BOOLEAN`
+	queryInsertInto          = `INSERT INTO %s %s`
+	queryInsertIntoColumn    = `INSERT INTO %s (%s) %s`
+	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
+	queryGetMaxValue         = `SELECT MAX(%s) FROM %s`
+	queryGetPrimaryKeys      = `SHOW PRIMARY KEYS IN TABLE %s`
 
 	columnName = "column_name"
 )

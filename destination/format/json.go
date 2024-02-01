@@ -30,7 +30,7 @@ type jsonRecord struct {
 	Metadata  map[string]string `json:"Metadata"`
 }
 
-func MakeJSONBytes(records []sdk.Record) ([]byte, error) {
+func makeJSONBytes(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, error) {
 	buf := bytes.NewBuffer([]byte{})
 
 	for _, r := range records {
@@ -45,12 +45,12 @@ func MakeJSONBytes(records []sdk.Record) ([]byte, error) {
 		bytes, err := json.Marshal(r)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		buf.Write(bytes)
 		buf.WriteByte('\n')
 	}
 
-	return buf.Bytes(), nil
+	return buf, nil, nil, nil, nil
 }

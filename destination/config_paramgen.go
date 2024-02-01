@@ -9,15 +9,24 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.format": {
+			Default:     "",
+			Description: "Data type of file we upload and copy data from to snowflake",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+				sdk.ValidationInclusion{List: []string{"csv", "json"}},
+			},
+		},
 		"snowflake.namingPrefix": {
 			Default:     "meroxa",
-			Description: "",
+			Description: "Prefix to append to update_at , deleted_at, create_at at destination table",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},
 		"snowflake.primaryKey": {
 			Default:     "",
-			Description: "",
+			Description: "Primary key(s) of the source table",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
 		},

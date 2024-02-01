@@ -15,7 +15,9 @@ import (
 // TODO Check mapping, we are assuming its structured atm
 
 // OPTIMIZE THIS OMG
-func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, error) {
+func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, error) {
+
+	fmt.Println(" @@@@@ MAKING CSV FROM RECORDS")
 	var (
 		insertsBuf bytes.Buffer
 		updatesBuf bytes.Buffer
@@ -131,7 +133,7 @@ func MakeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 			return nil, nil, nil, nil, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
 		}
 	}
-	
+
 	insertsWriter.Flush()
 	if err := insertsWriter.Error(); err != nil {
 		return nil, nil, nil, nil, err

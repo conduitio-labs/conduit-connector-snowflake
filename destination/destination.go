@@ -1,17 +1,13 @@
 package destination
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
-	"github.com/google/uuid"
 )
 
 const (
@@ -23,6 +19,7 @@ type Destination struct {
 	sdk.UnimplementedDestination
 	repository *repository.Snowflake
 	config     Config
+	Writer     writer.Writer
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
@@ -62,18 +59,19 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 // Open prepoares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-	r, err := repository.Create(ctx, d.config.Connection)
-	if err != nil {
-		return fmt.Errorf("failed to create snowflake repository: %w", err)
-	}
 
-	if err := r.InitStage(ctx, d.config.Stage); err != nil {
-		return fmt.Errorf("failed to create stage: %w", err)
-	}
+	writer, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
+		Prefix:     d.config.NamingPrefix,
+		PrimaryKey: d.config.PrimaryKey,
+		Stage:      d.config.Stage,
+		TableName:  d.config.Table,
+		Connection: d.config.Connection,
+		Format:     d.config.Format,
+	})
 
-	d.repository = r
+	d.Writer = writer
 
-	return nil
+	return err
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
@@ -85,64 +83,10 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// FYI - these are only implemented in the SDK for destinations
 
 	// General approach
-	mode := "csv"
-	var (
-		schema map[string]string
-		orderingCols []string
-		insertsBuf *bytes.Buffer
-		updatesBuf *bytes.Buffer
-		err error
-	)
+	fmt.Println(" @@@@@@@@@ START WRITE - ")
+	len, err := d.Writer.Write(ctx, records)
 
-	switch mode {
-	case "json":
-	default:
-		//this is csv
-		insertsBuf, updatesBuf, schema, orderingCols, err = format.MakeCSVRecords(records, d.config.NamingPrefix, d.config.PrimaryKey)
-		if err != nil {
-			return 0, errors.Errorf("failed to convert records to CSV: %w", err)
-		}
-	}
-
-	fmt.Printf(" @@@ CSV DATA INSERTS  %s \n ", string(insertsBuf.Bytes()))
-	fmt.Printf(" @@@ CSV DATA UPDATES/DELETES  %s \n ", string(updatesBuf.Bytes()))
-
-	// generate a UUID used for the temporary table and filename in internal stage
-	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
-	insertsFileName := fmt.Sprintf("inserts_%s.csv", batchUUID)
-	updatesFileName := fmt.Sprintf("updates_%s.csv", batchUUID)
-	fmt.Printf("@@@@ INSERTS FILE NAME %s \n", insertsFileName)
-	fmt.Printf("@@@@ UPDATES FILE NAME %s \n", updatesFileName)
-
-	tempTable, err := d.repository.SetupTables(ctx, d.config.Table, batchUUID, schema)
-	if err != nil {
-		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
-	}
-
-	if insertsBuf.Len() != 0 {
-		if err := d.repository.PutFileInStage(ctx, insertsBuf, insertsFileName, d.config.Stage); err != nil {
-			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
-		}
-		if err := d.repository.Copy(ctx, d.config.Table, d.config.Stage, insertsFileName); err != nil {
-			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
-		}
-	}
-	
-	if updatesBuf.Len() != 0 {
-		if err := d.repository.PutFileInStage(ctx, updatesBuf, updatesFileName, d.config.Stage); err != nil {
-			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
-		}
-	
-		if err := d.repository.Copy(ctx, tempTable, d.config.Stage, updatesFileName); err != nil {
-			return 0, errors.Errorf("failed copy file to temporary table: %w", err)
-		}
-	
-		if err := d.repository.Merge(ctx, d.config.Table, tempTable, d.config.NamingPrefix, schema, orderingCols); err != nil {
-			return 0, errors.Errorf("failed merge temp to prod : %w", err)
-		}
-	}
-
-	return 0, nil
+	return len, err
 }
 
 func (d *Destination) Teardown(ctx context.Context) error {
