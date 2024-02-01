@@ -14,16 +14,12 @@
 
 package snowflake
 
-import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
-)
-
 // driver Configurable Acceptance test driver.
-type driver struct {
-	sdk.ConfigurableAcceptanceTestDriver
+// type driver struct {
+// 	sdk.ConfigurableAcceptanceTestDriver
 
-	// idCounter int32
-}
+// 	idCounter int32
+// }
 
 // TODO FIX
 /*

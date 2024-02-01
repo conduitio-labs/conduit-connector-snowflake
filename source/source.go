@@ -16,10 +16,10 @@ package source
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/pkg/errors"
 )
 
 // Source connector.
@@ -44,7 +44,7 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 
 	err := sdk.Util.ParseConfig(cfg, &s.config)
 	if err != nil {
-		return errors.Errorf("failed to parse source config : %w", err)
+		return fmt.Errorf("failed to parse source config : %w", err)
 	}
 
 	return nil
@@ -55,10 +55,11 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 	it, err := iterator.New(ctx, s.config.Connection, s.config.Table, s.config.OrderingColumn, s.config.Keys,
 		s.config.Columns, s.config.BatchSize, s.config.Snapshot, rp)
 	if err != nil {
-		return errors.Errorf("create iterator: %w", err)
+		return fmt.Errorf("create iterator: %w", err)
 	}
 
 	s.iterator = it
+
 	return nil
 }
 
@@ -66,7 +67,7 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 	hasNext, err := s.iterator.HasNext(ctx)
 	if err != nil {
-		return sdk.Record{}, errors.Errorf("has next: %w", err)
+		return sdk.Record{}, fmt.Errorf("has next: %w", err)
 	}
 
 	if !hasNext {
@@ -75,14 +76,14 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 
 	r, err := s.iterator.Next(ctx)
 	if err != nil {
-		return sdk.Record{}, errors.Errorf("next: %w", err)
+		return sdk.Record{}, fmt.Errorf("next: %w", err)
 	}
 
 	return r, nil
 }
 
 // Teardown gracefully shutdown connector.
-func (s *Source) Teardown(ctx context.Context) error {
+func (s *Source) Teardown(_ context.Context) error {
 	if s.iterator != nil {
 		err := s.iterator.Stop()
 		if err != nil {

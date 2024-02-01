@@ -1,3 +1,17 @@
+// Copyright © 2024 Meroxa, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package format
 
 import (
@@ -13,7 +27,8 @@ import (
 )
 
 func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (
-	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
+	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
+) {
 	var (
 		insertsBuf    bytes.Buffer
 		insertRecords int
@@ -81,52 +96,17 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 			}
 		}
 	}
-	insertsWriter.Write(csvColumnOrder)
-	updatesWriter.Write(csvColumnOrder)
 
-	for _, val := range records {
-		record := []string{}
-		var cols map[string]interface{}
-		var a sdk.Data
-		if val.Operation != sdk.OperationDelete {
-			a = val.Payload.After
-		} else {
-			a = val.Payload.Before
-		}
+	// write csv headers
+	if err := insertsWriter.Write(csvColumnOrder); err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	if err := updatesWriter.Write(csvColumnOrder); err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
 
-		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return nil, nil, nil, nil, nil,
-				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
-		}
-
-		for _, c := range csvColumnOrder {
-			if c == operationColumn {
-				record = append(record, val.Operation.String())
-
-				continue
-			}
-			switch cols[c].(type) {
-			case nil:
-				record = append(record, "")
-			default:
-				record = append(record, fmt.Sprint(cols[c]))
-			}
-		}
-
-		switch val.Operation {
-		case sdk.OperationCreate, sdk.OperationSnapshot:
-			if err := insertsWriter.Write(record); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			insertRecords++
-		case sdk.OperationUpdate, sdk.OperationDelete:
-			if err := updatesWriter.Write(record); err != nil {
-				return nil, nil, nil, nil, nil, err
-			}
-			updateRecords++
-		default:
-			return nil, nil, nil, nil, nil, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
-		}
+	if err := createCSVRecords(records, insertsWriter, updatesWriter, csvColumnOrder, operationColumn); err != nil {
+		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
 	}
 
 	insertsWriter.Flush()
@@ -150,4 +130,56 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 	}
 
 	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
+}
+
+func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
+	csvColumnOrder []string, operationColumn string,
+) error {
+	for _, val := range records {
+		record := []string{}
+		var cols map[string]interface{}
+		var a sdk.Data
+		if val.Operation != sdk.OperationDelete {
+			a = val.Payload.After
+		} else {
+			a = val.Payload.Before
+		}
+
+		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
+			return errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
+		}
+
+		for _, c := range csvColumnOrder {
+			if c == operationColumn {
+				record = append(record, val.Operation.String())
+
+				continue
+			}
+			switch cols[c].(type) {
+			case nil:
+				record = append(record, "")
+			default:
+				record = append(record, fmt.Sprint(cols[c]))
+			}
+		}
+
+		var insertCount, updateCount int
+
+		switch val.Operation {
+		case sdk.OperationCreate, sdk.OperationSnapshot:
+			if err := insertsWriter.Write(record); err != nil {
+				return err
+			}
+			insertCount++
+		case sdk.OperationUpdate, sdk.OperationDelete:
+			if err := updatesWriter.Write(record); err != nil {
+				return err
+			}
+			updateCount++
+		default:
+			return errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
+		}
+	}
+	
+	return nil
 }

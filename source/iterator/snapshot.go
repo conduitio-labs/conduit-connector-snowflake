@@ -22,8 +22,8 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 )
 
 // snapshotIterator to iterate snowflake objects.
@@ -112,7 +112,7 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (i *snapshotIterator) Next(_ context.Context) (sdk.Record, error) {
 	row := make(map[string]any)
 	if err := i.rows.MapScan(row); err != nil {
 		return sdk.Record{}, errors.Errorf("scan rows: %w", err)

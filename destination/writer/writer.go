@@ -1,3 +1,17 @@
+// Copyright © 2024 Meroxa, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package writer
 
 import (
@@ -21,7 +35,7 @@ import (
 // SnowflakeWriter, others exists to test local behavior.
 type Writer interface {
 	Write(context.Context, []sdk.Record) (int, error)
-	Close() error
+	Close(context.Context) error
 }
 
 // Snowflake writer stores batch bytes into an Snowflake bucket as a file.
@@ -54,7 +68,7 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 	}
 
 	// create the stage if it doesn't exist
-	if _, err := db.Exec(fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", cfg.Stage)); err != nil {
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", cfg.Stage)); err != nil {
 		return nil, err
 	}
 
@@ -68,7 +82,11 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 	}, nil
 }
 
-func (s *Snowflake) Close() error {
+func (s *Snowflake) Close(ctx context.Context) error {
+	if _, err := s.SnowflakeDB.ExecContext(ctx, fmt.Sprintf("DROP STAGE @%s", s.Stage)); err != nil {
+		return errors.Errorf("failed to gracefully close the connection: %w", err)
+	}
+
 	if err := s.SnowflakeDB.Close(); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
@@ -93,7 +111,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	}
 
 	// generate a UUID used for the temporary table and filename in internal stage
-	batchUUID := strings.Replace(uuid.NewString(), "-", "", -1)
+	batchUUID := strings.ReplaceAll(uuid.NewString(), "-", "")
 	var insertsFilename, updatesFilename string
 
 	tempTable, err := s.SetupTables(ctx, batchUUID, schema)
@@ -119,7 +137,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	}
 
 	if err := s.CopyAndMerge(ctx, tempTable, insertsFilename, updatesFilename, colOrder, indexCols, schema); err != nil {
-		return 0, errors.Errorf("failed to process records:")
+		return 0, errors.Errorf("failed to process records: %w", err)
 	}
 
 	return len(records), nil
@@ -186,7 +204,8 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 }
 
 func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
-	colOrder, indexCols []string, schema map[string]string) error {
+	colOrder, indexCols []string, schema map[string]string,
+) error {
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -281,7 +300,7 @@ func toStr(fields []string) string {
 	return strings.Join(fields, ", ")
 }
 
-func buildQuery(ctx context.Context, query string) string {
+func buildQuery(_ context.Context, query string) string {
 	sb := sqlbuilder.Build(query)
 	s, _ := sb.Build()
 

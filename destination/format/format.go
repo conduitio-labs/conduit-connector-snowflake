@@ -45,7 +45,8 @@ func Parse(name string) (Format, error) {
 
 // MakeBytes returns a slice of bytes representing records in a given format.
 func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []string) (
-	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
+	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
+) {
 	switch f {
 	case CSV:
 		return makeCSVRecords(records, prefix, indexColumns)

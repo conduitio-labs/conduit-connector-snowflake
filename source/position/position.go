@@ -19,7 +19,7 @@ import (
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/pkg/errors"
+	"github.com/go-errors/errors"
 )
 
 // IteratorType describe position type.

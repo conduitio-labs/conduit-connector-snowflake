@@ -21,7 +21,7 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/pkg/errors"
+	"github.com/go-errors/errors"
 )
 
 // Iterator combined iterator.

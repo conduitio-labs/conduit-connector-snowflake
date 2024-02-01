@@ -24,7 +24,7 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/pkg/errors"
+	"github.com/go-errors/errors"
 )
 
 // CDCIterator to iterate snowflake objects.
@@ -114,7 +114,7 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 	var (
 		payload sdk.RawData
 		err     error
