@@ -31,9 +31,7 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 ) {
 	var (
 		insertsBuf    bytes.Buffer
-		insertRecords int
 		updatesBuf    bytes.Buffer
-		updateRecords int
 	)
 	insertsWriter := csv.NewWriter(&insertsBuf)
 	updatesWriter := csv.NewWriter(&updatesBuf)
@@ -105,8 +103,19 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		return nil, nil, nil, nil, nil, err
 	}
 
-	if err := createCSVRecords(records, insertsWriter, updatesWriter, csvColumnOrder, operationColumn); err != nil {
+	insertCount, updateCount, err := createCSVRecords(records, insertsWriter, updatesWriter, csvColumnOrder, operationColumn)
+	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
+	}
+
+	// If there are no inserts, then empty the buffer to remove CSV headers
+	if insertCount == 0 {
+		insertsBuf = bytes.Buffer{}
+	}
+	
+	// If there are no updates/deletes, empty the buffer to remove CSV headers
+	if updateCount == 0 {
+		updatesBuf = bytes.Buffer{}
 	}
 
 	insertsWriter.Flush()
@@ -119,22 +128,12 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		return nil, nil, nil, nil, nil, err
 	}
 
-	// If there are no inserts, then empty the buffer to remove CSV headers
-	if insertRecords == 0 {
-		insertsBuf = bytes.Buffer{}
-	}
-
-	// If there are no updates/deletes, empty the buffer to remove CSV headers
-	if updateRecords == 0 {
-		updatesBuf = bytes.Buffer{}
-	}
-
 	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
 }
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
-) error {
+) (insertCount int, updateCount int, err error) {
 	for _, val := range records {
 		record := []string{}
 		var cols map[string]interface{}
@@ -146,7 +145,7 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 		}
 
 		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
+			return 0, 0, errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w",  err)
 		}
 
 		for _, c := range csvColumnOrder {
@@ -163,23 +162,21 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 			}
 		}
 
-		var insertCount, updateCount int
-
 		switch val.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			if err := insertsWriter.Write(record); err != nil {
-				return err
+				return 0, 0, err
 			}
 			insertCount++
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			if err := updatesWriter.Write(record); err != nil {
-				return err
+				return 0, 0, err
 			}
 			updateCount++
 		default:
-			return errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
+			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
 		}
 	}
 	
-	return nil
+	return insertCount, updateCount, err
 }
