@@ -16,9 +16,9 @@ package format
 
 import (
 	"bytes"
-	"fmt"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
 )
 
 // Format defines the format the data will be persisted in by Destination
@@ -39,7 +39,7 @@ func Parse(name string) (Format, error) {
 	case "csv":
 		return CSV, nil
 	default:
-		return "", fmt.Errorf("unsupported format: %q", name)
+		return "", errors.Errorf("unsupported format: %q", name)
 	}
 }
 
@@ -49,6 +49,6 @@ func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []st
 	case CSV:
 		return makeCSVRecords(records, prefix, indexColumns)
 	default:
-		return nil, nil, nil, nil, nil, fmt.Errorf("unsupported format: %s", f)
+		return nil, nil, nil, nil, nil, errors.Errorf("unsupported format: %s", f)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/pkg/errors"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
@@ -131,7 +132,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	action, err := getAction(c.currentBatch[c.index])
 	if err != nil {
-		return record, fmt.Errorf("get action: %w", err)
+		return record, errors.Errorf("get action: %w", err)
 	}
 
 	// remove metadata columns.
@@ -142,14 +143,14 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	payload, err = json.Marshal(c.currentBatch[c.index])
 	if err != nil {
-		return record, fmt.Errorf("marshal error : %w", err)
+		return record, errors.Errorf("marshal error : %w", err)
 	}
 
 	key := make(sdk.StructuredData)
 	for i := range c.keys {
 		val, ok := c.currentBatch[c.index][c.keys[i]]
 		if !ok {
-			return sdk.Record{}, fmt.Errorf("key column %q not found", c.keys[i])
+			return sdk.Record{}, errors.Errorf("key column %q not found", c.keys[i])
 		}
 
 		key[c.keys[i]] = val
@@ -162,7 +163,7 @@ func (c *CDCIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	p, err := pos.ConvertToSDKPosition()
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("convert to sdk position:%w", err)
+		return sdk.Record{}, errors.Errorf("convert to sdk position:%w", err)
 	}
 
 	switch action {

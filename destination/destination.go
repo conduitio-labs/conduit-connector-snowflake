@@ -2,7 +2,6 @@ package destination
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"time"
 
@@ -53,7 +52,7 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 
 	err := sdk.Util.ParseConfig(cfg, &d.Config)
 	if err != nil {
-		return fmt.Errorf("failed to parse destination config: %w", err)
+		return errors.Errorf("failed to parse destination config: %w", err)
 	}
 
 	return nil

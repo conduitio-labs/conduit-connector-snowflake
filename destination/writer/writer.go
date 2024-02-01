@@ -52,7 +52,7 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 
 	db, err := sql.Open("snowflake", cfg.Connection)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to snowflake db")
+		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
 
 	// create the stage if it doesn't exist
@@ -167,7 +167,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	columnsSQL := buildSchema(schema)
 	queryCreateTemporaryTable := `CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTemporaryTable, tempTable, columnsSQL))); err != nil {
-		return "", fmt.Errorf("create temporary table: %w", err)
+		return "", errors.Errorf("create temporary table: %w", err)
 	}
 
 	queryCreateTable := `CREATE TABLE IF NOT EXISTS %s (
@@ -177,7 +177,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 		meroxa_updated_at TIMESTAMP_LTZ )`
 
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTable, s.TableName, columnsSQL))); err != nil {
-		return "", fmt.Errorf("create destination table: %w", err)
+		return "", errors.Errorf("create destination table: %w", err)
 	}
 
 	return tempTable, tx.Commit()
@@ -202,7 +202,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 	})
 
 	if _, err := tx.ExecContext(ctxFs, q); err != nil {
-		return fmt.Errorf("PUT file %s in stage %s: %w", filename, s.Stage, err)
+		return errors.Errorf("PUT file %s in stage %s: %w", filename, s.Stage, err)
 	}
 	return tx.Commit()
 }
@@ -238,7 +238,7 @@ func (s *Snowflake) CopyInserts(ctx context.Context, filename string, colOrder [
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
 	if _, err = tx.ExecContext(ctx, query); err != nil {
-		return fmt.Errorf("failed to copy file %s in %s: %w", filename, s.TableName, err)
+		return errors.Errorf("failed to copy file %s in %s: %w", filename, s.TableName, err)
 	}
 
 	return tx.Commit()
@@ -258,7 +258,7 @@ func (s *Snowflake) CopyUpdates(ctx context.Context, tempTable, filename string)
 		MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' PURGE = TRUE;`
 
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCopyInto, tempTable, s.Stage, filename))); err != nil {
-		return fmt.Errorf("failed to copy file %s in temp %s: %w", filename, tempTable, err)
+		return errors.Errorf("failed to copy file %s in temp %s: %w", filename, tempTable, err)
 	}
 
 	return tx.Commit()
@@ -290,7 +290,7 @@ func (s *Snowflake) Merge(ctx context.Context, tempTable string, orderingCols []
 		s.Prefix,
 		s.Prefix,
 	))); err != nil {
-		return fmt.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
+		return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
 	}
 
 	return tx.Commit()
@@ -304,14 +304,14 @@ func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string,
 
 	rows, err := s.SnowflakeDB.QueryContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
 	if err != nil {
-		return nil, fmt.Errorf("query get max value: %w", err)
+		return nil, errors.Errorf("query get max value: %w", err)
 	}
 	defer rows.Close()
 
 	dest := make(map[string]any)
 	for rows.Next() {
 		if err = rows.Scan(dest); err != nil {
-			return nil, fmt.Errorf("scan primary key row: %w", err)
+			return nil, errors.Errorf("scan primary key row: %w", err)
 		}
 
 		columns = append(columns, dest["column_name"].(string))

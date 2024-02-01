@@ -182,7 +182,7 @@ func randomIdentifier(t *testing.T) string {
 func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
 	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
-		return fmt.Errorf("structurize data")
+		return errors.Errorf("structurize data")
 	}
 
 	cols, vals := extractColumnsAndValues(payload)
@@ -220,7 +220,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 	structuredData := make(sdk.StructuredData)
 	err := json.Unmarshal(data.Bytes(), &structuredData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data into structured data: %w", err)
+		return nil, errors.Errorf("failed to unmarshal data into structured data: %w", err)
 	}
 
 	structuredDataUpper := make(sdk.StructuredData)
@@ -228,7 +228,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 		if parsedValue, ok := value.(map[string]any); ok {
 			valueJSON, err := json.Marshal(parsedValue)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal map into json: %w", err)
+				return nil, errors.Errorf("failed to marshal map into json: %w", err)
 			}
 
 			structuredDataUpper[strings.ToUpper(key)] = string(valueJSON)
