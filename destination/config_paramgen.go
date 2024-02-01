@@ -15,7 +15,7 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},
-				sdk.ValidationInclusion{List: []string{"csv", "json"}},
+				sdk.ValidationInclusion{List: []string{"csv"}},
 			},
 		},
 		"snowflake.namingPrefix": {

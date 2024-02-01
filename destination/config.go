@@ -16,7 +16,7 @@ type Config struct {
 	// Prefix to append to update_at , deleted_at, create_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
-	Format format.Format `json:"snowflake.format" validate:"required,inclusion=csv|json"`
+	Format format.Format `json:"snowflake.format" validate:"required,inclusion=csv"`
 }
 
 const (

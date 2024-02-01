@@ -85,8 +85,6 @@ func (w *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	)
 
 	switch w.Format {
-	case "json":
-		//this is json
 	case "csv":
 		//this is csv
 		fmt.Println("@@@@ Case CSV")
@@ -164,7 +162,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	}
 
 	queryCreateTable := `CREATE TABLE IF NOT EXISTS %s (
-		%s, 
+		%s,
 		meroxa_deleted_at TIMESTAMP_LTZ,
 		meroxa_created_at TIMESTAMP_LTZ,
 		meroxa_updated_at TIMESTAMP_LTZ )`
@@ -180,7 +178,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 	// nolint:errcheck,nolintlint
 	q := fmt.Sprintf(
 			"PUT file://%s @%s auto_compress=true parallel=30;", // TODO: make parallelism configurable.
-			filename, 
+			filename,
 			s.Stage,
 		)
 
@@ -193,7 +191,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 	ctxFs = sf.WithFileTransferOptions(ctxFs, &sf.SnowflakeFileTransferOptions{
 		RaisePutGetError: true,
 	})
-	
+
 	if _, err := tx.ExecContext(ctxFs, q); err != nil {
 		return fmt.Errorf("PUT file %s in stage %s: %w", filename, s.Stage, err)
 	}
@@ -219,8 +217,6 @@ func (s *Snowflake) CopyInserts(ctx context.Context, filename string, colOrder [
 			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
 			s.TableName, colList, s.Prefix, aliasCols, s.Stage, filename,
 		)
-	case format.JSON:
-		// need to implement
 	default:
 		return errors.Errorf("invalid format: %s", s.Format)
 	}

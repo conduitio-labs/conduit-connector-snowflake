@@ -27,23 +27,17 @@ type Format string
 const (
 	// Parquet data format https://parquet.apache.org/
 	CSV Format = "csv"
-
-	// JSON format
-	JSON Format = "json"
 )
 
 // All is a variable containing all supported format for enumeration
 var All = []Format{
 	CSV,
-	JSON,
 }
 
 func Parse(name string) (Format, error) {
 	switch name {
 	case "csv":
 		return CSV, nil
-	case "json":
-		return JSON, nil
 	default:
 		return "", fmt.Errorf("unsupported format: %q", name)
 	}
@@ -54,8 +48,6 @@ func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []st
 	switch f {
 	case CSV:
 		return makeCSVRecords(records, prefix, indexColumns)
-	case JSON:
-		return makeJSONBytes(records, prefix, indexColumns)
 	default:
 		return nil, nil, nil, nil, nil, fmt.Errorf("unsupported format: %s", f)
 	}
