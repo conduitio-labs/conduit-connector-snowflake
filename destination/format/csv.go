@@ -103,7 +103,13 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		return nil, nil, nil, nil, nil, err
 	}
 
-	insertCount, updateCount, err := createCSVRecords(records, insertsWriter, updatesWriter, csvColumnOrder, operationColumn)
+	insertCount, updateCount, err := createCSVRecords(
+		records,
+		insertsWriter,
+		updatesWriter,
+		csvColumnOrder,
+		operationColumn,
+	)
 	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
 	}
