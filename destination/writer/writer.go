@@ -177,10 +177,10 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
 	// nolint:errcheck,nolintlint
 	q := fmt.Sprintf(
-			"PUT file://%s @%s auto_compress=true parallel=30;", // TODO: make parallelism configurable.
-			filename,
-			s.Stage,
-		)
+		"PUT file://%s @%s auto_compress=true parallel=30;", // TODO: make parallelism configurable.
+		filename,
+		s.Stage,
+	)
 
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -234,7 +234,6 @@ func (s *Snowflake) CopyInserts(ctx context.Context, filename string, colOrder [
 
 	return tx.Commit()
 }
-
 
 func (s *Snowflake) CopyUpdates(ctx context.Context, tempTable, filename string) error {
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)

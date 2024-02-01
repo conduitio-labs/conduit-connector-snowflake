@@ -18,9 +18,9 @@ import (
 func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error) {
 	fmt.Println(" @@@@@ MAKING CSV FROM RECORDS")
 	var (
-		insertsBuf bytes.Buffer
+		insertsBuf    bytes.Buffer
 		insertRecords int
-		updatesBuf bytes.Buffer
+		updatesBuf    bytes.Buffer
 		updateRecords int
 	)
 	insertsWriter := csv.NewWriter(&insertsBuf)

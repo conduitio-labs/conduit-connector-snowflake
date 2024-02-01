@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/matryer/is"
 	"github.com/go-errors/errors"
+	"github.com/matryer/is"
 )
 
-type  unsupported interface {}
+type unsupported interface{}
 
 func Test_Parse_UnsupportedTypes(t *testing.T) {
 	v := []struct {
@@ -41,23 +41,23 @@ func Test_Parse_UnsupportedTypes(t *testing.T) {
 			value: uintptr(10),
 		},
 		{
-			kind: reflect.Map,
+			kind:  reflect.Map,
 			value: map[string]string{},
 		},
 		{
-			kind: reflect.Slice,
+			kind:  reflect.Slice,
 			value: []string{},
 		},
 		{
-			kind: reflect.Array,
+			kind:  reflect.Array,
 			value: [1]string{"a"},
 		},
 		{
-			kind: reflect.Struct,
+			kind:  reflect.Struct,
 			value: struct{}{},
 		},
 		{
-			kind: reflect.Pointer,
+			kind:  reflect.Pointer,
 			value: &struct{}{},
 		},
 	}
