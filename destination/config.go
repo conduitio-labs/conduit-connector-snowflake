@@ -24,5 +24,5 @@ const (
 	SnowflakePrimaryKey   = "snowflake.primaryKey"
 	SnowflakeNamingPrefix = "snowflake.namingPrefix"
 	SnowflakeMode         = "snowflake.mode"
-	SnowflakeFormat       = "format"
+	SnowflakeFormat       = "snowflake.format"
 )
