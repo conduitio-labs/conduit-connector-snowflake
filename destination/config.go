@@ -37,6 +37,5 @@ const (
 	SnowflakeStage        = "snowflake.stage"
 	SnowflakePrimaryKey   = "snowflake.primaryKey"
 	SnowflakeNamingPrefix = "snowflake.namingPrefix"
-	SnowflakeMode         = "snowflake.mode"
 	SnowflakeFormat       = "snowflake.format"
 )
