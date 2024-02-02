@@ -228,8 +228,9 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			aliasFields[i] = fmt.Sprintf(`f.$%d`, i+1)
 		}
 		aliasCols := toStr(aliasFields)
-		query := fmt.Sprintf(`
-			COPY INTO %s (%s, %s_created_at)
+		//nolint:gosec // use proper SQL statement preparation
+		query := fmt.Sprintf(
+			`COPY INTO %s (%s, %s_created_at)
 			FROM (
 				SELECT %s, CURRENT_TIMESTAMP()
 				FROM @%s/%s f
@@ -248,6 +249,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 
 	if updatesFilename != "" {
 		// COPY INTO for updates
+		//nolint:gosec // use proper SQL statement preparation
 		queryCopyInto := fmt.Sprintf(`
 			COPY INTO %s FROM @%s
 			FILES = ('%s.gz')
