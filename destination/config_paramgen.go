@@ -9,6 +9,12 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.fileUploadThreads": {
+			Default:     "30",
+			Description: "Number of threads to run for PUT file uploads.",
+			Type:        sdk.ParameterTypeInt,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.format": {
 			Default:     "",
 			Description: "Data type of file we upload and copy data from to snowflake",
@@ -28,7 +34,9 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Default:     "",
 			Description: "Primary key(s) of the source table",
 			Type:        sdk.ParameterTypeString,
-			Validations: []sdk.Validation{},
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
 		},
 		"snowflake.stage": {
 			Default:     "0",

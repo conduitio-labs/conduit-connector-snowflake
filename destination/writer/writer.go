@@ -44,6 +44,7 @@ type Snowflake struct {
 	PrimaryKey  []string
 	Stage       string
 	TableName   string
+	FileThreads int
 	Format      format.Format
 	SnowflakeDB *sql.DB
 }
@@ -52,12 +53,13 @@ var _ Writer = (*Snowflake)(nil)
 
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
 type SnowflakeConfig struct {
-	Prefix     string
-	PrimaryKey []string
-	Stage      string
-	TableName  string
-	Connection string
-	Format     format.Format
+	Prefix      string
+	PrimaryKey  []string
+	Stage       string
+	TableName   string
+	Connection  string
+	FileThreads int
+	Format      format.Format
 }
 
 // NewSnowflake takes an SnowflakeConfig reference and produces an Snowflake Writer.
@@ -79,6 +81,7 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 		Stage:       cfg.Stage,
 		TableName:   cfg.TableName,
 		Format:      cfg.Format,
+		FileThreads: cfg.FileThreads,
 	}, nil
 }
 
@@ -154,6 +157,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 
 	tempTable := fmt.Sprintf("%s_temp_%s", s.TableName, batchUUID)
 	columnsSQL := buildSchema(schema)
+	pks := toStr(s.PrimaryKey)
 	queryCreateTempTable := fmt.Sprintf(
 		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`,
 		tempTable, columnsSQL)
@@ -161,13 +165,16 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 		return "", errors.Errorf("create temporary table: %w", err)
 	}
 
-	queryCreateTable := `CREATE TABLE IF NOT EXISTS %s (
+	queryCreateTable := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s (
 		%s,
 		meroxa_deleted_at TIMESTAMP_LTZ,
 		meroxa_created_at TIMESTAMP_LTZ,
-		meroxa_updated_at TIMESTAMP_LTZ )`
+		meroxa_updated_at TIMESTAMP_LTZ,
+		PRIMARY KEY (%s)
+	)`, s.TableName, columnsSQL, pks)
 
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryCreateTable, s.TableName, columnsSQL))); err != nil {
+	if _, err = tx.ExecContext(ctx, buildQuery(ctx, queryCreateTable)); err != nil {
 		return "", errors.Errorf("create destination table: %w", err)
 	}
 
@@ -177,9 +184,10 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
 	// nolint:errcheck,nolintlint
 	q := fmt.Sprintf(
-		"PUT file://%s @%s auto_compress=true parallel=30;", // TODO: make parallelism configurable.
+		"PUT file://%s @%s auto_compress=true parallel=%d;",
 		filename,
 		s.Stage,
+		s.FileThreads,
 	)
 
 	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)

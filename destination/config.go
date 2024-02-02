@@ -26,11 +26,13 @@ type Config struct {
 	// Snowflake Stage data is copied into before merge
 	Stage string `json:"snowflake.stage" default:"0"`
 	// Primary key(s) of the source table
-	PrimaryKey []string `json:"snowflake.primaryKey"`
+	PrimaryKey []string `json:"snowflake.primaryKey" validate:"required"`
 	// Prefix to append to update_at , deleted_at, create_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
 	Format format.Format `json:"snowflake.format" validate:"required,inclusion=csv"`
+	// Number of threads to run for PUT file uploads.
+	FileUploadThreads int `json:"snowflake.fileUploadThreads" default:"30"`
 }
 
 const (

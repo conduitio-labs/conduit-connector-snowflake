@@ -78,12 +78,13 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
 	writer, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
-		Prefix:     d.Config.NamingPrefix,
-		PrimaryKey: d.Config.PrimaryKey,
-		Stage:      d.Config.Stage,
-		TableName:  d.Config.Table,
-		Connection: d.Config.Connection,
-		Format:     d.Config.Format,
+		Prefix:      d.Config.NamingPrefix,
+		PrimaryKey:  d.Config.PrimaryKey,
+		Stage:       d.Config.Stage,
+		TableName:   d.Config.Table,
+		Connection:  d.Config.Connection,
+		Format:      d.Config.Format,
+		FileThreads: d.Config.FileUploadThreads,
 	})
 	if err != nil {
 		return errors.Errorf("failed to open connection to snowflake: %w", err)
