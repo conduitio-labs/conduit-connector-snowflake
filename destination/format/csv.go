@@ -114,24 +114,24 @@ func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []strin
 		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
 	}
 
-	// If there are no inserts, then empty the buffer to remove CSV headers
-	if insertCount == 0 {
+	// If there are inserts, flush the writer. Otherwise, we should return with an empty buffer.
+	if insertCount > 0 {
+		insertsWriter.Flush()
+		if err := insertsWriter.Error(); err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+	} else {
 		insertsBuf = bytes.Buffer{}
 	}
 
 	// If there are no updates/deletes, empty the buffer to remove CSV headers
-	if updateCount == 0 {
+	if updateCount != 0 {
+		updatesWriter.Flush()
+		if err := updatesWriter.Error(); err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+	} else {
 		updatesBuf = bytes.Buffer{}
-	}
-
-	insertsWriter.Flush()
-	if err := insertsWriter.Error(); err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	updatesWriter.Flush()
-	if err := updatesWriter.Error(); err != nil {
-		return nil, nil, nil, nil, nil, err
 	}
 
 	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
