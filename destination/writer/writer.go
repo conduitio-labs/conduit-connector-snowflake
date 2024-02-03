@@ -159,8 +159,8 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	columnsSQL := buildSchema(schema)
 	pks := toStr(s.PrimaryKey)
 	queryCreateTempTable := fmt.Sprintf(
-		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s)`,
-		tempTable, columnsSQL)
+		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s))`,
+		tempTable, columnsSQL, pks)
 	if _, err = tx.ExecContext(ctx, buildQuery(ctx, queryCreateTempTable)); err != nil {
 		return "", errors.Errorf("create temporary table: %w", err)
 	}
