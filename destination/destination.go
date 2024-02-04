@@ -96,6 +96,8 @@ func (d *Destination) Open(ctx context.Context) error {
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
+	// TODO: change to debug, using info for now to test with mdpx
+	sdk.Logger(ctx).Info().Msgf("batch contains %d records", len(records))
 	if d.Schema == nil {
 		if err := d.initSchema(records); err != nil {
 			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
@@ -113,6 +115,9 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	if err != nil {
 		return 0, errors.Errorf("failed to write records: %w", err)
 	}
+
+	// TODO: change to debug, using info for now to test with mdpx
+	sdk.Logger(ctx).Info().Msgf("wrote %d records", n)
 
 	return n, nil
 }
