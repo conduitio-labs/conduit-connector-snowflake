@@ -69,7 +69,7 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 
 	// create the stage if it doesn't exist
 	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", cfg.Stage)); err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
 	return &Snowflake{
