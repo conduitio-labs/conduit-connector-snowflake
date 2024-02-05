@@ -105,6 +105,7 @@ func Test_Parse(t *testing.T) {
 				"bool":    true,
 				"float32": float32(10.1),
 				"float64": float64(10.2),
+				"invalid": nil,
 			},
 		},
 	})
@@ -117,5 +118,6 @@ func Test_Parse(t *testing.T) {
 		"bool":    reflect.Bool,
 		"float32": reflect.Float64,
 		"float64": reflect.Float64,
+		"invalid": reflect.Invalid,
 	})
 }

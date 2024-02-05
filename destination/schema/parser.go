@@ -45,6 +45,8 @@ func Parse(r sdk.Record) (Schema, error) {
 			schema[k] = reflect.Float64
 		case reflect.String:
 			schema[k] = reflect.String
+		case reflect.Invalid:
+			schema[k] = reflect.Invalid // this designates null value type
 		default:
 			return nil, errors.Errorf("unsupported schema kind %q", kind.String())
 		}
