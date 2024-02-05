@@ -17,9 +17,7 @@ package format
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -33,6 +31,7 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 		insertsBuf bytes.Buffer
 		updatesBuf bytes.Buffer
 	)
+
 	insertsWriter := csv.NewWriter(&insertsBuf)
 	updatesWriter := csv.NewWriter(&updatesBuf)
 
@@ -46,42 +45,28 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 	for _, r := range records {
 		// get Primary Key(s)
 		if len(orderingColumns) == 0 {
-			var recordKeyMap map[string]interface{}
-			// we are making an assumption here that it's structured data
-			if err := json.Unmarshal(r.Key.Bytes(), &recordKeyMap); err != nil {
+			key, ok := r.Key.(sdk.StructuredData)
+			if !ok {
 				return nil, nil, nil, nil, nil,
-					errors.Errorf("could not unmarshal record.key, only structured data is supported: %w", err)
+					errors.Errorf("key does not contain structured data (%T)", r.Key)
 			}
-			orderingColumns = maps.Keys(recordKeyMap)
+			orderingColumns = maps.Keys(key)
 		}
 
-		var a sdk.Data
-		// create a column map if we are updating or creating records
-		if r.Operation != sdk.OperationDelete {
-			a = r.Payload.After
-		} else {
-			a = r.Payload.Before
-		}
-
-		// infer ordering column from first record
-		var cols map[string]interface{}
-
-		// we are making an assumption here that it's structured data
-		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
+		data, err := extract(r.Operation, r.Payload)
+		if err != nil {
 			return nil, nil, nil, nil, nil,
-				errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
+				errors.Errorf("failed to extract payload data: %w", err)
 		}
 
-		for key, val := range cols {
+		for key, val := range data {
 			if columnMap[key] == "" {
 				csvColumnOrder = append(csvColumnOrder, key)
 				switch val.(type) {
 				case int, int8, int16, int32, int64:
 					columnMap[key] = "INTEGER"
 				case float32, float64:
-					columnMap[key] = "INTEGER"
-				case time.Time:
-					columnMap[key] = "DATETIME"
+					columnMap[key] = "FLOAT"
 				case bool:
 					columnMap[key] = "BOOLEAN"
 				case nil:
@@ -103,35 +88,14 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 		return nil, nil, nil, nil, nil, err
 	}
 
-	insertCount, updateCount, err := createCSVRecords(
+	if err := createCSVRecords(
 		records,
 		insertsWriter,
 		updatesWriter,
 		csvColumnOrder,
 		operationColumn,
-	)
-	if err != nil {
+	); err != nil {
 		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
-	}
-
-	// If there are inserts, flush the writer. Otherwise, we should return with an empty buffer.
-	if insertCount > 0 {
-		insertsWriter.Flush()
-		if err := insertsWriter.Error(); err != nil {
-			return nil, nil, nil, nil, nil, err
-		}
-	} else {
-		insertsBuf = bytes.Buffer{}
-	}
-
-	// If there are no updates/deletes, empty the buffer to remove CSV headers
-	if updateCount != 0 {
-		updatesWriter.Flush()
-		if err := updatesWriter.Error(); err != nil {
-			return nil, nil, nil, nil, nil, err
-		}
-	} else {
-		updatesBuf = bytes.Buffer{}
 	}
 
 	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
@@ -139,50 +103,65 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
-) (insertCount int, updateCount int, err error) {
-	for _, val := range records {
-		record := []string{}
-		var cols map[string]interface{}
-		var a sdk.Data
-		if val.Operation != sdk.OperationDelete {
-			a = val.Payload.After
-		} else {
-			a = val.Payload.Before
+) error {
+	var inserts, updates [][]string
+
+	for _, r := range records {
+		row := make([]string, len(csvColumnOrder))
+
+		data, err := extract(r.Operation, r.Payload)
+		if err != nil {
+			return errors.Errorf("failed to extract payload data: %w", err)
 		}
 
-		if err := json.Unmarshal(a.Bytes(), &cols); err != nil {
-			return 0, 0, errors.Errorf("could not unmarshal record.payload.after, only structured data is supported: %w", err)
-		}
-
-		for _, c := range csvColumnOrder {
-			if c == operationColumn {
-				record = append(record, val.Operation.String())
-
-				continue
-			}
-			switch cols[c].(type) {
-			case nil:
-				record = append(record, "")
+		for i, c := range csvColumnOrder {
+			switch {
+			case c == operationColumn:
+				row[i] = r.Operation.String()
+			case data[c] == nil:
+				row[i] = ""
 			default:
-				record = append(record, fmt.Sprint(cols[c]))
+				row[i] = fmt.Sprint(data[c])
 			}
 		}
 
-		switch val.Operation {
+		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
-			if err := insertsWriter.Write(record); err != nil {
-				return 0, 0, err
-			}
-			insertCount++
+			inserts = append(inserts, row)
 		case sdk.OperationUpdate, sdk.OperationDelete:
-			if err := updatesWriter.Write(record); err != nil {
-				return 0, 0, err
-			}
-			updateCount++
+			updates = append(updates, row)
 		default:
-			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", val.Operation.String())
+			return errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
 		}
 	}
 
-	return insertCount, updateCount, err
+	// N.B.: WriteAll will flush the buffer when comeplete.
+
+	if err := insertsWriter.WriteAll(inserts); err != nil {
+		return errors.Errorf("failed to write insert records: %w", err)
+	}
+
+	if err := updatesWriter.WriteAll(updates); err != nil {
+		return errors.Errorf("failed to write update records: %w", err)
+	}
+
+	return nil
+}
+
+func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
+	if op == sdk.OperationDelete {
+		data, ok := payload.Before.(sdk.StructuredData)
+		if !ok {
+			return nil, errors.Errorf("payload.before does not contain structured data (%T)", payload.Before)
+		}
+
+		return data, nil
+	}
+
+	data, ok := payload.After.(sdk.StructuredData)
+	if !ok {
+		return nil, errors.Errorf("payload.after does not contain structured data (%T)", payload.After)
+	}
+
+	return data, nil
 }
