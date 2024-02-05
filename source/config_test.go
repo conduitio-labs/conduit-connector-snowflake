@@ -34,7 +34,7 @@ func TestParseConfig(t *testing.T) {
 		Keys:           nil,
 		OrderingColumn: "",
 		BatchSize:      0,
-		Snapshot:       true,
+		Snapshot:       false,
 	}
 
 	is := is.New(t)

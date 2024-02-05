@@ -25,7 +25,6 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
-	"github.com/huandu/go-sqlbuilder"
 	sf "github.com/snowflakedb/gosnowflake"
 	"golang.org/x/exp/maps"
 )
@@ -45,8 +44,8 @@ type Snowflake struct {
 	Stage       string
 	TableName   string
 	FileThreads int
-	Format      format.Format
-	SnowflakeDB *sql.DB
+
+	db *sql.DB
 }
 
 var _ Writer = (*Snowflake)(nil)
@@ -59,7 +58,6 @@ type SnowflakeConfig struct {
 	TableName   string
 	Connection  string
 	FileThreads int
-	Format      format.Format
 }
 
 // NewSnowflake takes an SnowflakeConfig reference and produces an Snowflake Writer.
@@ -77,20 +75,19 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 	return &Snowflake{
 		Prefix:      cfg.Prefix,
 		PrimaryKey:  cfg.PrimaryKey,
-		SnowflakeDB: db,
 		Stage:       cfg.Stage,
 		TableName:   cfg.TableName,
-		Format:      cfg.Format,
 		FileThreads: cfg.FileThreads,
+		db:          db,
 	}, nil
 }
 
 func (s *Snowflake) Close(ctx context.Context) error {
-	if _, err := s.SnowflakeDB.ExecContext(ctx, fmt.Sprintf("DROP STAGE @%s", s.Stage)); err != nil {
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE @%s", s.Stage)); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
-	if err := s.SnowflakeDB.Close(); err != nil {
+	if err := s.db.Close(); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
@@ -108,7 +105,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 		err        error
 	)
 
-	insertsBuf, updatesBuf, schema, indexCols, colOrder, err = s.Format.MakeBytes(records, s.Prefix, s.PrimaryKey)
+	insertsBuf, updatesBuf, schema, indexCols, colOrder, err = format.MakeCSVBytes(records, s.Prefix, s.PrimaryKey)
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
@@ -148,7 +145,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 
 // creates temporary, and destination table if they don't exist already.
 func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) (string, error) {
-	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -157,11 +154,11 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 
 	tempTable := fmt.Sprintf("%s_temp_%s", s.TableName, batchUUID)
 	columnsSQL := buildSchema(schema)
-	pks := toStr(s.PrimaryKey)
+	pks := strings.Join(s.PrimaryKey, ", ")
 	queryCreateTempTable := fmt.Sprintf(
 		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s))`,
 		tempTable, columnsSQL, pks)
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, queryCreateTempTable)); err != nil {
+	if _, err = tx.ExecContext(ctx, queryCreateTempTable); err != nil {
 		return "", errors.Errorf("create temporary table: %w", err)
 	}
 
@@ -174,7 +171,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 		PRIMARY KEY (%s)
 	)`, s.TableName, columnsSQL, pks)
 
-	if _, err = tx.ExecContext(ctx, buildQuery(ctx, queryCreateTable)); err != nil {
+	if _, err = tx.ExecContext(ctx, queryCreateTable); err != nil {
 		return "", errors.Errorf("create destination table: %w", err)
 	}
 
@@ -190,7 +187,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 		s.FileThreads,
 	)
 
-	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -214,7 +211,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
 	colOrder, indexCols []string, schema map[string]string,
 ) error {
-	tx, err := s.SnowflakeDB.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -235,7 +232,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 		for i := 0; i < len(colOrder); i++ {
 			aliasFields[i] = fmt.Sprintf(`f.$%d`, i+1)
 		}
-		aliasCols := toStr(aliasFields)
+		aliasCols := strings.Join(aliasFields, ", ")
 		//nolint:gosec // use proper SQL statement preparation
 		query := fmt.Sprintf(
 			`COPY INTO %s (%s, %s_created_at)
@@ -283,7 +280,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
 			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()`
 
-		if _, err = tx.ExecContext(ctx, buildQuery(ctx, fmt.Sprintf(queryMergeInto,
+		if _, err = tx.ExecContext(ctx, fmt.Sprintf(queryMergeInto,
 			s.TableName,
 			tempTable,
 			orderingColumnList,
@@ -292,7 +289,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			s.Prefix,
 			s.Prefix,
 			s.Prefix,
-		))); err != nil {
+		)); err != nil {
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
 		}
 
@@ -306,35 +303,24 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 	return nil
 }
 
-func toStr(fields []string) string {
-	return strings.Join(fields, ", ")
-}
-
-func buildQuery(_ context.Context, query string) string {
-	sb := sqlbuilder.Build(query)
-	s, _ := sb.Build()
-
-	return s
-}
-
 func buildFinalColumnList(table, delimiter string, cols []string) string {
 	ret := make([]string, len(cols))
 	for i, colName := range cols {
-		ret[i] = fmt.Sprintf("%s%s%s", table, delimiter, colName)
+		ret[i] = strings.Join([]string{table, colName}, delimiter)
 	}
 
-	return toStr(ret)
+	return strings.Join(ret, ", ")
 }
 
 func buildSchema(schema map[string]string) string {
 	cols := make([]string, len(schema))
 	i := 0
 	for colName, sqlType := range schema {
-		cols[i] = fmt.Sprintf("%s %s", colName, sqlType)
+		cols[i] = strings.Join([]string{colName, sqlType}, " ")
 		i++
 	}
 
-	return toStr(cols)
+	return strings.Join(cols, ", ")
 }
 
 func buildOrderingColumnList(tableFrom, tableTo, delimiter string, orderingCols []string) string {

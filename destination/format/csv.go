@@ -26,7 +26,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func makeCSVRecords(records []sdk.Record, prefix string, orderingColumns []string) (
+func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string) (
 	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
 ) {
 	var (

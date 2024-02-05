@@ -16,7 +16,6 @@ package destination
 
 import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 )
 
 //go:generate paramgen -output=config_paramgen.go Config
@@ -30,7 +29,7 @@ type Config struct {
 	// Prefix to append to update_at , deleted_at, create_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
-	Format format.Format `json:"snowflake.format" validate:"required,inclusion=csv"`
+	Format string `json:"snowflake.format" validate:"required,inclusion=CSV"`
 	// Number of threads to run for PUT file uploads.
 	FileUploadThreads int `json:"snowflake.fileUploadThreads" default:"30"`
 }

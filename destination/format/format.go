@@ -14,43 +14,13 @@
 
 package format
 
-import (
-	"bytes"
-
-	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
-)
-
-// Format defines the format the data will be persisted in by Destination.
-type Format string
+//go:generate stringer -type=Type -trimprefix=Type -linecomment
+type Type int
 
 const (
-	// Parquet data format https://parquet.apache.org/
-	CSV Format = "csv"
+	TypeCSV Type = iota
 )
 
-// All is a variable containing all supported format for enumeration.
-var All = []Format{
-	CSV,
-}
-
-func Parse(name string) (Format, error) {
-	switch name {
-	case "csv":
-		return CSV, nil
-	default:
-		return "", errors.Errorf("unsupported format: %q", name)
-	}
-}
-
-// MakeBytes returns a slice of bytes representing records in a given format.
-func (f Format) MakeBytes(records []sdk.Record, prefix string, indexColumns []string) (
-	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
-) {
-	switch f {
-	case CSV:
-		return makeCSVRecords(records, prefix, indexColumns)
-	default:
-		return nil, nil, nil, nil, nil, errors.Errorf("unsupported format: %s", f)
-	}
+var All = []Type{
+	TypeCSV,
 }

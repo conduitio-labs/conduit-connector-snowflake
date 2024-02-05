@@ -83,7 +83,6 @@ func (d *Destination) Open(ctx context.Context) error {
 		Stage:       d.Config.Stage,
 		TableName:   d.Config.Table,
 		Connection:  d.Config.Connection,
-		Format:      d.Config.Format,
 		FileThreads: d.Config.FileUploadThreads,
 	})
 	if err != nil {
