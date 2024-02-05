@@ -29,7 +29,7 @@ type Config struct {
 	// BatchSize - size of batch.
 	BatchSize int `json:"snowflake.batchsize" default:"0"`
 	// Snapshot
-	Snapshot bool `json:"snowflake.snapshot" default:"false"`
+	Snapshot bool `json:"snowflake.snapshot" default:"true"`
 }
 
 const (
