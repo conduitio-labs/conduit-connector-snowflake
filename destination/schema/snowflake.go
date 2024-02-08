@@ -14,6 +14,7 @@
 
 package schema
 
+/*
 import (
 	"reflect"
 )
@@ -42,3 +43,4 @@ func SnowflakeSchema(s Schema) map[string]string {
 
 	return snowschema
 }
+*/

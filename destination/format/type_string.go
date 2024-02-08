@@ -9,11 +9,12 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[TypeCSV-0]
+	_ = x[TypeAVRO-1]
 }
 
-const _Type_name = "CSV"
+const _Type_name = "CSVAVRO"
 
-var _Type_index = [...]uint8{0, 3}
+var _Type_index = [...]uint8{0, 3, 7}
 
 func (i Type) String() string {
 	if i < 0 || i >= Type(len(_Type_index)-1) {

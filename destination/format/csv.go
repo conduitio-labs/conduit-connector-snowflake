@@ -21,8 +21,84 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"golang.org/x/exp/maps"
 )
+
+/*
+
+	NewCSVFormatter("meroxa_operation")
+
+type CSVFormatter struct {
+	cols []string
+	bufin, bufup bytes.Buffer
+}
+
+func NewCSVFormatter(col... string) *CSVFormatter {
+	return &CSVFormatter{
+		extracolumns: col,
+		bufin: bytes.Buffer{},
+		bufup: bytes.Buffer{},
+	}
+}
+
+func (c *CSVFormatter) WriteAll(records []sdk.Records) error {
+	inserts := csv.NewWriter(c.bufin)
+	updates := csv.NewWriter(c.bufup)
+
+	var inserts, updates [][]string
+
+	operationColumn := fmt.Sprintf("%s_operation", prefix)
+	columnMap := map[string]string{operationColumn: "VARCHAR"}
+	csvColumnOrder := []string{operationColumn}
+	// collect column order
+
+
+
+	for _, r := range records {
+		data, err := extract(r.Operation, r.Payload)
+		if err != nil {
+			return nil, nil, nil, nil, nil,
+				errors.Errorf("failed to extract payload data: %w", err)
+		}
+
+		csvColumnOrder := append(csvColumnOrder, sort.Strings(maps.Keys(data)))
+
+		for i, key := range csvColumnOrder {
+			if columnMap[key] == "" {
+				switch data[key].(type) {
+				case int, int8, int16, int32, int64:
+					columnMap[key] = "INTEGER"
+				case float32, float64:
+					columnMap[key] = "FLOAT"
+				case bool:
+					columnMap[key] = "BOOLEAN"
+				case nil:
+					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+					columnMap[key] = "VARIANT"
+				default:
+					columnMap[key] = "VARCHAR"
+				}
+			}
+		}
+	}
+
+	// write records based on column order
+	for _, r := range records {
+		data, err := extract(r.Operation, r.Payload)
+		if err != nil {
+			return nil, nil, nil, nil, nil,
+				errors.Errorf("failed to extract payload data: %w", err)
+		}
+
+
+	}
+}
+
+func (c *CSVFormatter) Readers() (io.Reader, io.Reader) {
+
+}
+
+*/
 
 func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string) (
 	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
@@ -41,44 +117,6 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 	csvColumnOrder := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
-
-	for _, r := range records {
-		// get Primary Key(s)
-		if len(orderingColumns) == 0 {
-			key, ok := r.Key.(sdk.StructuredData)
-			if !ok {
-				return nil, nil, nil, nil, nil,
-					errors.Errorf("key does not contain structured data (%T)", r.Key)
-			}
-			orderingColumns = maps.Keys(key)
-		}
-
-		data, err := extract(r.Operation, r.Payload)
-		if err != nil {
-			return nil, nil, nil, nil, nil,
-				errors.Errorf("failed to extract payload data: %w", err)
-		}
-
-		for key, val := range data {
-			if columnMap[key] == "" {
-				csvColumnOrder = append(csvColumnOrder, key)
-				switch val.(type) {
-				case int, int8, int16, int32, int64:
-					columnMap[key] = "INTEGER"
-				case float32, float64:
-					columnMap[key] = "FLOAT"
-				case bool:
-					columnMap[key] = "BOOLEAN"
-				case nil:
-					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-					columnMap[key] = "VARIANT"
-				default:
-					columnMap[key] = "VARCHAR"
-				}
-			}
-		}
-	}
 
 	// write csv headers
 	if err := insertsWriter.Write(csvColumnOrder); err != nil {

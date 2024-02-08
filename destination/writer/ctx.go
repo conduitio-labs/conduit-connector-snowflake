@@ -1,4 +1,4 @@
-// Copyright © 2022 Meroxa, Inc.
+// Copyright © 2024 Meroxa, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package format
+package writer
 
 import (
+	"context"
+	"strings"
+
+	"github.com/google/uuid"
 )
 
-//go:generate stringer -type=Type -trimprefix=Type -linecomment
-type Type int
+type reqIDctxKey struct{}
 
-const (
-	TypeCSV Type = iota
-	TypeAVRO
-)
+func withRequestID(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reqIDctxKey{}, strings.ReplaceAll(uuid.NewString(), "-", ""))
+}
 
-var All = []Type{
-	TypeCSV,
-	TypeAVRO,
+func requestID(ctx context.Context) string {
+	return (ctx.Value(reqIDctxKey{}).(string))
 }

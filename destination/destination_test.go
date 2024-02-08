@@ -24,9 +24,9 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer/mock"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/matryer/is"
-	"go.uber.org/mock/gomock"
 )
 
 func TestDestination_Teardown(t *testing.T) {

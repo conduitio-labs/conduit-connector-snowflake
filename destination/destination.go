@@ -16,11 +16,10 @@ package destination
 
 import (
 	"context"
-	"slices"
 	"time"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 )
@@ -35,7 +34,6 @@ type Destination struct {
 
 	Config Config
 	Writer writer.Writer
-	Schema schema.Schema
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
@@ -77,31 +75,43 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 // Open prepares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-	writer, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
-		Prefix:      d.Config.NamingPrefix,
-		PrimaryKey:  d.Config.PrimaryKey,
-		Stage:       d.Config.Stage,
-		TableName:   d.Config.Table,
-		Connection:  d.Config.Connection,
-		FileThreads: d.Config.FileUploadThreads,
-	})
-	if err != nil {
-		return errors.Errorf("failed to open connection to snowflake: %w", err)
+	switch d.Config.Format {
+	case format.TypeCSV.String():
+		w, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
+			Prefix:      d.Config.NamingPrefix,
+			PrimaryKey:  d.Config.PrimaryKey,
+			Stage:       d.Config.Stage,
+			TableName:   d.Config.Table,
+			Connection:  d.Config.Connection,
+			FileThreads: d.Config.FileUploadThreads,
+		})
+		if err != nil {
+			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)
+		}
+		d.Writer = w
+	case format.TypeAVRO.String():
+		aw, err := writer.NewAvro(ctx, &writer.SnowflakeConfig{
+			Prefix:      d.Config.NamingPrefix,
+			PrimaryKey:  d.Config.PrimaryKey,
+			Stage:       d.Config.Stage,
+			TableName:   d.Config.Table,
+			Connection:  d.Config.Connection,
+			FileThreads: d.Config.FileUploadThreads,
+		})
+		if err != nil {
+			return errors.Errorf("avro writer: failed to open connector snowflake: %w", err)
+		}
+
+		d.Writer = aw
+	default:
+		return errors.Errorf("unknown format %q", d.Config.Format)
 	}
-
-	d.Writer = writer
-
 	return nil
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// TODO: change to debug, using info for now to test with mdpx
 	sdk.Logger(ctx).Info().Msgf("batch contains %d records", len(records))
-	if d.Schema == nil {
-		if err := d.initSchema(records); err != nil {
-			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
-		}
-	}
 
 	// TLDR - we don't need to implement custom batching logic, it's already handled
 	// for us in the SDK, as long as we use sdk.batch.size / sdk.batch.delay.
@@ -129,25 +139,6 @@ func (d *Destination) Teardown(ctx context.Context) error {
 	if err := d.Writer.Close(ctx); err != nil {
 		return errors.Errorf("failed to gracefully close connection: %w", err)
 	}
-
-	return nil
-}
-
-func (d *Destination) initSchema(records []sdk.Record) error {
-	i := slices.IndexFunc(records, func(r sdk.Record) bool {
-		return r.Operation == sdk.OperationSnapshot || r.Operation == sdk.OperationCreate
-	})
-
-	if i < 0 {
-		return errors.New("failed to find suitable record to infer schema")
-	}
-
-	s, err := schema.Parse(records[i])
-	if err != nil {
-		return errors.Errorf("failed to infer schema from record: %w", err)
-	}
-
-	d.Schema = s
 
 	return nil
 }

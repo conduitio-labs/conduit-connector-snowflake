@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
@@ -67,8 +68,11 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
 
-	// create the stage if it doesn't exist
-	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE STAGE IF NOT EXISTS %s", cfg.Stage)); err != nil {
+	// create the stage if it doesn't exist, replace it if already present
+	if _, err := db.ExecContext(
+		ctx,
+		fmt.Sprintf("CREATE OR REPLACE STAGE %s", cfg.Stage),
+	); err != nil {
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
@@ -94,7 +98,6 @@ func (s *Snowflake) Close(ctx context.Context) error {
 	return nil
 }
 
-// Write stores the batch on AWS Snowflake as a file.
 func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
 		schema     map[string]string
@@ -178,7 +181,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	return tempTable, tx.Commit()
 }
 
-func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
+func (s *Snowflake) PutFileInStage(ctx context.Context, buf io.Reader, filename string) error {
 	// nolint:errcheck,nolintlint
 	q := fmt.Sprintf(
 		"PUT file://%s @%s auto_compress=true parallel=%d;",
@@ -238,9 +241,9 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			`COPY INTO %s (%s, %s_created_at)
 			FROM (
 				SELECT %s, CURRENT_TIMESTAMP()
-				FROM @%s/%s f
+				FROM @%s/%s (file_format => CSVXA) f
 			)
-			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
+			FILE_FORMAT = (TYPE = CSVXA FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
 			s.TableName, colList, s.Prefix, aliasCols, s.Stage, insertsFilename,
 		)
 
