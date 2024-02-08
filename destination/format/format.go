@@ -14,9 +14,6 @@
 
 package format
 
-import (
-)
-
 //go:generate stringer -type=Type -trimprefix=Type -linecomment
 type Type int
 

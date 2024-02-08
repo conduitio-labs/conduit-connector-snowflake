@@ -18,8 +18,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 )
