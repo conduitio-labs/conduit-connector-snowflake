@@ -83,7 +83,7 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 }
 
 func (s *Snowflake) Close(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE @%s", s.Stage)); err != nil {
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
