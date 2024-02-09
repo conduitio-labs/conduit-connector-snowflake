@@ -264,9 +264,9 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			`COPY INTO %s (%s, %s_created_at)
 			FROM (
 				SELECT %s, CURRENT_TIMESTAMP()
-				FROM @%s/%s (file_format => CSVXA) f
+				FROM @%s/%s f
 			)
-			FILE_FORMAT = (TYPE = CSVXA FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
+			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
 			s.TableName, colList, s.Prefix, aliasCols, s.Stage, insertsFilename,
 		)
 
