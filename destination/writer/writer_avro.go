@@ -33,7 +33,7 @@ import (
 
 const (
 	valueSchema = "kafkaconnect.value.schema"
-	keySchema   = "kafkaconnect.key.schema"
+	keySchema = "kafkaconnect.key.schema"
 )
 
 type Avro struct {
@@ -46,8 +46,8 @@ type Avro struct {
 	db          *sql.DB
 	schema      avro.Schema
 	schemaTypes map[string]avro.Type
-	insertBuf   *bytes.Buffer
-	updatesBuf  *bytes.Buffer
+	insertBuf *bytes.Buffer
+	updatesBuf *bytes.Buffer
 }
 
 var _ Writer = (*Avro)(nil)
@@ -84,7 +84,7 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		TableName:   cfg.TableName,
 		FileThreads: cfg.FileThreads,
 		db:          db,
-		insertBuf:   &bytes.Buffer{},
+		insertBuf:         &bytes.Buffer{},
 		updatesBuf:  &bytes.Buffer{},
 	}, nil
 }
@@ -101,12 +101,12 @@ func (w *Avro) Close(ctx context.Context) error {
 	return nil
 }
 
-func (w *Avro) Write(ctx context.Context, records *[]sdk.Record) (int, error) {
+func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 	// N.B. Initializing the schema from the first record which has the value schema
 	if w.schema == nil {
-		i := slices.IndexFunc(*records, func(r sdk.Record) bool {
+		i := slices.IndexFunc(records, func(r sdk.Record) bool {
 			return r.Metadata != nil && r.Metadata[valueSchema] != ""
 		})
 
@@ -116,11 +116,11 @@ func (w *Avro) Write(ctx context.Context, records *[]sdk.Record) (int, error) {
 
 		// parse keyschema as well
 
-		if ks, ok := (*records)[i].Metadata[keySchema]; ok {
+		if ks, ok := records[i].Metadata[keySchema]; ok {
 			_ = ks // do something with it
 		}
 
-		ksch, err := schema.ParseKafkaConnect((*records)[i].Metadata[valueSchema])
+		ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
 		if err != nil {
 			return 0, errors.Errorf("failed to parse kafka schema: %w", err)
 		}
@@ -144,14 +144,14 @@ func (w *Avro) Write(ctx context.Context, records *[]sdk.Record) (int, error) {
 	// N.B. Prepare records by operation.
 	//      Processing first inserts, then updates.
 	//      Deletes are staggarred at the end of all updates.
-	for i, r := range *records {
+	for i, r := range records {
 		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
-			inserts = append(inserts, &(*records)[i])
+			inserts = append(inserts, &records[i])
 		case sdk.OperationUpdate:
-			updates = append(updates, &(*records)[i])
+			updates = append(updates, &records[i])
 		case sdk.OperationDelete:
-			deletes = append(deletes, &(*records)[i])
+			deletes = append(deletes, &records[i])
 		}
 	}
 

@@ -33,7 +33,7 @@ import (
 // has accumulated in its buffers. The default writer the Destination would use is
 // SnowflakeWriter, others exists to test local behavior.
 type Writer interface {
-	Write(context.Context, *[]sdk.Record) (int, error)
+	Write(context.Context, []sdk.Record) (int, error)
 	Close(context.Context) error
 }
 
@@ -111,7 +111,7 @@ func (s *Snowflake) Close(ctx context.Context) error {
 	return nil
 }
 
-func (s *Snowflake) Write(ctx context.Context, records *[]sdk.Record) (int, error) {
+func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
 		schema     map[string]string
 		indexCols  []string
@@ -176,7 +176,7 @@ func (s *Snowflake) Write(ctx context.Context, records *[]sdk.Record) (int, erro
 		return 0, errors.Errorf("failed to process records: %w", err)
 	}
 
-	return len(*records), nil
+	return len(records), nil
 }
 
 // creates temporary, and destination table if they don't exist already.

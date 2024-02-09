@@ -25,7 +25,7 @@ import (
 )
 
 func MakeCSVBytes(
-	records *[]sdk.Record,
+	records []sdk.Record,
 	prefix string,
 	orderingColumns []string,
 	insertsBuf *bytes.Buffer,
@@ -41,7 +41,7 @@ func MakeCSVBytes(
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
-	for _, r := range *records {
+	for _, r := range records {
 		// get Primary Key(s)
 		if len(orderingColumns) == 0 {
 			key, ok := r.Key.(sdk.StructuredData)
@@ -93,12 +93,12 @@ func MakeCSVBytes(
 	return columnMap, orderingColumns, csvColumnOrder, nil
 }
 
-func createCSVRecords(records *[]sdk.Record, insertsWriter, updatesWriter *csv.Writer,
+func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
 ) error {
 	var inserts, updates [][]string
 
-	for _, r := range *records {
+	for _, r := range records {
 		row := make([]string, len(csvColumnOrder))
 
 		data, err := extract(r.Operation, r.Payload)
