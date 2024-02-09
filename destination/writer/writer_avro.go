@@ -33,7 +33,7 @@ import (
 
 const (
 	valueSchema = "kafkaconnect.value.schema"
-	keySchema = "kafkaconnect.key.schema"
+	keySchema   = "kafkaconnect.key.schema"
 )
 
 type Avro struct {
@@ -46,8 +46,8 @@ type Avro struct {
 	db          *sql.DB
 	schema      avro.Schema
 	schemaTypes map[string]avro.Type
-	insertBuf *bytes.Buffer
-	updatesBuf *bytes.Buffer
+	insertBuf   *bytes.Buffer
+	updatesBuf  *bytes.Buffer
 }
 
 var _ Writer = (*Avro)(nil)
@@ -84,7 +84,7 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		TableName:   cfg.TableName,
 		FileThreads: cfg.FileThreads,
 		db:          db,
-		insertBuf:         &bytes.Buffer{},
+		insertBuf:   &bytes.Buffer{},
 		updatesBuf:  &bytes.Buffer{},
 	}, nil
 }

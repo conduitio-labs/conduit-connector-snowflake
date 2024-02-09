@@ -122,7 +122,7 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// control the size of records & timing of when Write() method is invoked.
 	// FYI - these are only implemented in the SDK for destinations
 
-	n, err := d.Writer.Write(ctx, &records)
+	n, err := d.Writer.Write(ctx, records)
 	if err != nil {
 		return 0, errors.Errorf("failed to write records: %w", err)
 	}

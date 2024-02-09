@@ -50,7 +50,7 @@ func (mr *MockWriterMockRecorder) Close(arg0 interface{}) *gomock.Call {
 }
 
 // Write mocks base method.
-func (m *MockWriter) Write(arg0 context.Context, arg1 *[]sdk.Record) (int, error) {
+func (m *MockWriter) Write(arg0 context.Context, arg1 []sdk.Record) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", arg0, arg1)
 	ret0, _ := ret[0].(int)

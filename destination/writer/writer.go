@@ -113,7 +113,6 @@ func (s *Snowflake) Close(ctx context.Context) error {
 
 func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
-		schema     map[string]string
 		indexCols  []string
 		colOrder   []string
 		insertsBuf *bytes.Buffer
@@ -121,8 +120,11 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 		err        error
 	)
 
-	schema, indexCols, colOrder, err = format.MakeCSVBytes(
+	schema := make(map[string]string)
+
+	indexCols, colOrder, err = format.MakeCSVBytes(
 		records,
+		schema,
 		s.Prefix,
 		s.PrimaryKey,
 		s.insertsBuf,

@@ -26,17 +26,18 @@ import (
 
 func MakeCSVBytes(
 	records []sdk.Record,
+	schema map[string]string,
 	prefix string,
 	orderingColumns []string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
-) (map[string]string, []string, []string, error) {
+) ([]string, []string, error) {
 	insertsWriter := csv.NewWriter(insertsBuf)
 	updatesWriter := csv.NewWriter(updatesBuf)
 
 	// we need to store the operation in a column, to detect updates & deletes
 	operationColumn := fmt.Sprintf("%s_operation", prefix)
-	columnMap := map[string]string{operationColumn: "VARCHAR"}
+	schema[operationColumn] = "VARCHAR"
 	csvColumnOrder := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
@@ -46,34 +47,32 @@ func MakeCSVBytes(
 		if len(orderingColumns) == 0 {
 			key, ok := r.Key.(sdk.StructuredData)
 			if !ok {
-				return nil, nil, nil,
-					errors.Errorf("key does not contain structured data (%T)", r.Key)
+				return nil, nil, errors.Errorf("key does not contain structured data (%T)", r.Key)
 			}
 			orderingColumns = maps.Keys(key)
 		}
 
 		data, err := extract(r.Operation, r.Payload)
 		if err != nil {
-			return nil, nil, nil,
-				errors.Errorf("failed to extract payload data: %w", err)
+			return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for key, val := range data {
-			if columnMap[key] == "" {
+			if schema[key] == "" {
 				csvColumnOrder = append(csvColumnOrder, key)
 				switch val.(type) {
 				case int, int8, int16, int32, int64:
-					columnMap[key] = "INTEGER"
+					schema[key] = "INTEGER"
 				case float32, float64:
-					columnMap[key] = "FLOAT"
+					schema[key] = "FLOAT"
 				case bool:
-					columnMap[key] = "BOOLEAN"
+					schema[key] = "BOOLEAN"
 				case nil:
 					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-					columnMap[key] = "VARIANT"
+					schema[key] = "VARIANT"
 				default:
-					columnMap[key] = "VARCHAR"
+					schema[key] = "VARCHAR"
 				}
 			}
 		}
@@ -86,11 +85,10 @@ func MakeCSVBytes(
 		csvColumnOrder,
 		operationColumn,
 	); err != nil {
-		return nil, nil, nil,
-			errors.Errorf("could not create CSV records: %w", err)
+		return nil, nil, errors.Errorf("could not create CSV records: %w", err)
 	}
 
-	return columnMap, orderingColumns, csvColumnOrder, nil
+	return orderingColumns, csvColumnOrder, nil
 }
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
