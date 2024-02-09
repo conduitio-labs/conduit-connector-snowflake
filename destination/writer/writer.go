@@ -69,10 +69,13 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 	}
 
 	// create the stage if it doesn't exist, replace it if already present
+	createStageQuery := fmt.Sprintf("CREATE OR REPLACE STAGE %s", cfg.Stage)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", createStageQuery)
 	if _, err := db.ExecContext(
 		ctx,
-		fmt.Sprintf("CREATE OR REPLACE STAGE %s", cfg.Stage),
+		createStageQuery,
 	); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to create stage")
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
@@ -87,11 +90,15 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 }
 
 func (s *Snowflake) Close(ctx context.Context) error {
+	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
 	if err := s.db.Close(); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
@@ -110,6 +117,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 
 	insertsBuf, updatesBuf, schema, indexCols, colOrder, err = format.MakeCSVBytes(records, s.Prefix, s.PrimaryKey)
 	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
@@ -119,6 +127,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 
 	tempTable, err := s.SetupTables(ctx, batchUUID, schema)
 	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to set up snowflake tables")
 		return 0, errors.Errorf("failed to set up snowflake tables: %w", err)
 	}
 
@@ -128,6 +137,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	if insertsBuf != nil && insertsBuf.Len() > 0 {
 		insertsFilename = fmt.Sprintf("inserts_%s.csv", batchUUID)
 		if err := s.PutFileInStage(ctx, insertsBuf, insertsFilename); err != nil {
+			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
 			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 		}
 	}
@@ -135,11 +145,13 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	if updatesBuf != nil && updatesBuf.Len() > 0 {
 		updatesFilename = fmt.Sprintf("updates_%s.csv", batchUUID)
 		if err := s.PutFileInStage(ctx, updatesBuf, updatesFilename); err != nil {
+			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
 			return 0, errors.Errorf("failed put CSV file to snowflake stage: %w", err)
 		}
 	}
 
 	if err := s.CopyAndMerge(ctx, tempTable, insertsFilename, updatesFilename, colOrder, indexCols, schema); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to process records")
 		return 0, errors.Errorf("failed to process records: %w", err)
 	}
 
@@ -150,7 +162,8 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return "", err
+		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
+		return "", errors.Errorf("failed to create transaction: %w", err)
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
@@ -161,8 +174,10 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	queryCreateTempTable := fmt.Sprintf(
 		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s))`,
 		tempTable, columnsSQL, pks)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTempTable)
 	if _, err = tx.ExecContext(ctx, queryCreateTempTable); err != nil {
-		return "", errors.Errorf("create temporary table: %w", err)
+		sdk.Logger(ctx).Err(err).Msg("failed to create temporary table")
+		return "", errors.Errorf("failed to create temporary table: %w", err)
 	}
 
 	queryCreateTable := fmt.Sprintf(
@@ -174,8 +189,11 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 		PRIMARY KEY (%s)
 	)`, s.TableName, columnsSQL, pks)
 
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTable)
+
 	if _, err = tx.ExecContext(ctx, queryCreateTable); err != nil {
-		return "", errors.Errorf("create destination table: %w", err)
+		sdk.Logger(ctx).Err(err).Msg("failed to create destination table")
+		return "", errors.Errorf("failed to create destination table: %w", err)
 	}
 
 	return tempTable, tx.Commit()
@@ -183,7 +201,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 
 func (s *Snowflake) PutFileInStage(ctx context.Context, buf io.Reader, filename string) error {
 	// nolint:errcheck,nolintlint
-	q := fmt.Sprintf(
+	putQuery := fmt.Sprintf(
 		"PUT file://%s @%s auto_compress=true parallel=%d;",
 		filename,
 		s.Stage,
@@ -192,7 +210,8 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf io.Reader, filename 
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		sdk.Logger(ctx).Err(err).Msg("failed to begin tx")
+		return errors.Errorf("failed to begin tx: %w", err)
 	}
 
 	ctxFs := sf.WithFileStream(ctx, buf)
@@ -200,11 +219,15 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf io.Reader, filename 
 		RaisePutGetError: true,
 	})
 
-	if _, err := tx.ExecContext(ctxFs, q); err != nil {
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", putQuery)
+
+	if _, err := tx.ExecContext(ctxFs, putQuery); err != nil {
+		sdk.Logger(ctx).Err(err).Msgf("PUT file %s in stage %s", filename, s.Stage)
 		return errors.Errorf("PUT file %s in stage %s: %w", filename, s.Stage, err)
 	}
 
 	if err := tx.Commit(); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("error putting file in stage")
 		return errors.Errorf("error putting file in stage: %w", err)
 	}
 
@@ -237,7 +260,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 		}
 		aliasCols := strings.Join(aliasFields, ", ")
 		//nolint:gosec // use proper SQL statement preparation
-		query := fmt.Sprintf(
+		copyIntoQuery := fmt.Sprintf(
 			`COPY INTO %s (%s, %s_created_at)
 			FROM (
 				SELECT %s, CURRENT_TIMESTAMP()
@@ -247,9 +270,10 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			s.TableName, colList, s.Prefix, aliasCols, s.Stage, insertsFilename,
 		)
 
-		sdk.Logger(ctx).Debug().Msgf("query constructed for COPY INTO for inserts: %s", query)
+		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
 
-		if _, err = tx.ExecContext(ctx, query); err != nil {
+		if _, err = tx.ExecContext(ctx, copyIntoQuery); err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("failed to copy file %s in %s", insertsFilename, s.TableName)
 			return errors.Errorf("failed to copy file %s in %s: %w", insertsFilename, s.TableName, err)
 		}
 		sdk.Logger(ctx).Info().Msg("ran COPY INTO for inserts")
@@ -258,7 +282,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 	if updatesFilename != "" {
 		// COPY INTO for updates
 		//nolint:gosec // use proper SQL statement preparation
-		queryCopyInto := fmt.Sprintf(`
+		copyIntoQuery := fmt.Sprintf(`
 			COPY INTO %s FROM @%s
 			FILES = ('%s.gz')
 			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
@@ -268,7 +292,10 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			updatesFilename,
 		)
 
-		if _, err = tx.ExecContext(ctx, queryCopyInto); err != nil {
+		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
+
+		if _, err = tx.ExecContext(ctx, copyIntoQuery); err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("failed to copy file %s in temp %s", updatesFilename, tempTable)
 			return errors.Errorf("failed to copy file %s in temp %s: %w", updatesFilename, tempTable, err)
 		}
 
@@ -279,11 +306,10 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 		updateSet := buildOrderingColumnList("a", "b", ",", cols)
 		orderingColumnList := buildOrderingColumnList("a", "b", " AND ", indexCols)
 
-		queryMergeInto := `MERGE INTO %s as a USING %s AS b ON %s
+		queryMergeInto := fmt.Sprintf(
+			`MERGE INTO %s as a USING %s AS b ON %s
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
-			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()`
-
-		if _, err = tx.ExecContext(ctx, fmt.Sprintf(queryMergeInto,
+			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()`,
 			s.TableName,
 			tempTable,
 			orderingColumnList,
@@ -292,7 +318,12 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 			s.Prefix,
 			s.Prefix,
 			s.Prefix,
-		)); err != nil {
+		)
+
+		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
+
+		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, tempTable)
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
 		}
 
@@ -300,6 +331,7 @@ func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename
 	}
 
 	if err := tx.Commit(); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("transaction failed")
 		return errors.Errorf("transaction failed: %w", err)
 	}
 
