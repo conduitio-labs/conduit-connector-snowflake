@@ -113,11 +113,9 @@ func (s *Snowflake) Close(ctx context.Context) error {
 
 func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
-		indexCols  []string
-		colOrder   []string
-		insertsBuf *bytes.Buffer
-		updatesBuf *bytes.Buffer
-		err        error
+		indexCols []string
+		colOrder  []string
+		err       error
 	)
 
 	schema := make(map[string]string)
@@ -137,8 +135,8 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	}
 
 	// Clean out the buffers after write. Storage will be reused next.
-	defer insertsBuf.Reset()
-	defer updatesBuf.Reset()
+	defer s.insertsBuf.Reset()
+	defer s.updatesBuf.Reset()
 
 	// generate a UUID used for the temporary table and filename in internal stage
 	batchUUID := strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -154,7 +152,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	sdk.Logger(ctx).Debug().Msg("set up necessary tables")
 	sdk.Logger(ctx).Debug().Msgf("insertBuffer.Len()=%d, updatesBuf.Len()=%d", s.insertsBuf.Len(), s.updatesBuf.Len())
 
-	if insertsBuf != nil && insertsBuf.Len() > 0 {
+	if s.insertsBuf != nil && s.insertsBuf.Len() > 0 {
 		insertsFilename = fmt.Sprintf("inserts_%s.csv", batchUUID)
 		if err := s.PutFileInStage(ctx, s.insertsBuf, insertsFilename); err != nil {
 			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
@@ -163,7 +161,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 		}
 	}
 
-	if updatesBuf != nil && updatesBuf.Len() > 0 {
+	if s.updatesBuf != nil && s.updatesBuf.Len() > 0 {
 		updatesFilename = fmt.Sprintf("updates_%s.csv", batchUUID)
 		if err := s.PutFileInStage(ctx, s.updatesBuf, updatesFilename); err != nil {
 			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
