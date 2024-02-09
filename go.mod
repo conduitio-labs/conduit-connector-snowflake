@@ -13,7 +13,6 @@ require (
 	github.com/huandu/go-sqlbuilder v1.25.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/snowflakedb/gosnowflake v1.7.2
-	go.uber.org/mock v0.4.0
 	go.uber.org/multierr v1.11.0
 )
 

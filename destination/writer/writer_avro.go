@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 
@@ -47,6 +46,8 @@ type Avro struct {
 	db          *sql.DB
 	schema      avro.Schema
 	schemaTypes map[string]avro.Type
+	insertBuf   *bytes.Buffer
+	updatesBuf  *bytes.Buffer
 }
 
 var _ Writer = (*Avro)(nil)
@@ -83,6 +84,8 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		TableName:   cfg.TableName,
 		FileThreads: cfg.FileThreads,
 		db:          db,
+		insertBuf:   &bytes.Buffer{},
+		updatesBuf:  &bytes.Buffer{},
 	}, nil
 }
 
@@ -98,12 +101,12 @@ func (w *Avro) Close(ctx context.Context) error {
 	return nil
 }
 
-func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
+func (w *Avro) Write(ctx context.Context, records *[]sdk.Record) (int, error) {
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 	// N.B. Initializing the schema from the first record which has the value schema
 	if w.schema == nil {
-		i := slices.IndexFunc(records, func(r sdk.Record) bool {
+		i := slices.IndexFunc(*records, func(r sdk.Record) bool {
 			return r.Metadata != nil && r.Metadata[valueSchema] != ""
 		})
 
@@ -113,11 +116,11 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 
 		// parse keyschema as well
 
-		if ks, ok := records[i].Metadata[keySchema]; ok {
+		if ks, ok := (*records)[i].Metadata[keySchema]; ok {
 			_ = ks // do something with it
 		}
 
-		ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
+		ksch, err := schema.ParseKafkaConnect((*records)[i].Metadata[valueSchema])
 		if err != nil {
 			return 0, errors.Errorf("failed to parse kafka schema: %w", err)
 		}
@@ -133,19 +136,22 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 		w.schema = avsc
 	}
 
-	var inserts, updates, deletes []sdk.Record
+	var inserts, updates, deletes []*sdk.Record
+
+	defer w.updatesBuf.Reset()
+	defer w.insertBuf.Reset()
 
 	// N.B. Prepare records by operation.
 	//      Processing first inserts, then updates.
 	//      Deletes are staggarred at the end of all updates.
-	for _, r := range records {
+	for i, r := range *records {
 		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
-			inserts = append(inserts, r)
+			inserts = append(inserts, &(*records)[i])
 		case sdk.OperationUpdate:
-			updates = append(updates, r)
+			updates = append(updates, &(*records)[i])
 		case sdk.OperationDelete:
-			deletes = append(deletes, r)
+			deletes = append(deletes, &(*records)[i])
 		}
 	}
 
@@ -171,10 +177,8 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	return updated + inserted, nil
 }
 
-func (w *Avro) insert(ctx context.Context, records []sdk.Record) (int, error) {
-	var buf bytes.Buffer
-
-	encoder, err := ocf.NewEncoder(w.schema.String(), &buf)
+func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
+	encoder, err := ocf.NewEncoder(w.schema.String(), w.insertBuf)
 	if err != nil {
 		return 0, errors.Errorf("failed to initialize avro encoder: %w", err)
 	}
@@ -199,13 +203,13 @@ func (w *Avro) insert(ctx context.Context, records []sdk.Record) (int, error) {
 
 	if err := encoder.Flush(); err != nil {
 		sdk.Logger(ctx).Debug().
-			Int("encoded", buf.Len()).
+			Int("encoded", w.insertBuf.Len()).
 			Msg("failed to flush encoded data")
 
 		return 0, errors.Errorf("failed to flush encoded data: %w", err)
 	}
 
-	stageFile, err := w.upload(ctx, &buf)
+	stageFile, err := w.upload(ctx, w.insertBuf)
 	if err != nil {
 		return 0, errors.Errorf("failed to store file %q in stage %q: %w", stageFile, w.Stage, err)
 	}
@@ -227,14 +231,14 @@ func (w *Avro) insert(ctx context.Context, records []sdk.Record) (int, error) {
 	return len(records), nil
 }
 
-func (w *Avro) merge(ctx context.Context, records []sdk.Record) (int, error) {
+func (w *Avro) merge(ctx context.Context, records []*sdk.Record) (int, error) {
 	_ = ctx
 	_ = records
 
 	return 0, nil
 }
 
-func (w *Avro) upload(ctx context.Context, buf io.Reader) (string, error) {
+func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 	ctx = sf.WithFileStream(ctx, buf)
 	ctx = sf.WithFileTransferOptions(ctx, &sf.SnowflakeFileTransferOptions{
 		RaisePutGetError: true,

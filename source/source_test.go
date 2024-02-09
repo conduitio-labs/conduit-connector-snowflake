@@ -22,7 +22,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 )
 
 func TestSource_Read(t *testing.T) {

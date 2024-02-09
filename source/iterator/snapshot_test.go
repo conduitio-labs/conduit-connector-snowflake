@@ -22,7 +22,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator/mock"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
-	"go.uber.org/mock/gomock"
+	"github.com/golang/mock/gomock"
 )
 
 var (

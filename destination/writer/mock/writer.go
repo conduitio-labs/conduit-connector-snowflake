@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	conduit_connector_sdk "github.com/conduitio/conduit-connector-sdk"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -50,7 +50,7 @@ func (mr *MockWriterMockRecorder) Close(arg0 interface{}) *gomock.Call {
 }
 
 // Write mocks base method.
-func (m *MockWriter) Write(arg0 context.Context, arg1 []conduit_connector_sdk.Record) (int, error) {
+func (m *MockWriter) Write(arg0 context.Context, arg1 *[]sdk.Record) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", arg0, arg1)
 	ret0, _ := ret[0].(int)
@@ -62,19 +62,4 @@ func (m *MockWriter) Write(arg0 context.Context, arg1 []conduit_connector_sdk.Re
 func (mr *MockWriterMockRecorder) Write(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockWriter)(nil).Write), arg0, arg1)
-}
-
-// Write2 mocks base method.
-func (m *MockWriter) Write2(arg0 context.Context, arg1 []conduit_connector_sdk.Record) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Write2", arg0, arg1)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Write2 indicates an expected call of Write2.
-func (mr *MockWriterMockRecorder) Write2(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write2", reflect.TypeOf((*MockWriter)(nil).Write2), arg0, arg1)
 }

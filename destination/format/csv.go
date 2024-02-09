@@ -24,18 +24,15 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string) (
-	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
-) {
-	var (
-		insertsBuf  bytes.Buffer
-		updatesBuf  bytes.Buffer
-		updateCount int
-		insertCount int
-	)
-
-	insertsWriter := csv.NewWriter(&insertsBuf)
-	updatesWriter := csv.NewWriter(&updatesBuf)
+func MakeCSVBytes(
+	records *[]sdk.Record,
+	prefix string,
+	orderingColumns []string,
+	insertsBuf *bytes.Buffer,
+	updatesBuf *bytes.Buffer,
+) (map[string]string, []string, []string, error) {
+	insertsWriter := csv.NewWriter(insertsBuf)
+	updatesWriter := csv.NewWriter(updatesBuf)
 
 	// we need to store the operation in a column, to detect updates & deletes
 	operationColumn := fmt.Sprintf("%s_operation", prefix)
@@ -44,12 +41,12 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
-	for _, r := range records {
+	for _, r := range *records {
 		// get Primary Key(s)
 		if len(orderingColumns) == 0 {
 			key, ok := r.Key.(sdk.StructuredData)
 			if !ok {
-				return nil, nil, nil, nil, nil,
+				return nil, nil, nil,
 					errors.Errorf("key does not contain structured data (%T)", r.Key)
 			}
 			orderingColumns = maps.Keys(key)
@@ -57,7 +54,7 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 
 		data, err := extract(r.Operation, r.Payload)
 		if err != nil {
-			return nil, nil, nil, nil, nil,
+			return nil, nil, nil,
 				errors.Errorf("failed to extract payload data: %w", err)
 		}
 
@@ -82,50 +79,31 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 		}
 	}
 
-	// write csv headers
-	if err := insertsWriter.Write(csvColumnOrder); err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-	if err := updatesWriter.Write(csvColumnOrder); err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	updateCount, insertCount, err := createCSVRecords(
+	if err := createCSVRecords(
 		records,
 		insertsWriter,
 		updatesWriter,
 		csvColumnOrder,
 		operationColumn,
-		updateCount,
-		insertCount,
-	)
-	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
+	); err != nil {
+		return nil, nil, nil,
+			errors.Errorf("could not create CSV records: %w", err)
 	}
 
-	if updateCount == 0 {
-		updatesBuf = bytes.Buffer{}
-	}
-
-	if insertCount == 0 {
-		insertsBuf = bytes.Buffer{}
-	}
-
-	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
+	return columnMap, orderingColumns, csvColumnOrder, nil
 }
 
-func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
+func createCSVRecords(records *[]sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
-	updateCount, insertCount int,
-) (int, int, error) {
+) error {
 	var inserts, updates [][]string
 
-	for _, r := range records {
+	for _, r := range *records {
 		row := make([]string, len(csvColumnOrder))
 
 		data, err := extract(r.Operation, r.Payload)
 		if err != nil {
-			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
+			return errors.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for i, c := range csvColumnOrder {
@@ -142,26 +120,32 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			inserts = append(inserts, row)
-			insertCount++
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			updates = append(updates, row)
-			updateCount++
 		default:
-			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
+			return errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
 		}
 	}
 
-	// N.B.: WriteAll will flush the buffer when comeplete.
-
-	if err := insertsWriter.WriteAll(inserts); err != nil {
-		return 0, 0, errors.Errorf("failed to write insert records: %w", err)
+	if len(inserts) > 0 {
+		if err := insertsWriter.Write(csvColumnOrder); err != nil {
+			return errors.Errorf("failed to write insert headers: %w", err)
+		}
+		if err := insertsWriter.WriteAll(inserts); err != nil {
+			return errors.Errorf("failed to write insert records: %w", err)
+		}
 	}
 
-	if err := updatesWriter.WriteAll(updates); err != nil {
-		return 0, 0, errors.Errorf("failed to write update records: %w", err)
+	if len(updates) > 0 {
+		if err := updatesWriter.Write(csvColumnOrder); err != nil {
+			return errors.Errorf("failed to write update headers: %w", err)
+		}
+		if err := updatesWriter.WriteAll(updates); err != nil {
+			return errors.Errorf("failed to write update records: %w", err)
+		}
 	}
 
-	return updateCount, insertCount, nil
+	return nil
 }
 
 func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
