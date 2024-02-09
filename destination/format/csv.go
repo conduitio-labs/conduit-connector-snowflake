@@ -28,8 +28,10 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 	*bytes.Buffer, *bytes.Buffer, map[string]string, []string, []string, error,
 ) {
 	var (
-		insertsBuf bytes.Buffer
-		updatesBuf bytes.Buffer
+		insertsBuf  bytes.Buffer
+		updatesBuf  bytes.Buffer
+		updateCount int
+		insertCount int
 	)
 
 	insertsWriter := csv.NewWriter(&insertsBuf)
@@ -88,14 +90,25 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 		return nil, nil, nil, nil, nil, err
 	}
 
-	if err := createCSVRecords(
+	updateCount, insertCount, err := createCSVRecords(
 		records,
 		insertsWriter,
 		updatesWriter,
 		csvColumnOrder,
 		operationColumn,
-	); err != nil {
+		updateCount,
+		insertCount,
+	)
+	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Errorf("could not create CSV records: %w", err)
+	}
+
+	if updateCount == 0 {
+		updatesBuf = bytes.Buffer{}
+	}
+
+	if insertCount == 0 {
+		insertsBuf = bytes.Buffer{}
 	}
 
 	return &insertsBuf, &updatesBuf, columnMap, orderingColumns, csvColumnOrder, nil
@@ -103,7 +116,8 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
-) error {
+	updateCount, insertCount int,
+) (int, int, error) {
 	var inserts, updates [][]string
 
 	for _, r := range records {
@@ -111,7 +125,7 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 
 		data, err := extract(r.Operation, r.Payload)
 		if err != nil {
-			return errors.Errorf("failed to extract payload data: %w", err)
+			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for i, c := range csvColumnOrder {
@@ -128,24 +142,26 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			inserts = append(inserts, row)
+			insertCount++
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			updates = append(updates, row)
+			updateCount++
 		default:
-			return errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
+			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
 		}
 	}
 
 	// N.B.: WriteAll will flush the buffer when comeplete.
 
 	if err := insertsWriter.WriteAll(inserts); err != nil {
-		return errors.Errorf("failed to write insert records: %w", err)
+		return 0, 0, errors.Errorf("failed to write insert records: %w", err)
 	}
 
 	if err := updatesWriter.WriteAll(updates); err != nil {
-		return errors.Errorf("failed to write update records: %w", err)
+		return 0, 0, errors.Errorf("failed to write update records: %w", err)
 	}
 
-	return nil
+	return updateCount, insertCount, nil
 }
 
 func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
