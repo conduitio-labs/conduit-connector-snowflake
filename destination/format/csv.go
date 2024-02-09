@@ -21,6 +21,7 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"golang.org/x/exp/maps"
 )
 
 func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string) (
@@ -40,6 +41,44 @@ func MakeCSVBytes(records []sdk.Record, prefix string, orderingColumns []string)
 	csvColumnOrder := []string{operationColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
+
+	for _, r := range records {
+		// get Primary Key(s)
+		if len(orderingColumns) == 0 {
+			key, ok := r.Key.(sdk.StructuredData)
+			if !ok {
+				return nil, nil, nil, nil, nil,
+					errors.Errorf("key does not contain structured data (%T)", r.Key)
+			}
+			orderingColumns = maps.Keys(key)
+		}
+
+		data, err := extract(r.Operation, r.Payload)
+		if err != nil {
+			return nil, nil, nil, nil, nil,
+				errors.Errorf("failed to extract payload data: %w", err)
+		}
+
+		for key, val := range data {
+			if columnMap[key] == "" {
+				csvColumnOrder = append(csvColumnOrder, key)
+				switch val.(type) {
+				case int, int8, int16, int32, int64:
+					columnMap[key] = "INTEGER"
+				case float32, float64:
+					columnMap[key] = "FLOAT"
+				case bool:
+					columnMap[key] = "BOOLEAN"
+				case nil:
+					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+					columnMap[key] = "VARIANT"
+				default:
+					columnMap[key] = "VARCHAR"
+				}
+			}
+		}
+	}
 
 	// write csv headers
 	if err := insertsWriter.Write(csvColumnOrder); err != nil {
