@@ -16,6 +16,7 @@ package destination
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
@@ -75,7 +76,7 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 // Open prepares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-	switch d.Config.Format {
+	switch strings.ToUpper(d.Config.Format) {
 	case format.TypeCSV.String():
 		w, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
 			Prefix:      d.Config.NamingPrefix,
