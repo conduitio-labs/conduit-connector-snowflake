@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -58,6 +59,8 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
 
+	sdk.Logger(ctx).Info().Msg("@@@@ START NEW AVRO - RUN CREATE STAGE")
+
 	// create the stage if it doesn't exist, replace it if already present
 	if _, err := db.ExecContext(
 		ctx,
@@ -65,6 +68,8 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 	); err != nil {
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
+
+	sdk.Logger(ctx).Info().Msg("@@@@ CREATE TABLE ")
 
 	// create basic table
 	if _, err := db.ExecContext(
@@ -90,7 +95,7 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 }
 
 func (w *Avro) Close(ctx context.Context) error {
-	if _, err := w.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE @%s", w.Stage)); err != nil {
+	if _, err := w.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", w.Stage)); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
@@ -102,11 +107,17 @@ func (w *Avro) Close(ctx context.Context) error {
 }
 
 func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
+
+	sdk.Logger(ctx).Info().Msg("@@@@ RUN WRITE")
+
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 	// N.B. Initializing the schema from the first record which has the value schema
 	if w.schema == nil {
+		sdk.Logger(ctx).Info().Msg("@@@@ GET SCHEMA FROM META DATA")
+
 		i := slices.IndexFunc(records, func(r sdk.Record) bool {
+
 			return r.Metadata != nil && r.Metadata[valueSchema] != ""
 		})
 
@@ -164,10 +175,14 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// process schema off records, initialize if not set, need a single snapshot/create
 	updates = append(updates, deletes...)
 
+	sdk.Logger(ctx).Info().Msg("@@@@ Run Insert")
+
 	inserted, err := w.insert(ctx, inserts)
 	if err != nil {
 		return 0, errors.Errorf("failed to insert %d records: %w", len(inserts), err)
 	}
+
+	sdk.Logger(ctx).Info().Msg("@@@@ Run Update")
 
 	updated, err := w.merge(ctx, updates)
 	if err != nil {
@@ -257,13 +272,15 @@ func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 
 func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredData) sdk.StructuredData {
 	for k, v := range sd {
-		switch v.(type) {
-		case float32, float64:
+		switch reflect.TypeOf(v).Kind() {
+		case reflect.Float32, reflect.Float64:
 			if t[k] == avro.Long {
-				sdk.Logger(ctx).Debug().Str("field", k).Msg("coercing field to long")
 				sd[k] = int64(sd[k].(float64))
+			} else if t[k] == avro.Int {
+				sd[k] = int(sd[k].(float64))
 			}
 		}
+
 	}
 
 	return sd
