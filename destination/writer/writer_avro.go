@@ -284,6 +284,8 @@ func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredD
 				sd[k] = int64(sd[k].(float32))
 			} else if t[k] == avro.Int {
 				sd[k] = int(sd[k].(float32))
+			} else if t[k] == avro.Double {
+				sd[k] = float64(sd[k].(float32))
 			}
 
 		}
