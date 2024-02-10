@@ -273,12 +273,19 @@ func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredData) sdk.StructuredData {
 	for k, v := range sd {
 		switch reflect.TypeOf(v).Kind() {
-		case reflect.Float32, reflect.Float64:
+		case reflect.Float64:
 			if t[k] == avro.Long {
 				sd[k] = int64(sd[k].(float64))
 			} else if t[k] == avro.Int {
 				sd[k] = int(sd[k].(float64))
 			}
+		case reflect.Float32:
+			if t[k] == avro.Long {
+				sd[k] = int64(sd[k].(float32))
+			} else if t[k] == avro.Int {
+				sd[k] = int(sd[k].(float32))
+			}
+
 		}
 
 	}
