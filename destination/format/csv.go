@@ -16,6 +16,7 @@ package format
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/csv"
 	"fmt"
 
@@ -32,8 +33,10 @@ func MakeCSVBytes(
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
 ) ([]string, []string, error) {
-	insertsWriter := csv.NewWriter(insertsBuf)
-	updatesWriter := csv.NewWriter(updatesBuf)
+	insertGzipWriter := gzip.NewWriter(insertsBuf)
+	updateGzipWriter := gzip.NewWriter(updatesBuf)
+	insertsWriter := csv.NewWriter(insertGzipWriter)
+	updatesWriter := csv.NewWriter(updateGzipWriter)
 
 	// we need to store the operation in a column, to detect updates & deletes
 	operationColumn := fmt.Sprintf("%s_operation", prefix)
@@ -78,14 +81,45 @@ func MakeCSVBytes(
 		}
 	}
 
-	if err := createCSVRecords(
+	numInserts, numUpdates, err := createCSVRecords(
 		records,
 		insertsWriter,
 		updatesWriter,
 		csvColumnOrder,
 		operationColumn,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, nil, errors.Errorf("could not create CSV records: %w", err)
+	}
+
+	if numInserts > 0 {
+		insertsWriter.Flush()
+		if err := insertsWriter.Error(); err != nil {
+			return nil, nil, errors.Errorf("could not flush insertsWriter: %w", err)
+		}
+
+		if err := insertGzipWriter.Flush(); err != nil {
+			return nil, nil, errors.Errorf("could not flush insertGzipWriter: %w", err)
+		}
+	
+		if err := insertGzipWriter.Close(); err != nil { 
+			return nil, nil, errors.Errorf("could not close insertGzipWriter: %w", err)
+		}
+	}
+
+	if numUpdates > 0 {
+		updatesWriter.Flush()
+		if err := updatesWriter.Error(); err != nil {
+			return nil, nil, errors.Errorf("could not flush updatesWriter: %w", err)
+		}
+
+		if err := updateGzipWriter.Flush(); err != nil {
+			return nil, nil, errors.Errorf("could not flush updateGzipWriter: %w", err)
+		}
+
+		if err := updateGzipWriter.Close(); err != nil { 
+			return nil, nil, errors.Errorf("could not close updateGzipWriter: %w", err)
+		}
 	}
 
 	return orderingColumns, csvColumnOrder, nil
@@ -93,7 +127,7 @@ func MakeCSVBytes(
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string, operationColumn string,
-) error {
+) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
 
 	for _, r := range records {
@@ -101,7 +135,7 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 
 		data, err := extract(r.Operation, r.Payload)
 		if err != nil {
-			return errors.Errorf("failed to extract payload data: %w", err)
+			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for i, c := range csvColumnOrder {
@@ -121,29 +155,29 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			updates = append(updates, row)
 		default:
-			return errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
+			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
 		}
 	}
 
 	if len(inserts) > 0 {
 		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write insert headers: %w", err)
+			return 0, 0, errors.Errorf("failed to write insert headers: %w", err)
 		}
 		if err := insertsWriter.WriteAll(inserts); err != nil {
-			return errors.Errorf("failed to write insert records: %w", err)
+			return 0, 0, errors.Errorf("failed to write insert records: %w", err)
 		}
 	}
 
 	if len(updates) > 0 {
 		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write update headers: %w", err)
+			return 0, 0, errors.Errorf("failed to write update headers: %w", err)
 		}
 		if err := updatesWriter.WriteAll(updates); err != nil {
-			return errors.Errorf("failed to write update records: %w", err)
+			return 0, 0, errors.Errorf("failed to write update records: %w", err)
 		}
 	}
 
-	return nil
+	return len(inserts), len(updates), nil
 }
 
 func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {

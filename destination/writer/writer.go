@@ -153,7 +153,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	sdk.Logger(ctx).Debug().Msgf("insertBuffer.Len()=%d, updatesBuf.Len()=%d", s.insertsBuf.Len(), s.updatesBuf.Len())
 
 	if s.insertsBuf != nil && s.insertsBuf.Len() > 0 {
-		insertsFilename = fmt.Sprintf("inserts_%s.csv", batchUUID)
+		insertsFilename = fmt.Sprintf("inserts_%s.csv.gz", batchUUID)
 		if err := s.PutFileInStage(ctx, s.insertsBuf, insertsFilename); err != nil {
 			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
 
@@ -162,7 +162,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	}
 
 	if s.updatesBuf != nil && s.updatesBuf.Len() > 0 {
-		updatesFilename = fmt.Sprintf("updates_%s.csv", batchUUID)
+		updatesFilename = fmt.Sprintf("updates_%s.csv.gz", batchUUID)
 		if err := s.PutFileInStage(ctx, s.updatesBuf, updatesFilename); err != nil {
 			sdk.Logger(ctx).Err(err).Msg("failed put CSV file to snowflake stage")
 
@@ -226,7 +226,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
 	// nolint:errcheck,nolintlint
 	putQuery := fmt.Sprintf(
-		"PUT file://%s @%s auto_compress=true parallel=%d;",
+		"PUT file://%s @%s SOURCE_COMPRESSION=GZIP parallel=%d;",
 		filename,
 		s.Stage,
 		s.FileThreads,
