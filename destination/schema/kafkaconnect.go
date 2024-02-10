@@ -32,7 +32,7 @@ var schemaTypes = map[string]avro.Type{
 	"INT64":   avro.Long,
 	"STRING":  avro.String,
 	"BOOLEAN": avro.Boolean,
-	"FLOAT64": avro.Float,
+	"FLOAT64": avro.Double,
 	"FLOAT32": avro.Float,
 }
 
