@@ -17,8 +17,10 @@ package format
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/csv"
 	"fmt"
+	"sync"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -26,13 +28,15 @@ import (
 )
 
 func MakeCSVBytes(
+	ctx context.Context,
 	records []sdk.Record,
 	schema map[string]string,
 	prefix string,
-	orderingColumns []string,
+	primaryKeys []string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
-) ([]string, []string, error) {
+	numGoroutines int,
+) (indexCols []string, columnOrder []string, err error) {
 	insertGzipWriter := gzip.NewWriter(insertsBuf)
 	updateGzipWriter := gzip.NewWriter(updatesBuf)
 	insertsWriter := csv.NewWriter(insertGzipWriter)
@@ -45,84 +49,162 @@ func MakeCSVBytes(
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
-	for _, r := range records {
-		// get Primary Key(s)
-		if len(orderingColumns) == 0 {
-			key, ok := r.Key.(sdk.StructuredData)
-			if !ok {
-				return nil, nil, errors.Errorf("key does not contain structured data (%T)", r.Key)
+	// Grab the schema from the first record.
+	// TODO: support schema evolution.
+	if len(records) == 0 {
+		return nil, nil, errors.New("unexpected empty slice of records")
+	}
+
+	r := records[0]
+
+	// get Primary Key(s)
+	if len(primaryKeys) == 0 {
+		key, ok := r.Key.(sdk.StructuredData)
+		if !ok {
+			return nil, nil, errors.Errorf("key does not contain structured data (%T)", r.Key)
+		}
+		primaryKeys = maps.Keys(key)
+	}
+
+	data, err := extract(r.Operation, r.Payload)
+	if err != nil {
+		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
+	}
+
+	for key, val := range data {
+		if schema[key] == "" {
+			csvColumnOrder = append(csvColumnOrder, key)
+			switch val.(type) {
+			case int, int8, int16, int32, int64:
+				schema[key] = "INTEGER"
+			case float32, float64:
+				schema[key] = "FLOAT"
+			case bool:
+				schema[key] = "BOOLEAN"
+			case nil:
+				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+				schema[key] = "VARIANT"
+			default:
+				schema[key] = "VARCHAR"
 			}
-			orderingColumns = maps.Keys(key)
 		}
+	}
 
-		data, err := extract(r.Operation, r.Payload)
-		if err != nil {
-			return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
-		}
+	// Process CSV records in parallel with goroutines
+	var (
+		wg                                 sync.WaitGroup
+		insertsProcessed, updatesProcessed bool
+	)
+	insertsBuffers := make([]*bytes.Buffer, numGoroutines)
+	updatesBuffers := make([]*bytes.Buffer, numGoroutines)
+	errChan := make(chan error, numGoroutines)
 
-		for key, val := range data {
-			if schema[key] == "" {
-				csvColumnOrder = append(csvColumnOrder, key)
-				switch val.(type) {
-				case int, int8, int16, int32, int64:
-					schema[key] = "INTEGER"
-				case float32, float64:
-					schema[key] = "FLOAT"
-				case bool:
-					schema[key] = "BOOLEAN"
-				case nil:
-					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-					schema[key] = "VARIANT"
-				default:
-					schema[key] = "VARCHAR"
+	// number of records to process in each goroutine
+	recordsPerRoutine := (len(records) + numGoroutines - 1) / numGoroutines
+	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines with %d records per routine",
+		len(records), recordsPerRoutine)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			start := index * recordsPerRoutine
+			end := start + recordsPerRoutine
+			if end > len(records) {
+				end = len(records)
+			}
+
+			// each goroutine gets its own set of buffers
+			insertsBuffers[index] = new(bytes.Buffer)
+			updatesBuffers[index] = new(bytes.Buffer)
+
+			insertW := csv.NewWriter(insertsBuffers[index])
+			updateW := csv.NewWriter(updatesBuffers[index])
+			inserts, updates, err := createCSVRecords(records[start:end], insertW, updateW, csvColumnOrder, operationColumn)
+			if err != nil {
+				errChan <- errors.Errorf("failed to create CSV records: %w", err)
+				return
+			}
+
+			if inserts > 0 {
+				insertsProcessed = true
+				insertW.Flush()
+				if err := insertW.Error(); err != nil {
+					errChan <- errors.Errorf("failed to flush inserts CSV writer: %w", err)
+					return
 				}
 			}
+			if updates > 0 {
+				updatesProcessed = true
+				updateW.Flush()
+				if err := updateW.Error(); err != nil {
+					errChan <- errors.Errorf("failed to flush updates CSV writer: %w", err)
+					return
+				}
+			}
+		}(i)
+	}
+
+	// wait for goroutines to complete
+	wg.Wait()
+	close(errChan)
+
+	// check for errors from goroutines
+	for err := range errChan {
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
-	numInserts, numUpdates, err := createCSVRecords(
-		records,
-		insertsWriter,
-		updatesWriter,
-		csvColumnOrder,
-		operationColumn,
-	)
-	if err != nil {
-		return nil, nil, errors.Errorf("could not create CSV records: %w", err)
-	}
+	if insertsProcessed {
+		if err := insertsWriter.Write(csvColumnOrder); err != nil {
+			return nil, nil, errors.Errorf("failed to write insert headers: %w", err)
+		}
 
-	if numInserts > 0 {
 		insertsWriter.Flush()
 		if err := insertsWriter.Error(); err != nil {
-			return nil, nil, errors.Errorf("could not flush insertsWriter: %w", err)
+			return nil, nil, errors.Errorf("failed to flush insertsWriter: %w", err)
+		}
+
+		if err := joinBuffers(insertsBuffers, insertGzipWriter); err != nil {
+			return nil, nil, errors.Errorf("failed to join insert buffers: %w", err)
 		}
 
 		if err := insertGzipWriter.Flush(); err != nil {
-			return nil, nil, errors.Errorf("could not flush insertGzipWriter: %w", err)
+			return nil, nil, errors.Errorf("failed to flush insertGzipWriter: %w", err)
 		}
-	
-		if err := insertGzipWriter.Close(); err != nil { 
-			return nil, nil, errors.Errorf("could not close insertGzipWriter: %w", err)
+
+		if err := insertGzipWriter.Close(); err != nil {
+			return nil, nil, errors.Errorf("failed to close insertGzipWriter: %w", err)
 		}
 	}
 
-	if numUpdates > 0 {
+	if updatesProcessed {
+		if err := updatesWriter.Write(csvColumnOrder); err != nil {
+			return nil, nil, errors.Errorf("failed to write update headers: %w", err)
+		}
+
 		updatesWriter.Flush()
 		if err := updatesWriter.Error(); err != nil {
-			return nil, nil, errors.Errorf("could not flush updatesWriter: %w", err)
+			return nil, nil, errors.Errorf("failed to flush updatesWriter: %w", err)
+		}
+
+		if err := joinBuffers(updatesBuffers, updateGzipWriter); err != nil {
+			return nil, nil, errors.Errorf("failed to join update buffers: %w", err)
 		}
 
 		if err := updateGzipWriter.Flush(); err != nil {
-			return nil, nil, errors.Errorf("could not flush updateGzipWriter: %w", err)
+			return nil, nil, errors.Errorf("failed to flush updateGzipWriter: %w", err)
 		}
 
-		if err := updateGzipWriter.Close(); err != nil { 
-			return nil, nil, errors.Errorf("could not close updateGzipWriter: %w", err)
+		if err := updateGzipWriter.Close(); err != nil {
+			return nil, nil, errors.Errorf("failed to close updateGzipWriter: %w", err)
 		}
 	}
 
-	return orderingColumns, csvColumnOrder, nil
+	return primaryKeys, csvColumnOrder, nil
 }
 
 func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
@@ -160,18 +242,12 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 	}
 
 	if len(inserts) > 0 {
-		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return 0, 0, errors.Errorf("failed to write insert headers: %w", err)
-		}
 		if err := insertsWriter.WriteAll(inserts); err != nil {
 			return 0, 0, errors.Errorf("failed to write insert records: %w", err)
 		}
 	}
 
 	if len(updates) > 0 {
-		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return 0, 0, errors.Errorf("failed to write update headers: %w", err)
-		}
 		if err := updatesWriter.WriteAll(updates); err != nil {
 			return 0, 0, errors.Errorf("failed to write update records: %w", err)
 		}
@@ -196,4 +272,14 @@ func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
 	}
 
 	return data, nil
+}
+
+func joinBuffers(buffers []*bytes.Buffer, w *gzip.Writer) error {
+	for _, buf := range buffers {
+		if _, err := buf.WriteTo(w); err != nil {
+			w.Close()
+			return err
+		}
+	}
+	return nil
 }

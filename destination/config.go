@@ -30,6 +30,8 @@ type Config struct {
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
 	Format string `json:"snowflake.format" validate:"required,inclusion=csv|avro"`
+	// For CSV processing, the number of goroutines to concurrently process CSV rows.
+	CSVGoroutines int `json:"snowflake.csvGoroutines" default:"1"`
 	// Number of threads to run for PUT file uploads.
 	FileUploadThreads int `json:"snowflake.fileUploadThreads" default:"30"`
 }

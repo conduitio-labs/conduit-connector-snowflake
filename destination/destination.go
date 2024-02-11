@@ -78,13 +78,14 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 func (d *Destination) Open(ctx context.Context) error {
 	switch strings.ToUpper(d.Config.Format) {
 	case format.TypeCSV.String():
-		w, err := writer.NewSnowflake(ctx, &writer.SnowflakeConfig{
-			Prefix:      d.Config.NamingPrefix,
-			PrimaryKey:  d.Config.PrimaryKey,
-			Stage:       d.Config.Stage,
-			TableName:   d.Config.Table,
-			Connection:  d.Config.Connection,
-			FileThreads: d.Config.FileUploadThreads,
+		w, err := writer.NewCSV(ctx, &writer.SnowflakeConfig{
+			Prefix:        d.Config.NamingPrefix,
+			PrimaryKey:    d.Config.PrimaryKey,
+			Stage:         d.Config.Stage,
+			TableName:     d.Config.Table,
+			Connection:    d.Config.Connection,
+			CSVGoroutines: d.Config.CSVGoroutines,
+			FileThreads:   d.Config.FileUploadThreads,
 		})
 		if err != nil {
 			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)

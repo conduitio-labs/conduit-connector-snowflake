@@ -37,33 +37,35 @@ type Writer interface {
 	Close(context.Context) error
 }
 
-// Snowflake writer stores batch bytes into an Snowflake bucket as a file.
-type Snowflake struct {
-	Prefix      string
-	PrimaryKey  []string
-	Stage       string
-	TableName   string
-	FileThreads int
+// SnowflakeCSV writer stores batch bytes into an SnowflakeCSV bucket as a file.
+type SnowflakeCSV struct {
+	Prefix        string
+	PrimaryKey    []string
+	Stage         string
+	TableName     string
+	FileThreads   int
+	CSVGoroutines int
 
 	db         *sql.DB
 	insertsBuf *bytes.Buffer
 	updatesBuf *bytes.Buffer
 }
 
-var _ Writer = (*Snowflake)(nil)
+var _ Writer = (*SnowflakeCSV)(nil)
 
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
 type SnowflakeConfig struct {
-	Prefix      string
-	PrimaryKey  []string
-	Stage       string
-	TableName   string
-	Connection  string
-	FileThreads int
+	Prefix        string
+	PrimaryKey    []string
+	Stage         string
+	TableName     string
+	Connection    string
+	CSVGoroutines int
+	FileThreads   int
 }
 
-// NewSnowflake takes an SnowflakeConfig reference and produces an Snowflake Writer.
-func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error) {
+// NewCSV takes an SnowflakeConfig reference and produces an SnowflakeCSV Writer.
+func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 	db, err := sql.Open("snowflake", cfg.Connection)
 	if err != nil {
 		return nil, errors.Errorf("failed to connect to snowflake db")
@@ -81,19 +83,20 @@ func NewSnowflake(ctx context.Context, cfg *SnowflakeConfig) (*Snowflake, error)
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
-	return &Snowflake{
-		Prefix:      cfg.Prefix,
-		PrimaryKey:  cfg.PrimaryKey,
-		Stage:       cfg.Stage,
-		TableName:   cfg.TableName,
-		FileThreads: cfg.FileThreads,
-		db:          db,
-		insertsBuf:  &bytes.Buffer{},
-		updatesBuf:  &bytes.Buffer{},
+	return &SnowflakeCSV{
+		Prefix:        cfg.Prefix,
+		PrimaryKey:    cfg.PrimaryKey,
+		Stage:         cfg.Stage,
+		TableName:     cfg.TableName,
+		CSVGoroutines: cfg.CSVGoroutines,
+		FileThreads:   cfg.FileThreads,
+		db:            db,
+		insertsBuf:    &bytes.Buffer{},
+		updatesBuf:    &bytes.Buffer{},
 	}, nil
 }
 
-func (s *Snowflake) Close(ctx context.Context) error {
+func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
@@ -111,7 +114,7 @@ func (s *Snowflake) Close(ctx context.Context) error {
 	return nil
 }
 
-func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error) {
+func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
 		indexCols []string
 		colOrder  []string
@@ -121,12 +124,14 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 	schema := make(map[string]string)
 
 	indexCols, colOrder, err = format.MakeCSVBytes(
+		ctx,
 		records,
 		schema,
 		s.Prefix,
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
+		s.CSVGoroutines,
 	)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
@@ -180,7 +185,7 @@ func (s *Snowflake) Write(ctx context.Context, records []sdk.Record) (int, error
 }
 
 // creates temporary, and destination table if they don't exist already.
-func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) (string, error) {
+func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) (string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
@@ -223,7 +228,7 @@ func (s *Snowflake) SetupTables(ctx context.Context, batchUUID string, schema ma
 	return tempTable, tx.Commit()
 }
 
-func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
+func (s *SnowflakeCSV) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
 	// nolint:errcheck,nolintlint
 	putQuery := fmt.Sprintf(
 		"PUT file://%s @%s SOURCE_COMPRESSION=GZIP parallel=%d;",
@@ -261,7 +266,7 @@ func (s *Snowflake) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filen
 	return nil
 }
 
-func (s *Snowflake) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
+func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
 	colOrder, indexCols []string, schema map[string]string,
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)

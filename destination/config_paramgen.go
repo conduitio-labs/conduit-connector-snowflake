@@ -9,6 +9,12 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.csvGoroutines": {
+			Default:     "1",
+			Description: "For CSV processing, the number of goroutines to concurrently process CSV rows.",
+			Type:        sdk.ParameterTypeInt,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.fileUploadThreads": {
 			Default:     "30",
 			Description: "Number of threads to run for PUT file uploads.",

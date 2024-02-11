@@ -107,7 +107,6 @@ func (w *Avro) Close(ctx context.Context) error {
 }
 
 func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
-
 	sdk.Logger(ctx).Info().Msg("@@@@ RUN WRITE")
 
 	// assign request id to the write cycle
@@ -117,7 +116,6 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 		sdk.Logger(ctx).Info().Msg("@@@@ GET SCHEMA FROM META DATA")
 
 		i := slices.IndexFunc(records, func(r sdk.Record) bool {
-
 			return r.Metadata != nil && r.Metadata[valueSchema] != ""
 		})
 
@@ -289,7 +287,6 @@ func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredD
 			}
 
 		}
-
 	}
 
 	return sd
