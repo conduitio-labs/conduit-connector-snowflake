@@ -1,4 +1,4 @@
-// Copyright © 2022 Meroxa, Inc.
+// Copyright © 2024 Meroxa, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package writer
 
 import (
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"context"
+	"strings"
+
+	"github.com/google/uuid"
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+type reqIDctxKey struct{}
+
+func withRequestID(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reqIDctxKey{}, strings.ReplaceAll(uuid.NewString(), "-", ""))
+}
+
+func requestID(ctx context.Context) string {
+	return (ctx.Value(reqIDctxKey{}).(string))
 }

@@ -20,10 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/mock/gomock"
-
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator/mock"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/golang/mock/gomock"
 )
 
 var (

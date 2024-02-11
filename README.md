@@ -13,6 +13,8 @@ snowflake connector.
 
 ### Configuration
 
+## Source
+
 The config passed to `Configure` can contain the following fields.
 
 | name             | description                                                                                                                                                                                                                                     | required | example                                                |
@@ -24,6 +26,14 @@ The config passed to `Configure` can contain the following fields.
 | `orderingColumn` | The name of a column that the connector will use for ordering rows. Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.                                                                           | yes      | "id"                                                   |
 | `snapshot`       | Whether or not the plugin will take a snapshot of the entire table before starting cdc mode, by default true.                                                                                                                                   | no       | "false"                                                |
 | `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                          | no       | "1000"                                                 |
+
+## Destination
+
+| name             | description                                                                                                                                                                                                                                     | required | example                                                |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
+| `connection`     | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
+| `sdk.batch.size` | Maximum size of batch before it gets written to Snowflake. Default is 1000.| no       | "1000" |
+| `sdk.batch.delay`|  Maximum delay before an incomplete batch is written to the destination. | no       | 5s   
 
 ### How to build it
 

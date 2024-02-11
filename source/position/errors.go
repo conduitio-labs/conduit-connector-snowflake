@@ -18,6 +18,4 @@ import (
 	"errors"
 )
 
-var (
-	ErrUnknownIteratorType = errors.New("unknown iterator type")
-)
+var ErrUnknownIteratorType = errors.New("unknown iterator type")

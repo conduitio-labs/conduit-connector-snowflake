@@ -15,13 +15,13 @@
 package snowflake
 
 import (
-	sdk "github.com/conduitio/conduit-connector-sdk"
-
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 var Connector = sdk.Connector{
 	NewSpecification: Specification,
 	NewSource:        source.New,
-	NewDestination:   nil,
+	NewDestination:   destination.NewDestination,
 }

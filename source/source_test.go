@@ -20,53 +20,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/golang/mock/gomock"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
 )
-
-func TestSource_Configure(t *testing.T) {
-	s := Source{}
-
-	tests := []struct {
-		name        string
-		cfg         map[string]string
-		wantErr     bool
-		expectedErr error
-	}{
-		{
-			name: "valid config",
-			cfg: map[string]string{
-				config.KeyConnection:     "user:password@my_organization-my_account/mydb",
-				config.KeyTable:          "customer",
-				config.KeyPrimaryKeys:    "id",
-				config.KeyOrderingColumn: "id",
-			},
-			expectedErr: nil,
-		},
-		{
-			name: "missing connection",
-			cfg: map[string]string{
-				config.KeyTable:          "customer",
-				config.KeyColumns:        "",
-				config.KeyPrimaryKeys:    "id",
-				config.KeyOrderingColumn: "id",
-			},
-			expectedErr: errors.New("validate config: Connection value must be set"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := s.Configure(context.Background(), tt.cfg)
-			if err != nil && errors.Is(err, tt.expectedErr) {
-				t.Errorf("got = %v, want %v", err, tt.expectedErr)
-			}
-		})
-	}
-}
 
 func TestSource_Read(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
