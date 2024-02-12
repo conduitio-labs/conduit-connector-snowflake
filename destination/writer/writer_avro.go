@@ -191,7 +191,11 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 }
 
 func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
-	encoder, err := ocf.NewEncoder(w.schema.String(), w.insertBuf)
+	encoder, err := ocf.NewEncoder(
+		w.schema.String(),
+		w.insertBuf,
+		ocf.WithCodec(ocf.ZStandard), // options are snappy, zstandard and deflate
+	)
 	if err != nil {
 		return 0, errors.Errorf("failed to initialize avro encoder: %w", err)
 	}
@@ -270,22 +274,15 @@ func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 
 func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredData) sdk.StructuredData {
 	for k, v := range sd {
-		switch reflect.TypeOf(v).Kind() {
-		case reflect.Float64:
+		switch v.(type) {
+		case float32, float64:
 			if t[k] == avro.Long {
 				sd[k] = int64(sd[k].(float64))
 			} else if t[k] == avro.Int {
-				sd[k] = int(sd[k].(float64))
-			}
-		case reflect.Float32:
-			if t[k] == avro.Long {
-				sd[k] = int64(sd[k].(float32))
-			} else if t[k] == avro.Int {
-				sd[k] = int(sd[k].(float32))
+				sd[k] = int32(sd[k].(float64))
 			} else if t[k] == avro.Double {
 				sd[k] = float64(sd[k].(float32))
 			}
-
 		}
 	}
 
