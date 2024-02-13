@@ -275,24 +275,20 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 			sdk.Logger(ctx).Err(err).Msg("rolling back transaction")
 		}
 	}()
-	colList := buildFinalColumnList("", "", colOrder)
-
-	aliasFields := make([]string, len(colOrder))
-	aliasCols := strings.Join(aliasFields, ", ")
 
 	if insertsFilename != "" {
 		// COPY INTO for inserts
 		sdk.Logger(ctx).Debug().Msg("constructing query for COPY INTO for inserts")
 
 		//nolint:gosec // use proper SQL statement preparation
-		copyIntoQuery := fmt.Sprintf(
-			`COPY INTO %s (%s)
-			FROM (
-				SELECT %s
-				FROM @%s/%s f
-			)
-			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
-			s.TableName, colList, aliasCols, s.Stage, insertsFilename,
+		copyIntoQuery := fmt.Sprintf(`
+		COPY INTO %s FROM @%s
+		FILES = ('%s')
+		FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
+		MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE';`,
+			s.TableName,
+			s.Stage,
+			insertsFilename,
 		)
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)

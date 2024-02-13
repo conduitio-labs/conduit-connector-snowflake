@@ -148,7 +148,7 @@ func MakeCSVBytes(
 	// number of records to process in each goroutine
 	recordsPerRoutine := (len(latestRecordMap) + numGoroutines - 1) / numGoroutines
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines with %d records per routine",
-		len(latestRecordMap), recordsPerRoutine)
+		numGoroutines, recordsPerRoutine)
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
