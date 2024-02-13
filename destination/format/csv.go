@@ -24,7 +24,10 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"golang.org/x/exp/maps"
+)
+
+const (
+	isoFormat = `YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM`
 )
 
 func MakeCSVBytes(
@@ -32,11 +35,11 @@ func MakeCSVBytes(
 	records []sdk.Record,
 	schema map[string]string,
 	prefix string,
-	primaryKeys []string,
+	primaryKey string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
 	numGoroutines int,
-) (indexCols []string, columnOrder []string, err error) {
+) (columnOrder []string, err error) {
 	insertGzipWriter := gzip.NewWriter(insertsBuf)
 	updateGzipWriter := gzip.NewWriter(updatesBuf)
 	insertsWriter := csv.NewWriter(insertGzipWriter)
@@ -44,31 +47,31 @@ func MakeCSVBytes(
 
 	// we need to store the operation in a column, to detect updates & deletes
 	operationColumn := fmt.Sprintf("%s_operation", prefix)
+	createdAtColumn := fmt.Sprintf("%s_created_at", prefix)
+	updatedAtColumn := fmt.Sprintf("%s_updated_at", prefix)
+	deletedAtColumn := fmt.Sprintf("%s_deleted_at", prefix)
+	recordNumberColumn := fmt.Sprintf("%s_record_num", prefix)
+
 	schema[operationColumn] = "VARCHAR"
-	csvColumnOrder := []string{operationColumn}
+	schema[createdAtColumn] = "TIMESTAMP_LTZ"
+	schema[updatedAtColumn] = "TIMESTAMP_LTZ"
+	schema[deletedAtColumn] = "TIMESTAMP_LTZ"
+
+	csvColumnOrder := []string{recordNumberColumn, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
 	// Grab the schema from the first record.
 	// TODO: support schema evolution.
 	if len(records) == 0 {
-		return nil, nil, errors.New("unexpected empty slice of records")
+		return nil, errors.New("unexpected empty slice of records")
 	}
 
 	r := records[0]
 
-	// get Primary Key(s)
-	if len(primaryKeys) == 0 {
-		key, ok := r.Key.(sdk.StructuredData)
-		if !ok {
-			return nil, nil, errors.Errorf("key does not contain structured data (%T)", r.Key)
-		}
-		primaryKeys = maps.Keys(key)
-	}
-
 	data, err := extract(r.Operation, r.Payload)
 	if err != nil {
-		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
+		return nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
 
 	for key, val := range data {
@@ -122,7 +125,7 @@ func MakeCSVBytes(
 
 			insertW := csv.NewWriter(insertsBuffers[index])
 			updateW := csv.NewWriter(updatesBuffers[index])
-			inserts, updates, err := createCSVRecords(records[start:end], insertW, updateW, csvColumnOrder, operationColumn)
+			inserts, updates, err := createCSVRecords(ctx, records[start:end], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn, recordNumberColumn)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
 				return
@@ -154,65 +157,68 @@ func MakeCSVBytes(
 	// check for errors from goroutines
 	for err := range errChan {
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
 	if insertsProcessed {
 		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return nil, nil, errors.Errorf("failed to write insert headers: %w", err)
+			return nil, errors.Errorf("failed to write insert headers: %w", err)
 		}
 
 		insertsWriter.Flush()
 		if err := insertsWriter.Error(); err != nil {
-			return nil, nil, errors.Errorf("failed to flush insertsWriter: %w", err)
+			return nil, errors.Errorf("failed to flush insertsWriter: %w", err)
 		}
 
 		if err := joinBuffers(insertsBuffers, insertGzipWriter); err != nil {
-			return nil, nil, errors.Errorf("failed to join insert buffers: %w", err)
+			return nil, errors.Errorf("failed to join insert buffers: %w", err)
 		}
 
 		if err := insertGzipWriter.Flush(); err != nil {
-			return nil, nil, errors.Errorf("failed to flush insertGzipWriter: %w", err)
+			return nil, errors.Errorf("failed to flush insertGzipWriter: %w", err)
 		}
 
 		if err := insertGzipWriter.Close(); err != nil {
-			return nil, nil, errors.Errorf("failed to close insertGzipWriter: %w", err)
+			return nil, errors.Errorf("failed to close insertGzipWriter: %w", err)
 		}
 	}
 
 	if updatesProcessed {
 		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return nil, nil, errors.Errorf("failed to write update headers: %w", err)
+			return nil, errors.Errorf("failed to write update headers: %w", err)
 		}
 
 		updatesWriter.Flush()
 		if err := updatesWriter.Error(); err != nil {
-			return nil, nil, errors.Errorf("failed to flush updatesWriter: %w", err)
+			return nil, errors.Errorf("failed to flush updatesWriter: %w", err)
 		}
 
 		if err := joinBuffers(updatesBuffers, updateGzipWriter); err != nil {
-			return nil, nil, errors.Errorf("failed to join update buffers: %w", err)
+			return nil, errors.Errorf("failed to join update buffers: %w", err)
 		}
 
 		if err := updateGzipWriter.Flush(); err != nil {
-			return nil, nil, errors.Errorf("failed to flush updateGzipWriter: %w", err)
+			return nil, errors.Errorf("failed to flush updateGzipWriter: %w", err)
 		}
 
 		if err := updateGzipWriter.Close(); err != nil {
-			return nil, nil, errors.Errorf("failed to close updateGzipWriter: %w", err)
+			return nil, errors.Errorf("failed to close updateGzipWriter: %w", err)
 		}
 	}
 
-	return primaryKeys, csvColumnOrder, nil
+	return csvColumnOrder, nil
 }
 
-func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
-	csvColumnOrder []string, operationColumn string,
+func createCSVRecords(ctx context.Context, records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
+	csvColumnOrder []string, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn, recordNumberColumn string,
 ) (numInserts int, numUpdates int, err error) {
+
 	var inserts, updates [][]string
 
-	for _, r := range records {
+	for i, r := range records {
+		recordString := r.Metadata["opencdc.readAt"]
+
 		row := make([]string, len(csvColumnOrder))
 
 		data, err := extract(r.Operation, r.Payload)
@@ -220,14 +226,22 @@ func createCSVRecords(records []sdk.Record, insertsWriter, updatesWriter *csv.Wr
 			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
 		}
 
-		for i, c := range csvColumnOrder {
+		for j, c := range csvColumnOrder {
 			switch {
 			case c == operationColumn:
-				row[i] = r.Operation.String()
+				row[j] = r.Operation.String()
+			case c == createdAtColumn && r.Operation == sdk.OperationCreate:
+				row[j] = recordString
+			case c == updatedAtColumn && r.Operation == sdk.OperationUpdate:
+				row[j] = recordString
+			case c == deletedAtColumn && r.Operation == sdk.OperationDelete:
+				row[j] = recordString
+			case c == recordNumberColumn:
+				row[j] = fmt.Sprintf("%d", i)
 			case data[c] == nil:
-				row[i] = ""
+				row[j] = ""
 			default:
-				row[i] = fmt.Sprint(data[c])
+				row[j] = fmt.Sprint(data[c])
 			}
 		}
 

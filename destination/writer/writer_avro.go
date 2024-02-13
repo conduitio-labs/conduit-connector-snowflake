@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -39,7 +38,7 @@ const (
 
 type Avro struct {
 	Prefix      string
-	PrimaryKey  []string
+	PrimaryKey  string
 	Stage       string
 	TableName   string
 	FileThreads int

@@ -38,7 +38,7 @@ func (Config) Parameters() map[string]sdk.Parameter {
 		},
 		"snowflake.primaryKey": {
 			Default:     "",
-			Description: "Primary key(s) of the source table",
+			Description: "Primary key of the source table",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},

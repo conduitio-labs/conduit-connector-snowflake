@@ -191,7 +191,7 @@ func Test_ParseConfig(t *testing.T) {
 			Connection: "u:p@localhost:1818/db/schema",
 		},
 		NamingPrefix: "meroxa",
-		PrimaryKey:   []string{"id"},
+		PrimaryKey:   "id",
 		Stage:        "orders_stage",
 		Format:       "csv",
 	}

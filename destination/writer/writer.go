@@ -26,7 +26,6 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	sf "github.com/snowflakedb/gosnowflake"
-	"golang.org/x/exp/maps"
 )
 
 // Writer is an interface that is responsible for persisting record that Destination
@@ -40,7 +39,7 @@ type Writer interface {
 // SnowflakeCSV writer stores batch bytes into an SnowflakeCSV bucket as a file.
 type SnowflakeCSV struct {
 	Prefix        string
-	PrimaryKey    []string
+	PrimaryKey    string
 	Stage         string
 	TableName     string
 	FileThreads   int
@@ -56,7 +55,7 @@ var _ Writer = (*SnowflakeCSV)(nil)
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
 type SnowflakeConfig struct {
 	Prefix        string
-	PrimaryKey    []string
+	PrimaryKey    string
 	Stage         string
 	TableName     string
 	Connection    string
@@ -97,13 +96,13 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+	// dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	// sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
+	// if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+	// 	sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
-		return errors.Errorf("failed to gracefully close the connection: %w", err)
-	}
+	// 	return errors.Errorf("failed to gracefully close the connection: %w", err)
+	// }
 
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
@@ -116,14 +115,13 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 
 func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var (
-		indexCols []string
-		colOrder  []string
-		err       error
+		colOrder []string
+		err      error
 	)
 
 	schema := make(map[string]string)
 
-	indexCols, colOrder, err = format.MakeCSVBytes(
+	colOrder, err = format.MakeCSVBytes(
 		ctx,
 		records,
 		schema,
@@ -175,7 +173,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		}
 	}
 
-	if err := s.CopyAndMerge(ctx, tempTable, insertsFilename, updatesFilename, colOrder, indexCols, schema); err != nil {
+	if err := s.CopyAndMerge(ctx, tempTable, insertsFilename, updatesFilename, colOrder, schema); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to process records")
 
 		return 0, errors.Errorf("failed to process records: %w", err)
@@ -197,10 +195,9 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema
 
 	tempTable := fmt.Sprintf("%s_temp_%s", s.TableName, batchUUID)
 	columnsSQL := buildSchema(schema)
-	pks := strings.Join(s.PrimaryKey, ", ")
 	queryCreateTempTable := fmt.Sprintf(
 		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s))`,
-		tempTable, columnsSQL, pks)
+		tempTable, columnsSQL, s.PrimaryKey)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTempTable)
 	if _, err = tx.ExecContext(ctx, queryCreateTempTable); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to create temporary table")
@@ -211,11 +208,8 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema
 	queryCreateTable := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s (
 		%s,
-		meroxa_deleted_at TIMESTAMP_LTZ,
-		meroxa_created_at TIMESTAMP_LTZ,
-		meroxa_updated_at TIMESTAMP_LTZ,
 		PRIMARY KEY (%s)
-	)`, s.TableName, columnsSQL, pks)
+	)`, s.TableName, columnsSQL, s.PrimaryKey)
 
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTable)
 
@@ -267,7 +261,7 @@ func (s *SnowflakeCSV) PutFileInStage(ctx context.Context, buf *bytes.Buffer, fi
 }
 
 func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
-	colOrder, indexCols []string, schema map[string]string,
+	colOrder []string, schema map[string]string,
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -281,25 +275,48 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 			sdk.Logger(ctx).Err(err).Msg("rolling back transaction")
 		}
 	}()
+	colList := buildFinalColumnList("", "", colOrder)
+
+	var updatePosition string
+	var deletePosition string
+	var operatePosition string
+	var pkPosition string
+	var numPosition string
+	aliasFields := make([]string, len(colOrder))
+
+	for i, col := range colOrder {
+		aliasCol := fmt.Sprintf(`f.$%d`, i+1)
+		aliasFields[i] = aliasCol
+		switch col {
+		case fmt.Sprintf("%s_updated_at", s.Prefix):
+			updatePosition = aliasCol
+		case fmt.Sprintf("%s_deleted_at", s.Prefix):
+			deletePosition = aliasCol
+		case fmt.Sprintf("%s_operation", s.Prefix):
+			operatePosition = aliasCol
+		case s.PrimaryKey:
+			pkPosition = aliasCol
+		case fmt.Sprintf("%s_record_num", s.Prefix):
+			numPosition = aliasCol
+		}
+
+	}
+	fmt.Println(numPosition)
+	aliasCols := strings.Join(aliasFields, ", ")
 
 	if insertsFilename != "" {
 		// COPY INTO for inserts
 		sdk.Logger(ctx).Debug().Msg("constructing query for COPY INTO for inserts")
-		colList := buildFinalColumnList("", "", colOrder)
-		aliasFields := make([]string, len(colOrder))
-		for i := 0; i < len(colOrder); i++ {
-			aliasFields[i] = fmt.Sprintf(`f.$%d`, i+1)
-		}
-		aliasCols := strings.Join(aliasFields, ", ")
+
 		//nolint:gosec // use proper SQL statement preparation
 		copyIntoQuery := fmt.Sprintf(
-			`COPY INTO %s (%s, %s_created_at)
+			`COPY INTO %s (%s)
 			FROM (
-				SELECT %s, CURRENT_TIMESTAMP()
+				SELECT %s
 				FROM @%s/%s f
 			)
 			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
-			s.TableName, colList, s.Prefix, aliasCols, s.Stage, insertsFilename,
+			s.TableName, colList, aliasCols, s.Stage, insertsFilename,
 		)
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
@@ -316,13 +333,27 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		// COPY INTO for updates
 		//nolint:gosec // use proper SQL statement preparation
 		copyIntoQuery := fmt.Sprintf(`
-			COPY INTO %s FROM @%s
-			FILES = ('%s.gz')
-			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
-			MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' PURGE = TRUE;`,
+			COPY INTO %s FROM (   select top 1  %s FROM @%s/%s f  where %s = "update" order by %s desc group by %s 
+									UNION 
+								  select top 1  %s FROM @%s/%s f  where %s = "delete" order by %s desc group by %s 
+											
+		                       )
+				FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
 			tempTable,
+			//first inner select
+			aliasCols,
 			s.Stage,
 			updatesFilename,
+			operatePosition,
+			updatePosition,
+			pkPosition,
+			//second inner select
+			aliasCols,
+			s.Stage,
+			updatesFilename,
+			operatePosition,
+			deletePosition,
+			pkPosition,
 		)
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
@@ -336,23 +367,38 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		sdk.Logger(ctx).Info().Msg("ran COPY INTO for updates/deletes")
 
 		// MERGE
-		cols := maps.Keys(schema)
-		updateSet := buildOrderingColumnList("a", "b", ",", cols)
-		orderingColumnList := buildOrderingColumnList("a", "b", " AND ", indexCols)
+		//	cols := maps.Keys(schema)
+		//updateSet := buildOrderingColumnList("a", "b", ",", cols)
+		orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey) //buildOrderingColumnList("a", "b", " AND ", indexCols)
+		colListA := buildFinalColumnList("a", ".", colOrder)
+		colListB := buildFinalColumnList("b", ".", colOrder)
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
 			`MERGE INTO %s as a USING %s AS b ON %s
-			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s, a.%s_updated_at = CURRENT_TIMESTAMP()
-			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = CURRENT_TIMESTAMP()`,
+			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET a.%s_updated_at = b.%s_updated_at
+			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = b.%s_deleted_at
+			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
+			WHEN NOT MATCHED AND b.%s_operation = 'delete' THEN INSERT  (%s) VALUES (%s) `,
 			s.TableName,
 			tempTable,
 			orderingColumnList,
-			s.Prefix,
-			updateSet,
-			s.Prefix,
+			//second line
 			s.Prefix,
 			s.Prefix,
+			s.Prefix,
+			//third line
+			s.Prefix,
+			s.Prefix,
+			s.Prefix,
+			//fourth line
+			s.Prefix,
+			colListA,
+			colListB,
+			//fith line
+			s.Prefix,
+			colListA,
+			colListB,
 		)
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
@@ -393,13 +439,4 @@ func buildSchema(schema map[string]string) string {
 	}
 
 	return strings.Join(cols, ", ")
-}
-
-func buildOrderingColumnList(tableFrom, tableTo, delimiter string, orderingCols []string) string {
-	ret := make([]string, len(orderingCols))
-	for i, colName := range orderingCols {
-		ret[i] = fmt.Sprintf("%s.%s = %s.%s", tableFrom, colName, tableTo, colName)
-	}
-
-	return strings.Join(ret, delimiter)
 }

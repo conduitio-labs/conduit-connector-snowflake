@@ -24,8 +24,8 @@ type Config struct {
 	config.Config
 	// Snowflake Stage data is copied into before merge
 	Stage string `json:"snowflake.stage" default:"0"`
-	// Primary key(s) of the source table
-	PrimaryKey []string `json:"snowflake.primaryKey" validate:"required"`
+	// Primary key of the source table
+	PrimaryKey string `json:"snowflake.primaryKey" validate:"required"`
 	// Prefix to append to update_at , deleted_at, create_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
