@@ -24,11 +24,19 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"golang.org/x/exp/maps"
 )
 
 const (
 	isoFormat = `YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM`
 )
+
+type recordSummary struct{
+	updatedAt string
+	createdAt string
+	deletedAt string
+	latestRecord *sdk.Record
+}
 
 func MakeCSVBytes(
 	ctx context.Context,
@@ -50,14 +58,13 @@ func MakeCSVBytes(
 	createdAtColumn := fmt.Sprintf("%s_created_at", prefix)
 	updatedAtColumn := fmt.Sprintf("%s_updated_at", prefix)
 	deletedAtColumn := fmt.Sprintf("%s_deleted_at", prefix)
-	recordNumberColumn := fmt.Sprintf("%s_record_num", prefix)
 
 	schema[operationColumn] = "VARCHAR"
 	schema[createdAtColumn] = "TIMESTAMP_LTZ"
 	schema[updatedAtColumn] = "TIMESTAMP_LTZ"
 	schema[deletedAtColumn] = "TIMESTAMP_LTZ"
 
-	csvColumnOrder := []string{recordNumberColumn, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn}
+	csvColumnOrder := []string{operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
@@ -94,6 +101,39 @@ func MakeCSVBytes(
 		}
 	}
 
+	// loop through records and de-dupe before converting to CSV
+	// this is done beforehand, so we can parallelize the CSV formatting
+	latestRecordMap := make(map[string]recordSummary, len(records))
+
+	for _, r := range records {
+		readAt := r.Metadata["opencdc.readAt"]
+		s, err := extract(r.Operation, r.Payload)
+		if err != nil {
+			return nil, err
+		}
+		key := fmt.Sprint(s[primaryKey]); 
+		l, ok := latestRecordMap[key]
+		if !ok {
+			l.latestRecord = &r
+		}
+
+		switch r.Operation{
+			case sdk.OperationUpdate:
+				if l.updatedAt < readAt {
+					l.updatedAt = readAt
+					l.latestRecord = &r
+				}
+			case sdk.OperationDelete:
+				l.deletedAt = readAt
+				l.latestRecord = &r
+			case sdk.OperationCreate, sdk.OperationSnapshot:
+				l.createdAt = readAt
+				l.latestRecord = &r
+		}
+
+		latestRecordMap[key] = l
+	}
+
 	// Process CSV records in parallel with goroutines
 	var (
 		wg                                 sync.WaitGroup
@@ -104,9 +144,9 @@ func MakeCSVBytes(
 	errChan := make(chan error, numGoroutines)
 
 	// number of records to process in each goroutine
-	recordsPerRoutine := (len(records) + numGoroutines - 1) / numGoroutines
+	recordsPerRoutine := (len(latestRecordMap) + numGoroutines - 1) / numGoroutines
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines with %d records per routine",
-		len(records), recordsPerRoutine)
+		len(latestRecordMap), recordsPerRoutine)
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -115,8 +155,8 @@ func MakeCSVBytes(
 
 			start := index * recordsPerRoutine
 			end := start + recordsPerRoutine
-			if end > len(records) {
-				end = len(records)
+			if end > len(latestRecordMap) {
+				end = len(latestRecordMap)
 			}
 
 			// each goroutine gets its own set of buffers
@@ -125,7 +165,9 @@ func MakeCSVBytes(
 
 			insertW := csv.NewWriter(insertsBuffers[index])
 			updateW := csv.NewWriter(updatesBuffers[index])
-			inserts, updates, err := createCSVRecords(ctx, records[start:end], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn, recordNumberColumn)
+			
+			dedupedRecords := maps.Values(latestRecordMap)
+			inserts, updates, err := createCSVRecords(ctx, dedupedRecords[start:end], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
 				return
@@ -210,14 +252,17 @@ func MakeCSVBytes(
 	return csvColumnOrder, nil
 }
 
-func createCSVRecords(ctx context.Context, records []sdk.Record, insertsWriter, updatesWriter *csv.Writer,
-	csvColumnOrder []string, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn, recordNumberColumn string,
+func createCSVRecords(ctx context.Context, recordSummaries []recordSummary, insertsWriter, updatesWriter *csv.Writer,
+	csvColumnOrder []string, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn string,
 ) (numInserts int, numUpdates int, err error) {
 
 	var inserts, updates [][]string
 
-	for i, r := range records {
-		recordString := r.Metadata["opencdc.readAt"]
+	for _, s := range recordSummaries {
+		if s.latestRecord == nil {
+			continue
+		}
+		r := s.latestRecord
 
 		row := make([]string, len(csvColumnOrder))
 
@@ -231,13 +276,11 @@ func createCSVRecords(ctx context.Context, records []sdk.Record, insertsWriter, 
 			case c == operationColumn:
 				row[j] = r.Operation.String()
 			case c == createdAtColumn && r.Operation == sdk.OperationCreate:
-				row[j] = recordString
+				row[j] = s.createdAt
 			case c == updatedAtColumn && r.Operation == sdk.OperationUpdate:
-				row[j] = recordString
+				row[j] = s.updatedAt
 			case c == deletedAtColumn && r.Operation == sdk.OperationDelete:
-				row[j] = recordString
-			case c == recordNumberColumn:
-				row[j] = fmt.Sprintf("%d", i)
+				row[j] = s.deletedAt
 			case data[c] == nil:
 				row[j] = ""
 			default:

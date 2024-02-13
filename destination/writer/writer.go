@@ -277,31 +277,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 	}()
 	colList := buildFinalColumnList("", "", colOrder)
 
-	var updatePosition string
-	var deletePosition string
-	var operatePosition string
-	var pkPosition string
-	var numPosition string
 	aliasFields := make([]string, len(colOrder))
-
-	for i, col := range colOrder {
-		aliasCol := fmt.Sprintf(`f.$%d`, i+1)
-		aliasFields[i] = aliasCol
-		switch col {
-		case fmt.Sprintf("%s_updated_at", s.Prefix):
-			updatePosition = aliasCol
-		case fmt.Sprintf("%s_deleted_at", s.Prefix):
-			deletePosition = aliasCol
-		case fmt.Sprintf("%s_operation", s.Prefix):
-			operatePosition = aliasCol
-		case s.PrimaryKey:
-			pkPosition = aliasCol
-		case fmt.Sprintf("%s_record_num", s.Prefix):
-			numPosition = aliasCol
-		}
-
-	}
-	fmt.Println(numPosition)
 	aliasCols := strings.Join(aliasFields, ", ")
 
 	if insertsFilename != "" {
@@ -333,27 +309,13 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		// COPY INTO for updates
 		//nolint:gosec // use proper SQL statement preparation
 		copyIntoQuery := fmt.Sprintf(`
-			COPY INTO %s FROM (   select top 1  %s FROM @%s/%s f  where %s = "update" order by %s desc group by %s 
-									UNION 
-								  select top 1  %s FROM @%s/%s f  where %s = "delete" order by %s desc group by %s 
-											
-		                       )
-				FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 1);`,
+			COPY INTO %s FROM @%s
+			FILES = ('%s')
+			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
+			MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' PURGE = TRUE;`,
 			tempTable,
-			//first inner select
-			aliasCols,
 			s.Stage,
 			updatesFilename,
-			operatePosition,
-			updatePosition,
-			pkPosition,
-			//second inner select
-			aliasCols,
-			s.Stage,
-			updatesFilename,
-			operatePosition,
-			deletePosition,
-			pkPosition,
 		)
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
