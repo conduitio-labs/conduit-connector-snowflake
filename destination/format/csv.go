@@ -113,6 +113,7 @@ func MakeCSVBytes(
 		if err != nil {
 			return nil, err
 		}
+
 		l, ok := latestRecordMap[key]
 		if !ok {
 			l = &recordSummary{

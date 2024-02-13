@@ -19,14 +19,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-deeper/chunks"
 	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
 	"github.com/hamba/avro/v2/ocf"
 	sf "github.com/snowflakedb/gosnowflake"
+	"github.com/sourcegraph/conc/pool"
 )
 
 const (
@@ -45,8 +50,9 @@ type Avro struct {
 	schema      avro.Schema
 	schemaTypes map[string]avro.Type
 	evolver     *schema.Evolver
-	insertBuf   *bytes.Buffer
-	updatesBuf  *bytes.Buffer
+	// insertBuf     *bytes.Buffer
+	insertBufPool *sync.Pool
+	updatesBuf    *bytes.Buffer
 }
 
 var _ Writer = (*Avro)(nil)
@@ -56,6 +62,8 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 	if err != nil {
 		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
+
+	db.SetMaxIdleConns(runtime.GOMAXPROCS(0))
 
 	// create the stage if it doesn't exist, replace it if already present
 	if _, err := db.ExecContext(
@@ -76,16 +84,28 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		return nil, errors.Errorf("failed to create table %q: %w", cfg.TableName, err)
 	}
 
+	insertBuf := bytes.Buffer{}
+	insertBuf.Grow(1024 * 1024 * 100) // pregrow to 100mb
+
+	insertBufPool := &sync.Pool{
+		New: func() any {
+			insertBuf := bytes.Buffer{}
+			insertBuf.Grow(1024 * 1024 * 100) // pregrow to 100mb
+			return &insertBuf
+		},
+	}
+
 	return &Avro{
-		Prefix:      cfg.Prefix,
-		PrimaryKey:  cfg.PrimaryKey,
-		Stage:       cfg.Stage,
-		TableName:   cfg.TableName,
-		FileThreads: cfg.FileThreads,
-		db:          db,
-		insertBuf:   &bytes.Buffer{},
-		updatesBuf:  &bytes.Buffer{},
-		evolver:     schema.NewEvolver(db),
+		Prefix:        cfg.Prefix,
+		PrimaryKey:    cfg.PrimaryKey,
+		Stage:         cfg.Stage,
+		TableName:     cfg.TableName,
+		FileThreads:   cfg.FileThreads,
+		db:            db,
+		insertBufPool: insertBufPool,
+		// insertBuf:     &insertBuf,      // pregrow 100mb
+		updatesBuf: &bytes.Buffer{}, // unused
+		evolver:    schema.NewEvolver(db),
 	}, nil
 }
 
@@ -123,7 +143,7 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var inserts, updates, deletes []*sdk.Record
 
 	defer w.updatesBuf.Reset()
-	defer w.insertBuf.Reset()
+	// defer w.insertBuf.Reset()
 
 	// N.B. Prepare records by operation.
 	//      Processing first inserts, then updates.
@@ -148,24 +168,59 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// process schema off records, initialize if not set, need a single snapshot/create
 	updates = append(updates, deletes...)
 
-	inserted, err := w.insert(ctx, inserts)
-	if err != nil {
+	p := pool.New().WithErrors()
+
+	workers := runtime.GOMAXPROCS(0)
+	chunked := chunks.Split(inserts, len(inserts)/workers)
+
+	sdk.Logger(ctx).Debug().
+		Int("chunks", len(chunked)).
+		Int("workers", workers).
+		Msg("split records in chunks")
+
+	for i, c := range chunked {
+		p.Go(func() error {
+			_, err := w.insert(
+				context.WithValue(ctx, reqIDctxKey{}, fmt.Sprintf("%s-%d", requestID(ctx), i)),
+				c,
+			)
+			if err != nil {
+				return errors.Errorf("%d: failed to insert %d records: %w", i, len(c), err)
+			}
+			return nil
+		})
+	}
+
+	if err := p.Wait(); err != nil {
 		return 0, errors.Errorf("failed to insert %d records: %w", len(inserts), err)
 	}
+
+	/*
+		inserted, err := w.insert(ctx, inserts)
+		if err != nil {
+			return 0, errors.Errorf("failed to insert %d records: %w", len(inserts), err)
+		}
+	*/
 
 	updated, err := w.merge(ctx, updates)
 	if err != nil {
 		return 0, errors.Errorf("failed to merge %d records: %w", len(updates), err)
 	}
 
-	return updated + inserted, nil
+	return updated + len(inserts), nil
 }
 
 func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
+	start := time.Now()
+	buf := w.insertBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	defer w.insertBufPool.Put(buf)
+
 	encoder, err := ocf.NewEncoder(
 		w.schema.String(),
-		w.insertBuf,
-		ocf.WithCodec(ocf.ZStandard), // options are snappy, zstandard and deflate
+		buf,
+		ocf.WithCodec(ocf.Snappy), // options are snappy, zstandard and deflate
 	)
 	if err != nil {
 		return 0, errors.Errorf("failed to initialize avro encoder: %w", err)
@@ -189,13 +244,18 @@ func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
 
 	if err := encoder.Flush(); err != nil {
 		sdk.Logger(ctx).Debug().
-			Int("encoded", w.insertBuf.Len()).
+			Int("encoded", buf.Len()).
 			Msg("failed to flush encoded data")
 
 		return 0, errors.Errorf("failed to flush encoded data: %w", err)
 	}
 
-	stageFile, err := w.upload(ctx, w.insertBuf)
+	sdk.Logger(ctx).Debug().
+		Dur("duration", time.Now().Sub(start)).
+		Int("size", buf.Len()).
+		Msgf("completed encoding to avro")
+
+	stageFile, err := w.upload(ctx, buf)
 	if err != nil {
 		return 0, errors.Errorf("failed to store file %q in stage %q: %w", stageFile, w.Stage, err)
 	}
@@ -214,6 +274,8 @@ func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
 		)
 	}
 
+	sdk.Logger(ctx).Debug().Dur("duration", time.Now().Sub(start)).Msgf("finished inserting data")
+
 	return len(records), nil
 }
 
@@ -226,6 +288,8 @@ func (w *Avro) merge(ctx context.Context, records []*sdk.Record) (int, error) {
 
 // initSchema creates a schema definition from the first record which has the value schema.
 func (w *Avro) initSchema(ctx context.Context, records []sdk.Record) error {
+	start := time.Now()
+
 	i := slices.IndexFunc(records, func(r sdk.Record) bool {
 		return r.Metadata != nil && r.Metadata[valueSchema] != ""
 	})
@@ -248,7 +312,10 @@ func (w *Avro) initSchema(ctx context.Context, records []sdk.Record) error {
 		return errors.Errorf("failed to construct avro schema: %w", err)
 	}
 
-	sdk.Logger(ctx).Debug().Str("schema", avsc.String()).Msg("schema created")
+	sdk.Logger(ctx).Debug().
+		Str("schema", avsc.String()).
+		Dur("duration", time.Now().Sub(start)).
+		Msg("schema created")
 
 	w.schemaTypes = schema.AvroFields(avsc)
 	w.schema = avsc
@@ -257,6 +324,8 @@ func (w *Avro) initSchema(ctx context.Context, records []sdk.Record) error {
 }
 
 func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
+	start := time.Now()
+
 	ctx = sf.WithFileStream(ctx, buf)
 	ctx = sf.WithFileTransferOptions(ctx, &sf.SnowflakeFileTransferOptions{
 		RaisePutGetError: true,
@@ -269,6 +338,8 @@ func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 	)); err != nil {
 		return "", errors.Errorf("failed to upload %q to stage %q: %w", filename, w.Stage, err)
 	}
+
+	sdk.Logger(ctx).Debug().Dur("duration", time.Now().Sub(start)).Msgf("finished uploading file %s", filename)
 
 	return filename + ".gz", nil
 }

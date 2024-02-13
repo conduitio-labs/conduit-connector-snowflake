@@ -4,6 +4,7 @@ go 1.21.4
 
 require (
 	github.com/conduitio/conduit-connector-sdk v0.8.0
+	github.com/go-deeper/chunks v1.0.0
 	github.com/go-errors/errors v1.5.1
 	github.com/go-playground/validator/v10 v10.17.0
 	github.com/golang/mock v1.6.0
@@ -13,6 +14,7 @@ require (
 	github.com/huandu/go-sqlbuilder v1.25.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/snowflakedb/gosnowflake v1.7.2
+	github.com/sourcegraph/conc v0.3.0
 	go.uber.org/multierr v1.11.0
 )
 

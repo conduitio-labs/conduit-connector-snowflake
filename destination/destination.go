@@ -113,6 +113,7 @@ func (d *Destination) Open(ctx context.Context) error {
 }
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
+	start := time.Now()
 	// TODO: change to debug, using info for now to test with mdpx
 	sdk.Logger(ctx).Info().Msgf("batch contains %d records", len(records))
 
@@ -127,6 +128,9 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	if err != nil {
 		return 0, errors.Errorf("failed to write records: %w", err)
 	}
+
+	// TODO: change to debug, using info for now to test with mdpx
+	sdk.Logger(ctx).Info().Dur("duration", time.Now().Sub(start)).Msgf("wrote %d records", n)
 
 	return n, nil
 }

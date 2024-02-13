@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -62,6 +63,8 @@ func NewEvolver(db *sql.DB) *Evolver {
 
 // Migrate evolves the snowflake table to match that of the provided schema.
 func (e *Evolver) Migrate(ctx context.Context, table string, sch avro.Schema) (bool, error) {
+	start := time.Now()
+
 	// find all fields of the current table
 	rows, err := e.db.QueryContext(
 		ctx,
@@ -129,6 +132,8 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch avro.Schema) (b
 	if _, err := e.db.ExecContext(ctx, e.buf.String()); err != nil {
 		return false, errors.Errorf("failed to evolve schema on table %q: %w", table, err)
 	}
+
+	sdk.Logger(ctx).Debug().Dur("duration", time.Now().Sub(start)).Msgf("finished migrating schema")
 
 	return true, nil
 }
