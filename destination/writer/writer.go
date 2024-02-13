@@ -96,13 +96,13 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	// dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
-	// sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	// if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-	// 	sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
-	// 	return errors.Errorf("failed to gracefully close the connection: %w", err)
-	// }
+		return errors.Errorf("failed to gracefully close the connection: %w", err)
+	}
 
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
@@ -312,7 +312,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 			COPY INTO %s FROM @%s
 			FILES = ('%s')
 			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
-			MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE' PURGE = TRUE;`,
+			MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE';`,
 			tempTable,
 			s.Stage,
 			updatesFilename,
@@ -329,9 +329,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		sdk.Logger(ctx).Info().Msg("ran COPY INTO for updates/deletes")
 
 		// MERGE
-		//	cols := maps.Keys(schema)
-		//updateSet := buildOrderingColumnList("a", "b", ",", cols)
-		orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey) //buildOrderingColumnList("a", "b", " AND ", indexCols)
+		orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey) // buildOrderingColumnList("a", "b", " AND ", indexCols)
 		colListA := buildFinalColumnList("a", ".", colOrder)
 		colListB := buildFinalColumnList("b", ".", colOrder)
 
@@ -345,19 +343,19 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 			s.TableName,
 			tempTable,
 			orderingColumnList,
-			//second line
+			// second line
 			s.Prefix,
 			s.Prefix,
 			s.Prefix,
-			//third line
+			// third line
 			s.Prefix,
 			s.Prefix,
 			s.Prefix,
-			//fourth line
+			// fourth line
 			s.Prefix,
 			colListA,
 			colListB,
-			//fith line
+			// fifth line
 			s.Prefix,
 			colListA,
 			colListB,
