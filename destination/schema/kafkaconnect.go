@@ -20,26 +20,10 @@ import (
 	"strings"
 
 	"github.com/go-errors/errors"
-	"github.com/hamba/avro/v2"
 	"golang.org/x/exp/maps"
 )
 
-var schemaTypes = map[string]avro.Type{
-	"INT":     avro.Int,
-	"INT8":    avro.Int,
-	"INT16":   avro.Int,
-	"INT32":   avro.Int,
-	"INT64":   avro.Long,
-	"STRING":  avro.String,
-	"BOOLEAN": avro.Boolean,
-	"FLOAT64": avro.Double,
-	"FLOAT32": avro.Double,
-}
-
-type (
-	KafkaConnectSchema map[string]string
-	AvroSchema         map[string]any
-)
+type KafkaConnectSchema map[string]string
 
 // ParseKafkaConnect returns a parsed Kafka Connect Schema from JSON string.
 // Returns error when JSON decoding or validation fail.
@@ -74,22 +58,4 @@ func (ksc KafkaConnectSchema) Validate() error {
 	}
 
 	return nil
-}
-
-func (ksc KafkaConnectSchema) ToAvro() AvroSchema {
-	var fields []map[string]string
-
-	for k, v := range ksc {
-		fields = append(fields, map[string]string{
-			"name": strings.ToLower(k),
-			"type": string(schemaTypes[strings.ToUpper(v)]),
-		})
-	}
-
-	return AvroSchema{
-		"type":      avro.Record,
-		"name":      "snowflakerow",
-		"namespace": "io.conduitio.snowflake",
-		"fields":    fields,
-	}
 }

@@ -26,6 +26,18 @@ const (
 	schemaNS   = "io.conduitio.snowflake"
 )
 
+var schemaTypes = map[string]avro.Type{
+	"INT":     avro.Int,
+	"INT8":    avro.Int,
+	"INT16":   avro.Int,
+	"INT32":   avro.Int,
+	"INT64":   avro.Long,
+	"STRING":  avro.String,
+	"BOOLEAN": avro.Boolean,
+	"FLOAT64": avro.Double,
+	"FLOAT32": avro.Double,
+}
+
 func NewAvroSchema(kcs KafkaConnectSchema) (avro.Schema, error) {
 	var fields []*avro.Field
 

@@ -14,33 +14,121 @@
 
 package schema
 
-/*
 import (
-	"reflect"
+	"bytes"
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+
+	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
+	"github.com/hamba/avro/v2"
 )
 
-func SnowflakeSchema(s Schema) map[string]string {
-	snowschema := make(map[string]string)
+type snowflkaeTableDef struct {
+	name            string
+	typ             string
+	kind            string
+	isNull          string
+	defaultVal      *string
+	pkey            string
+	uniqKey         string
+	check           *string
+	exp             *string
+	comment         *string
+	policyName      *string
+	privacyDomain   *string
+	schemaEvolution *string
+}
 
-	for k, v := range s {
-		switch v {
-		case reflect.Int64:
-			// snowflake has single int type and they are all synonymous
-			snowschema[k] = "BIGINT"
-		case reflect.Bool:
-			snowschema[k] = "BOOLEAN"
-		case reflect.Float64:
-			// similarly to ints, all floats are of equal width
-			snowschema[k] = "FLOAT8"
-		case reflect.String:
-			// defaults to max string length when constraint is not specified
-			snowschema[k] = "VARCHAR"
-		case reflect.Invalid:
-			// unknown data type.
-			snowschema[k] = "VARIANT"
+var snowflakeTypes = map[avro.Type]string{
+	avro.Int:     "bigint",
+	avro.Long:    "bigint",
+	avro.String:  "varchar",
+	avro.Float:   "double",
+	avro.Double:  "double",
+	avro.Boolean: "boolean",
+}
+
+type Evolver struct {
+	db  *sql.DB
+	buf bytes.Buffer
+}
+
+func NewEvolver(db *sql.DB) *Evolver {
+	return &Evolver{db: db}
+}
+
+// Migrate evolves the snowflake table to match that of the provided schema.
+func (e *Evolver) Migrate(ctx context.Context, table string, sch avro.Schema) (bool, error) {
+	// find all fields of the current table
+	rows, err := e.db.QueryContext(
+		ctx,
+		fmt.Sprintf("DESC TABLE %s", table),
+	)
+	if err != nil {
+		return false, errors.Errorf("failed to describe table %q: %w", table, err)
+	}
+	defer rows.Close()
+
+	tableFields := make(map[string]string)
+
+	for rows.Next() {
+		var s snowflkaeTableDef
+
+		if err := rows.Scan(
+			&s.name, &s.typ, &s.kind, &s.isNull,
+			&s.defaultVal, &s.pkey, &s.uniqKey,
+			&s.check, &s.exp, &s.comment, &s.policyName,
+			&s.privacyDomain, &s.schemaEvolution,
+		); err != nil {
+			return false, errors.Errorf("failed to scan rows: %w", err)
 		}
+
+		tableFields[strings.ToLower(s.name)] = strings.ToLower(s.typ)
 	}
 
-	return snowschema
+	if err := rows.Err(); err != nil {
+		return false, errors.Errorf("failed to iterate over rows result: %w", err)
+	}
+
+	var newColumns []string
+
+	for _, f := range (sch.(*avro.RecordSchema)).Fields() {
+		avroField := f.Name()
+
+		if _, ok := tableFields[avroField]; ok {
+			continue // exists, ignore type
+		}
+
+		avroType := ((f.Type()).(*avro.PrimitiveSchema)).Type()
+		snowflakeType, ok := snowflakeTypes[avroType]
+		if !ok {
+			return false, errors.Errorf("cannot find match type %q in snowflake", avroType)
+		}
+
+		newColumns = append(
+			newColumns,
+			fmt.Sprintf("%s %s", avroField, snowflakeType),
+		)
+	}
+
+	if len(newColumns) == 0 {
+		sdk.Logger(ctx).Debug().Msg("evolver: no new columns to add")
+
+		return false, nil
+	}
+
+	fmt.Fprintf(&e.buf, "ALTER TABLE %s ADD COLUMN %s", table, strings.Join(newColumns, ", "))
+
+	sdk.Logger(ctx).Debug().
+		Str("alter", e.buf.String()).
+		Msgf("adding new columns to table %q", table)
+
+	if _, err := e.db.ExecContext(ctx, e.buf.String()); err != nil {
+		return false, errors.Errorf("failed to evolve schema on table %q: %w", table, err)
+	}
+
+	return true, nil
 }
-*/

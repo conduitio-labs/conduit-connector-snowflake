@@ -20,7 +20,6 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -28,7 +27,6 @@ import (
 	"github.com/hamba/avro/v2"
 	"github.com/hamba/avro/v2/ocf"
 	sf "github.com/snowflakedb/gosnowflake"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -46,6 +44,7 @@ type Avro struct {
 	db          *sql.DB
 	schema      avro.Schema
 	schemaTypes map[string]avro.Type
+	evolver     *schema.Evolver
 	insertBuf   *bytes.Buffer
 	updatesBuf  *bytes.Buffer
 }
@@ -58,8 +57,6 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
 
-	sdk.Logger(ctx).Info().Msg("@@@@ START NEW AVRO - RUN CREATE STAGE")
-
 	// create the stage if it doesn't exist, replace it if already present
 	if _, err := db.ExecContext(
 		ctx,
@@ -67,8 +64,6 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 	); err != nil {
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
-
-	sdk.Logger(ctx).Info().Msg("@@@@ CREATE TABLE ")
 
 	// create basic table
 	if _, err := db.ExecContext(
@@ -90,6 +85,7 @@ func NewAvro(ctx context.Context, cfg *SnowflakeConfig) (*Avro, error) {
 		db:          db,
 		insertBuf:   &bytes.Buffer{},
 		updatesBuf:  &bytes.Buffer{},
+		evolver:     schema.NewEvolver(db),
 	}, nil
 }
 
@@ -106,42 +102,22 @@ func (w *Avro) Close(ctx context.Context) error {
 }
 
 func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
-	sdk.Logger(ctx).Info().Msg("@@@@ RUN WRITE")
-
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
-	// N.B. Initializing the schema from the first record which has the value schema
+
 	if w.schema == nil {
-		sdk.Logger(ctx).Info().Msg("@@@@ GET SCHEMA FROM META DATA")
-
-		i := slices.IndexFunc(records, func(r sdk.Record) bool {
-			return r.Metadata != nil && r.Metadata[valueSchema] != ""
-		})
-
-		if i < 0 {
-			return 0, errors.Errorf("failed to find record with schema")
+		if err := w.initSchema(ctx, records); err != nil {
+			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
 		}
 
-		// parse keyschema as well
-
-		if ks, ok := records[i].Metadata[keySchema]; ok {
-			_ = ks // do something with it
-		}
-
-		ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
+		migrated, err := w.evolver.Migrate(ctx, w.TableName, w.schema)
 		if err != nil {
-			return 0, errors.Errorf("failed to parse kafka schema: %w", err)
+			return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
 		}
 
-		avsc, err := schema.NewAvroSchema(ksch)
-		if err != nil {
-			return 0, errors.Errorf("failed to construct avro schema: %w", err)
-		}
-
-		sdk.Logger(ctx).Debug().Str("schema", avsc.String()).Msg("schema created")
-
-		w.schemaTypes = schema.AvroFields(avsc)
-		w.schema = avsc
+		sdk.Logger(ctx).Debug().
+			Bool("success", migrated).
+			Msg("schema initialized and migration completed")
 	}
 
 	var inserts, updates, deletes []*sdk.Record
@@ -172,14 +148,10 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// process schema off records, initialize if not set, need a single snapshot/create
 	updates = append(updates, deletes...)
 
-	sdk.Logger(ctx).Info().Msg("@@@@ Run Insert")
-
 	inserted, err := w.insert(ctx, inserts)
 	if err != nil {
 		return 0, errors.Errorf("failed to insert %d records: %w", len(inserts), err)
 	}
-
-	sdk.Logger(ctx).Info().Msg("@@@@ Run Update")
 
 	updated, err := w.merge(ctx, updates)
 	if err != nil {
@@ -205,11 +177,9 @@ func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
 			return 0, errors.Errorf("payload.after (%T) is not structured data", data)
 		}
 
-		sdk.Logger(ctx).Debug().Str("keys", strings.Join(maps.Keys(data), ", ")).Msg("encoding data with keys")
-
 		// N.B. When JSON is serialized all numbers are serialized to doubles.
 		//      Ensure correct types as per avro.
-		if err := encoder.Encode(coerceTypes(ctx, w.schemaTypes, data)); err != nil {
+		if err := encoder.Encode(coerceTypes(w.schemaTypes, data)); err != nil {
 			sdk.Logger(ctx).Debug().
 				Msgf("failed to encode data %+v", data)
 
@@ -254,6 +224,38 @@ func (w *Avro) merge(ctx context.Context, records []*sdk.Record) (int, error) {
 	return 0, nil
 }
 
+// initSchema creates a schema definition from the first record which has the value schema.
+func (w *Avro) initSchema(ctx context.Context, records []sdk.Record) error {
+	i := slices.IndexFunc(records, func(r sdk.Record) bool {
+		return r.Metadata != nil && r.Metadata[valueSchema] != ""
+	})
+
+	if i < 0 {
+		return errors.Errorf("failed to find record with schema")
+	}
+
+	if ks, ok := records[i].Metadata[keySchema]; ok {
+		_ = ks // do something with it
+	}
+
+	ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
+	if err != nil {
+		return errors.Errorf("failed to parse kafka schema: %w", err)
+	}
+
+	avsc, err := schema.NewAvroSchema(ksch)
+	if err != nil {
+		return errors.Errorf("failed to construct avro schema: %w", err)
+	}
+
+	sdk.Logger(ctx).Debug().Str("schema", avsc.String()).Msg("schema created")
+
+	w.schemaTypes = schema.AvroFields(avsc)
+	w.schema = avsc
+
+	return nil
+}
+
 func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 	ctx = sf.WithFileStream(ctx, buf)
 	ctx = sf.WithFileTransferOptions(ctx, &sf.SnowflakeFileTransferOptions{
@@ -271,16 +273,17 @@ func (w *Avro) upload(ctx context.Context, buf *bytes.Buffer) (string, error) {
 	return filename + ".gz", nil
 }
 
-func coerceTypes(ctx context.Context, t map[string]avro.Type, sd sdk.StructuredData) sdk.StructuredData {
+func coerceTypes(t map[string]avro.Type, sd sdk.StructuredData) sdk.StructuredData {
 	for k, v := range sd {
 		switch v.(type) {
 		case float32, float64:
-			if t[k] == avro.Long {
+			switch t[k] {
+			case avro.Long:
 				sd[k] = int64(sd[k].(float64))
-			} else if t[k] == avro.Int {
+			case avro.Int:
 				sd[k] = int32(sd[k].(float64))
-			} else if t[k] == avro.Double {
-				sd[k] = float64(sd[k].(float32))
+			default:
+				sd[k] = sd[k].(float64)
 			}
 		}
 	}
