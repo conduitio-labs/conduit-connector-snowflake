@@ -273,6 +273,8 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 	colListB := buildFinalColumnList("b", ".", colOrder)
 	setSelectMerge := buildSelectMerge(colOrder)
 
+	sdk.Logger(ctx).Debug().Msgf("insertsFilename=%s, updatesFilename=%s", insertsFilename, updatesFilename)
+
 	if insertsFilename != "" {
 		// COPY INTO for inserts
 		sdk.Logger(ctx).Debug().Msg("constructing merge query for inserts")
@@ -322,7 +324,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 			s.TableName,
 			setSelectMerge,
 			s.Stage,
-			insertsFilename,
+			updatesFilename,
 			orderingColumnList,
 			// second line
 			s.Prefix,

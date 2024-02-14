@@ -152,11 +152,11 @@ func MakeCSVBytes(
 	updatesBuffers := make([]*bytes.Buffer, numGoroutines)
 	errChan := make(chan error, numGoroutines)
 
-	// number of records to process in each goroutine
-	recordsPerRoutine := (len(latestRecordMap) + numGoroutines - 1) / numGoroutines
-	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines with %d records per routine",
-		numGoroutines, recordsPerRoutine)
 	dedupedRecords := maps.Values(latestRecordMap)
+	recordChunks := splitRecordChunks(dedupedRecords, numGoroutines)
+
+	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines in %d chunks",
+	numGoroutines, len(recordChunks))
 
 	sdk.Logger(ctx).Debug().Msgf("deduped records - %+v",
 		dedupedRecords)
@@ -168,15 +168,6 @@ func MakeCSVBytes(
 
 			sdk.Logger(ctx).Debug().Msgf("current index - %d  ", index)
 
-			start := index * recordsPerRoutine
-			end := start + recordsPerRoutine
-			if end > len(latestRecordMap) {
-				end = len(latestRecordMap)
-			}
-
-			sdk.Logger(ctx).Debug().Msgf("start index - %d  ", start)
-			sdk.Logger(ctx).Debug().Msgf("end index - %d  ", end)
-
 			// each goroutine gets its own set of buffers
 			insertsBuffers[index] = new(bytes.Buffer)
 			updatesBuffers[index] = new(bytes.Buffer)
@@ -184,9 +175,7 @@ func MakeCSVBytes(
 			insertW := csv.NewWriter(insertsBuffers[index])
 			updateW := csv.NewWriter(updatesBuffers[index])
 
-			sdk.Logger(ctx).Debug().Msgf("Processing chunk on index %d, start %d, end %d - %+v ", index, start, end, dedupedRecords[start:end][0].latestRecord)
-
-			inserts, updates, err := createCSVRecords(ctx, dedupedRecords[start:end], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn)
+			inserts, updates, err := createCSVRecords(ctx, recordChunks[index], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
 				return
@@ -293,7 +282,7 @@ func createCSVRecords(ctx context.Context, recordSummaries []*recordSummary, ins
 			switch {
 			case c == operationColumn:
 				row[j] = r.Operation.String()
-			case c == createdAtColumn && r.Operation == sdk.OperationCreate:
+			case c == createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
 				row[j] = s.createdAt
 			case c == updatedAtColumn && r.Operation == sdk.OperationUpdate:
 				row[j] = s.updatedAt
@@ -358,4 +347,43 @@ func joinBuffers(buffers []*bytes.Buffer, w *gzip.Writer) error {
 		}
 	}
 	return nil
+}
+
+
+// splitRecordChunks takes a slice of recordSummary and an integer n, then splits the slice into n chunks.
+// Note: The last chunk may have fewer elements if the slice size is not evenly divisible by n.
+// TODO: replace this with 
+func splitRecordChunks(slice []*recordSummary, n int) [][]*recordSummary {
+	var chunks [][]*recordSummary
+
+	// Calculate chunk size
+	totalLen := len(slice)
+	if n <= 0 {
+		n = 1 // Ensure there is at least one chunk
+	}
+	chunkSize := totalLen / n
+	remainder := totalLen % n
+
+	start := 0
+	for i := 0; i < n; i++ {
+		end := start + chunkSize
+		if i < remainder {
+			end++ // Distribute the remainder among the first few chunks
+		}
+
+		// Adjust end if it goes beyond the slice length
+		if end > totalLen {
+			end = totalLen
+		}
+
+		chunks = append(chunks, slice[start:end])
+		start = end
+
+		// Break the loop early if we've already included all elements
+		if start >= totalLen {
+			break
+		}
+	}
+
+	return chunks
 }
