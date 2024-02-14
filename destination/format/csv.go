@@ -156,7 +156,7 @@ func MakeCSVBytes(
 	recordChunks := splitRecordChunks(dedupedRecords, numGoroutines)
 
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines in %d chunks",
-	numGoroutines, len(recordChunks))
+		numGoroutines, len(recordChunks))
 
 	sdk.Logger(ctx).Debug().Msgf("deduped records - %+v",
 		dedupedRecords)
@@ -181,22 +181,8 @@ func MakeCSVBytes(
 				return
 			}
 
-			if inserts > 0 {
-				insertsProcessed = true
-				insertW.Flush()
-				if err := insertW.Error(); err != nil {
-					errChan <- errors.Errorf("failed to flush inserts CSV writer: %w", err)
-					return
-				}
-			}
-			if updates > 0 {
-				updatesProcessed = true
-				updateW.Flush()
-				if err := updateW.Error(); err != nil {
-					errChan <- errors.Errorf("failed to flush updates CSV writer: %w", err)
-					return
-				}
-			}
+			insertsProcessed = inserts > 0
+			updatesProcessed = updates > 0
 		}(i)
 	}
 
@@ -225,10 +211,6 @@ func MakeCSVBytes(
 			return nil, errors.Errorf("failed to join insert buffers: %w", err)
 		}
 
-		if err := insertGzipWriter.Flush(); err != nil {
-			return nil, errors.Errorf("failed to flush insertGzipWriter: %w", err)
-		}
-
 		if err := insertGzipWriter.Close(); err != nil {
 			return nil, errors.Errorf("failed to close insertGzipWriter: %w", err)
 		}
@@ -246,10 +228,6 @@ func MakeCSVBytes(
 
 		if err := joinBuffers(updatesBuffers, updateGzipWriter); err != nil {
 			return nil, errors.Errorf("failed to join update buffers: %w", err)
-		}
-
-		if err := updateGzipWriter.Flush(); err != nil {
-			return nil, errors.Errorf("failed to flush updateGzipWriter: %w", err)
 		}
 
 		if err := updateGzipWriter.Close(); err != nil {
@@ -349,10 +327,9 @@ func joinBuffers(buffers []*bytes.Buffer, w *gzip.Writer) error {
 	return nil
 }
 
-
 // splitRecordChunks takes a slice of recordSummary and an integer n, then splits the slice into n chunks.
 // Note: The last chunk may have fewer elements if the slice size is not evenly divisible by n.
-// TODO: replace this with 
+// TODO: replace this with
 func splitRecordChunks(slice []*recordSummary, n int) [][]*recordSummary {
 	var chunks [][]*recordSummary
 

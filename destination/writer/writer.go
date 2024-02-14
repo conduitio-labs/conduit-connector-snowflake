@@ -51,9 +51,10 @@ type SnowflakeCSV struct {
 }
 
 type setListMode string
+
 const (
 	updateSetMode setListMode = "update"
-	deleteSetMode setListMode  = "delete"
+	deleteSetMode setListMode = "delete"
 )
 
 var _ Writer = (*SnowflakeCSV)(nil)
