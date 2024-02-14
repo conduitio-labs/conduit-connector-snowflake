@@ -19,10 +19,8 @@ type Type int
 
 const (
 	TypeCSV Type = iota
-	TypeAVRO
 )
 
 var All = []Type{
 	TypeCSV,
-	TypeAVRO,
 }

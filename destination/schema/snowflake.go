@@ -19,12 +19,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"github.com/hamba/avro/v2"
 )
 
 type snowflkaeTableDef struct {
@@ -43,13 +43,16 @@ type snowflkaeTableDef struct {
 	schemaEvolution *string
 }
 
-var snowflakeTypes = map[avro.Type]string{
-	avro.Int:     "bigint",
-	avro.Long:    "bigint",
-	avro.String:  "varchar",
-	avro.Float:   "double",
-	avro.Double:  "double",
-	avro.Boolean: "boolean",
+var snowflakeTypes = map[reflect.Kind]string{
+	reflect.Int:     "bigint",
+	reflect.Int8:    "bigint",
+	reflect.Int16:   "bigint",
+	reflect.Int32:   "bigint",
+	reflect.Int64:   "bigint",
+	reflect.String:  "varchar",
+	reflect.Bool:    "boolean",
+	reflect.Float32: "double",
+	reflect.Float64: "double",
 }
 
 type Evolver struct {
@@ -62,7 +65,7 @@ func NewEvolver(db *sql.DB) *Evolver {
 }
 
 // Migrate evolves the snowflake table to match that of the provided schema.
-func (e *Evolver) Migrate(ctx context.Context, table string, sch avro.Schema) (bool, error) {
+func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, error) {
 	start := time.Now()
 
 	// find all fields of the current table
@@ -98,22 +101,19 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch avro.Schema) (b
 
 	var newColumns []string
 
-	for _, f := range (sch.(*avro.RecordSchema)).Fields() {
-		avroField := f.Name()
-
-		if _, ok := tableFields[avroField]; ok {
+	for k, v := range sch {
+		if _, ok := tableFields[k]; ok {
 			continue // exists, ignore type
 		}
 
-		avroType := ((f.Type()).(*avro.PrimitiveSchema)).Type()
-		snowflakeType, ok := snowflakeTypes[avroType]
+		snowflakeType, ok := snowflakeTypes[v]
 		if !ok {
-			return false, errors.Errorf("cannot find match type %q in snowflake", avroType)
+			return false, errors.Errorf("cannot find match type %q in snowflake", v)
 		}
 
 		newColumns = append(
 			newColumns,
-			fmt.Sprintf("%s %s", avroField, snowflakeType),
+			fmt.Sprintf("%s %s", k, snowflakeType),
 		)
 	}
 

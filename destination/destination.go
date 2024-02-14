@@ -91,20 +91,6 @@ func (d *Destination) Open(ctx context.Context) error {
 			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)
 		}
 		d.Writer = w
-	case format.TypeAVRO.String():
-		aw, err := writer.NewAvro(ctx, &writer.SnowflakeConfig{
-			Prefix:      d.Config.NamingPrefix,
-			PrimaryKey:  d.Config.PrimaryKey,
-			Stage:       d.Config.Stage,
-			TableName:   d.Config.Table,
-			Connection:  d.Config.Connection,
-			FileThreads: d.Config.FileUploadThreads,
-		})
-		if err != nil {
-			return errors.Errorf("avro writer: failed to open connector snowflake: %w", err)
-		}
-
-		d.Writer = aw
 	default:
 		return errors.Errorf("unknown format %q", d.Config.Format)
 	}
