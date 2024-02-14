@@ -104,7 +104,7 @@ func MakeCSVBytes(
 	// loop through records and de-dupe before converting to CSV
 	// this is done beforehand, so we can parallelize the CSV formatting
 	latestRecordMap := make(map[string]*recordSummary, len(records))
-	sdk.Logger(ctx).Debug().Msgf("num of records after deduping: %d", len(records))
+	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(records))
 
 	for i, r := range records {
 		readAt := r.Metadata["opencdc.readAt"]
@@ -136,13 +136,7 @@ func MakeCSVBytes(
 			l.latestRecord = &records[i]
 		}
 	}
-	sdk.Logger(ctx).Debug().Msgf("latest record map %+v",
-		latestRecordMap)
 
-	for key, rec := range latestRecordMap {
-		sdk.Logger(ctx).Debug().Msgf("latest record map record - %s  - %+v",
-			key, rec.latestRecord)
-	}
 	// Process CSV records in parallel with goroutines
 	var (
 		wg                                 sync.WaitGroup
@@ -158,15 +152,10 @@ func MakeCSVBytes(
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines in %d chunks",
 		numGoroutines, len(recordChunks))
 
-	sdk.Logger(ctx).Debug().Msgf("deduped records - %+v",
-		dedupedRecords)
-
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-
-			sdk.Logger(ctx).Debug().Msgf("current index - %d  ", index)
 
 			// each goroutine gets its own set of buffers
 			insertsBuffers[index] = new(bytes.Buffer)

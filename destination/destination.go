@@ -115,9 +115,6 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 		return 0, errors.Errorf("failed to write records: %w", err)
 	}
 
-	// TODO: change to debug, using info for now to test with mdpx
-	sdk.Logger(ctx).Info().Dur("duration", time.Now().Sub(start)).Msgf("wrote %d records", n)
-
 	return n, nil
 }
 
