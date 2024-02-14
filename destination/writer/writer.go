@@ -50,6 +50,12 @@ type SnowflakeCSV struct {
 	updatesBuf *bytes.Buffer
 }
 
+type setListMode string
+const (
+	updateSetMode setListMode = "update"
+	deleteSetMode setListMode  = "delete"
+)
+
 var _ Writer = (*SnowflakeCSV)(nil)
 
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
@@ -267,7 +273,8 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 	}()
 
 	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
-	updateSetCols := buildUpdateSetList("a", "b", colOrder)
+	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode)
+	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode)
 	// buildOrderingColumnList("a", "b", " AND ", indexCols)
 	colListA := buildFinalColumnList("a", ".", colOrder)
 	colListB := buildFinalColumnList("b", ".", colOrder)
@@ -331,7 +338,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 			updateSetCols,
 			// third line
 			s.Prefix,
-			updateSetCols,
+			deleteSetCols,
 			// fourth line
 			s.Prefix,
 			colListA,
@@ -371,10 +378,20 @@ func buildFinalColumnList(table, delimiter string, cols []string) string {
 	return strings.Join(ret, ", ")
 }
 
-func buildUpdateSetList(table1, table2 string, cols []string) string {
-	ret := make([]string, len(cols))
-	for i, colName := range cols {
-		ret[i] = fmt.Sprintf("%s.%s = %s.%s", table1, colName, table2, colName)
+func (s *SnowflakeCSV) buildSetList(table1, table2 string, cols []string, mode setListMode) string {
+	var ret []string
+	createdAtCol := fmt.Sprintf("%s_created_at", s.Prefix)
+	updatedAtCol := fmt.Sprintf("%s_updated_at", s.Prefix)
+	for _, colName := range cols {
+		// do not overwrite created_at on updates & deletes
+		if colName == createdAtCol && (mode == updateSetMode || mode == deleteSetMode) {
+			continue
+		}
+		// do not overwrite updated_at on deletes
+		if colName == updatedAtCol && mode == deleteSetMode {
+			continue
+		}
+		ret = append(ret, fmt.Sprintf("%s.%s = %s.%s", table1, colName, table2, colName))
 	}
 
 	return strings.Join(ret, ", ")
