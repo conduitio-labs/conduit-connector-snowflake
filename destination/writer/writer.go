@@ -53,6 +53,7 @@ type SnowflakeCSV struct {
 type setListMode string
 
 const (
+	insertSetMode setListMode = "insert"
 	updateSetMode setListMode = "update"
 	deleteSetMode setListMode = "delete"
 )
@@ -274,9 +275,10 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 	}()
 
 	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
+	insertSetCols := s.buildSetList("a", "b", colOrder, insertSetMode)
 	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode)
 	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode)
-	// buildOrderingColumnList("a", "b", " AND ", indexCols)
+
 	colListA := buildFinalColumnList("a", ".", colOrder)
 	colListB := buildFinalColumnList("b", ".", colOrder)
 	setSelectMerge := buildSelectMerge(colOrder)
@@ -300,7 +302,7 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, update
 			// second line
 			s.Prefix,
 			s.Prefix,
-			updateSetCols,
+			insertSetCols,
 			// third line
 			s.Prefix,
 			s.Prefix,
