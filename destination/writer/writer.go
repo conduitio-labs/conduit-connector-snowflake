@@ -96,13 +96,13 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+	// dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	// sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
+	// if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+	// 	sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
-		return errors.Errorf("failed to gracefully close the connection: %w", err)
-	}
+	// 	return errors.Errorf("failed to gracefully close the connection: %w", err)
+	// }
 
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
@@ -145,7 +145,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	batchUUID := strings.ReplaceAll(uuid.NewString(), "-", "")
 	var insertsFilename, updatesFilename string
 
-	tempTable, err := s.SetupTables(ctx, batchUUID, schema)
+	err = s.SetupTables(ctx, batchUUID, schema)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to set up snowflake tables")
 
@@ -173,7 +173,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		}
 	}
 
-	if err := s.CopyAndMerge(ctx, tempTable, insertsFilename, updatesFilename, colOrder, schema); err != nil {
+	if err := s.CopyAndMerge(ctx, insertsFilename, updatesFilename, colOrder, schema); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to process records")
 
 		return 0, errors.Errorf("failed to process records: %w", err)
@@ -183,27 +183,17 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 }
 
 // creates temporary, and destination table if they don't exist already.
-func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) (string, error) {
+func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema map[string]string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
 
-		return "", errors.Errorf("failed to create transaction: %w", err)
+		return errors.Errorf("failed to create transaction: %w", err)
 	}
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	tempTable := fmt.Sprintf("%s_temp_%s", s.TableName, batchUUID)
 	columnsSQL := buildSchema(schema)
-	queryCreateTempTable := fmt.Sprintf(
-		`CREATE TEMPORARY TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s))`,
-		tempTable, columnsSQL, s.PrimaryKey)
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTempTable)
-	if _, err = tx.ExecContext(ctx, queryCreateTempTable); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to create temporary table")
-
-		return "", errors.Errorf("failed to create temporary table: %w", err)
-	}
 
 	queryCreateTable := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s (
@@ -216,10 +206,10 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, batchUUID string, schema
 	if _, err = tx.ExecContext(ctx, queryCreateTable); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to create destination table")
 
-		return "", errors.Errorf("failed to create destination table: %w", err)
+		return errors.Errorf("failed to create destination table: %w", err)
 	}
 
-	return tempTable, tx.Commit()
+	return tx.Commit()
 }
 
 func (s *SnowflakeCSV) PutFileInStage(ctx context.Context, buf *bytes.Buffer, filename string) error {
@@ -260,7 +250,7 @@ func (s *SnowflakeCSV) PutFileInStage(ctx context.Context, buf *bytes.Buffer, fi
 	return nil
 }
 
-func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilename, updatesFilename string,
+func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, insertsFilename, updatesFilename string,
 	colOrder []string, schema map[string]string,
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -276,77 +266,70 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		}
 	}()
 
+	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
+	updateSetCols := buildUpdateSetList("a", "b", colOrder)
+	// buildOrderingColumnList("a", "b", " AND ", indexCols)
+	colListA := buildFinalColumnList("a", ".", colOrder)
+	colListB := buildFinalColumnList("b", ".", colOrder)
+	setSelectMerge := buildSelectMerge(colOrder)
+
 	if insertsFilename != "" {
 		// COPY INTO for inserts
-		sdk.Logger(ctx).Debug().Msg("constructing query for COPY INTO for inserts")
-
-		//nolint:gosec // use proper SQL statement preparation
-		copyIntoQuery := fmt.Sprintf(`
-		COPY INTO %s FROM @%s
-		FILES = ('%s')
-		FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
-		MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE';`,
-			s.TableName,
-			s.Stage,
-			insertsFilename,
-		)
-
-		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
-
-		if _, err = tx.ExecContext(ctx, copyIntoQuery); err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to copy file %s in %s", insertsFilename, s.TableName)
-
-			return errors.Errorf("failed to copy file %s in %s: %w", insertsFilename, s.TableName, err)
-		}
-		sdk.Logger(ctx).Info().Msg("ran COPY INTO for inserts")
-	}
-
-	if updatesFilename != "" {
-		// COPY INTO for updates
-		//nolint:gosec // use proper SQL statement preparation
-		copyIntoQuery := fmt.Sprintf(`
-			COPY INTO %s FROM @%s
-			FILES = ('%s')
-			FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ','  PARSE_HEADER = TRUE)
-			MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE';`,
-			tempTable,
-			s.Stage,
-			updatesFilename,
-		)
-
-		sdk.Logger(ctx).Debug().Msgf("executing: %s", copyIntoQuery)
-
-		if _, err = tx.ExecContext(ctx, copyIntoQuery); err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to copy file %s in temp %s", updatesFilename, tempTable)
-
-			return errors.Errorf("failed to copy file %s in temp %s: %w", updatesFilename, tempTable, err)
-		}
-
-		sdk.Logger(ctx).Info().Msg("ran COPY INTO for updates/deletes")
-
-		// MERGE
-		orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey) // buildOrderingColumnList("a", "b", " AND ", indexCols)
-		colListA := buildFinalColumnList("a", ".", colOrder)
-		colListB := buildFinalColumnList("b", ".", colOrder)
+		sdk.Logger(ctx).Debug().Msg("constructing merge query for inserts")
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
-			`MERGE INTO %s as a USING %s AS b ON %s
-			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET a.%s_updated_at = b.%s_updated_at
-			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET a.%s_deleted_at = b.%s_deleted_at
-			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
-			WHEN NOT MATCHED AND b.%s_operation = 'delete' THEN INSERT  (%s) VALUES (%s) `,
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  csv ) )AS b ON %s
+			WHEN MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN UPDATE SET %s
+			WHEN NOT MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN INSERT  (%s) VALUES (%s) ; `,
 			s.TableName,
-			tempTable,
+			setSelectMerge,
+			s.Stage,
+			insertsFilename,
 			orderingColumnList,
 			// second line
 			s.Prefix,
 			s.Prefix,
-			s.Prefix,
+			updateSetCols,
 			// third line
 			s.Prefix,
 			s.Prefix,
+			colListA,
+			colListB,
+		)
+
+		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
+
+		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, insertsFilename)
+
+			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
+		}
+
+		sdk.Logger(ctx).Info().Msg("ran MERGE for inserts")
+	}
+
+	if updatesFilename != "" {
+		sdk.Logger(ctx).Debug().Msg("constructing merge query for update / delete")
+
+		//nolint:gosec // not an issue
+		queryMergeInto := fmt.Sprintf(
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  csv ) )AS b ON %s
+			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s
+			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
+			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
+			WHEN NOT MATCHED AND b.%s_operation = 'delete' THEN INSERT  (%s) VALUES (%s) ; `,
+			s.TableName,
+			setSelectMerge,
+			s.Stage,
+			insertsFilename,
+			orderingColumnList,
+			// second line
 			s.Prefix,
+			updateSetCols,
+			// third line
+			s.Prefix,
+			updateSetCols,
 			// fourth line
 			s.Prefix,
 			colListA,
@@ -360,9 +343,9 @@ func (s *SnowflakeCSV) CopyAndMerge(ctx context.Context, tempTable, insertsFilen
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
 
 		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, tempTable)
+			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, updatesFilename)
 
-			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, tempTable, err)
+			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
 		}
 
 		sdk.Logger(ctx).Info().Msg("ran MERGE for updates/deletes")
@@ -381,6 +364,24 @@ func buildFinalColumnList(table, delimiter string, cols []string) string {
 	ret := make([]string, len(cols))
 	for i, colName := range cols {
 		ret[i] = strings.Join([]string{table, colName}, delimiter)
+	}
+
+	return strings.Join(ret, ", ")
+}
+
+func buildUpdateSetList(table1, table2 string, cols []string) string {
+	ret := make([]string, len(cols))
+	for i, colName := range cols {
+		ret[i] = fmt.Sprintf("%s.%s = %s.%s", table1, colName, table2, colName)
+	}
+
+	return strings.Join(ret, ", ")
+}
+
+func buildSelectMerge(cols []string) string {
+	ret := make([]string, len(cols))
+	for i, colName := range cols {
+		ret[i] = fmt.Sprintf("$%d %s", i+1, colName)
 	}
 
 	return strings.Join(ret, ", ")
