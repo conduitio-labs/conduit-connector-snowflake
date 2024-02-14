@@ -168,25 +168,34 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// process schema off records, initialize if not set, need a single snapshot/create
 	updates = append(updates, deletes...)
 
-	p := pool.New().WithErrors()
-
-	workers := runtime.GOMAXPROCS(0)
+	workers := func() int {
+		maxProcs := runtime.GOMAXPROCS(0)
+		numCPU := runtime.NumCPU()
+		if maxProcs < numCPU {
+			return maxProcs
+		}
+		return numCPU
+	}()
 	chunked := chunks.Split(inserts, len(inserts)/workers)
+	p := pool.New().WithMaxGoroutines(workers).WithErrors()
 
 	sdk.Logger(ctx).Debug().
 		Int("chunks", len(chunked)).
 		Int("workers", workers).
 		Msg("split records in chunks")
 
-	for i, c := range chunked {
+	for i := range chunked {
+		n := i
+
 		p.Go(func() error {
 			_, err := w.insert(
-				context.WithValue(ctx, reqIDctxKey{}, fmt.Sprintf("%s-%d", requestID(ctx), i)),
-				c,
+				context.WithValue(ctx, reqIDctxKey{}, fmt.Sprintf("%s-%d", requestID(ctx), n)),
+				chunked[n],
 			)
 			if err != nil {
-				return errors.Errorf("%d: failed to insert %d records: %w", i, len(c), err)
+				return errors.Errorf("%d: failed to insert %d records: %w", n, len(chunked[n]), err)
 			}
+
 			return nil
 		})
 	}
@@ -213,9 +222,11 @@ func (w *Avro) Write(ctx context.Context, records []sdk.Record) (int, error) {
 func (w *Avro) insert(ctx context.Context, records []*sdk.Record) (int, error) {
 	start := time.Now()
 	buf := w.insertBufPool.Get().(*bytes.Buffer)
-	buf.Reset()
 
-	defer w.insertBufPool.Put(buf)
+	defer func() {
+		buf.Reset()
+		w.insertBufPool.Put(buf)
+	}()
 
 	encoder, err := ocf.NewEncoder(
 		w.schema.String(),
