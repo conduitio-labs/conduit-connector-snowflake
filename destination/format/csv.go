@@ -136,7 +136,13 @@ func MakeCSVBytes(
 			l.latestRecord = &records[i]
 		}
 	}
+	sdk.Logger(ctx).Debug().Msgf("latest record map %+v",
+		latestRecordMap)
 
+	for key, rec := range latestRecordMap {
+		sdk.Logger(ctx).Debug().Msgf("latest record map record - %s  - %+v",
+			key, rec.latestRecord)
+	}
 	// Process CSV records in parallel with goroutines
 	var (
 		wg                                 sync.WaitGroup
@@ -150,17 +156,26 @@ func MakeCSVBytes(
 	recordsPerRoutine := (len(latestRecordMap) + numGoroutines - 1) / numGoroutines
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines with %d records per routine",
 		numGoroutines, recordsPerRoutine)
+	dedupedRecords := maps.Values(latestRecordMap)
+
+	sdk.Logger(ctx).Debug().Msgf("deduped records - %+v",
+		dedupedRecords)
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
 
+			sdk.Logger(ctx).Debug().Msgf("current index - %d  ", index)
+
 			start := index * recordsPerRoutine
 			end := start + recordsPerRoutine
 			if end > len(latestRecordMap) {
 				end = len(latestRecordMap)
 			}
+
+			sdk.Logger(ctx).Debug().Msgf("start index - %d  ", start)
+			sdk.Logger(ctx).Debug().Msgf("end index - %d  ", end)
 
 			// each goroutine gets its own set of buffers
 			insertsBuffers[index] = new(bytes.Buffer)
@@ -169,7 +184,8 @@ func MakeCSVBytes(
 			insertW := csv.NewWriter(insertsBuffers[index])
 			updateW := csv.NewWriter(updatesBuffers[index])
 
-			dedupedRecords := maps.Values(latestRecordMap)
+			sdk.Logger(ctx).Debug().Msgf("Processing chunk on index %d, start %d, end %d - %+v ", index, start, end, dedupedRecords[start:end][0].latestRecord)
+
 			inserts, updates, err := createCSVRecords(ctx, dedupedRecords[start:end], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
@@ -335,6 +351,7 @@ func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
 
 func joinBuffers(buffers []*bytes.Buffer, w *gzip.Writer) error {
 	for _, buf := range buffers {
+		fmt.Printf(" @@@ --- buf bytes  %s /n ", buf.Bytes())
 		if _, err := buf.WriteTo(w); err != nil {
 			w.Close()
 			return err
