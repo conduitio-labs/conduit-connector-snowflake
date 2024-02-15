@@ -29,7 +29,7 @@ type Config struct {
 	// Prefix to append to update_at , deleted_at, create_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
 	// Data type of file we upload and copy data from to snowflake
-	Format string `json:"snowflake.format" validate:"required,inclusion=csv|avro"`
+	Format string `json:"snowflake.format" default:"csv" validate:"required,inclusion=csv"`
 	// For CSV processing, the number of goroutines to concurrently process CSV rows.
 	CSVGoroutines int `json:"snowflake.csvGoroutines" default:"1"`
 	// Number of threads to run for PUT file uploads.
@@ -37,8 +37,10 @@ type Config struct {
 }
 
 const (
-	SnowflakeStage        = "snowflake.stage"
-	SnowflakePrimaryKey   = "snowflake.primaryKey"
-	SnowflakeNamingPrefix = "snowflake.namingPrefix"
-	SnowflakeFormat       = "snowflake.format"
+	SnowflakeStage             = "snowflake.stage"
+	SnowflakePrimaryKey        = "snowflake.primaryKey"
+	SnowflakeNamingPrefix      = "snowflake.namingPrefix"
+	SnowflakeFormat            = "snowflake.format"
+	SnowflakeCSVGoRoutines     = "snowflake.csvGoroutines"
+	SnowflakeFileUploadThreads = "snowflake.fileUploadThreads"
 )

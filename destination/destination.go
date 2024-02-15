@@ -61,10 +61,6 @@ func (d *Destination) Parameters() map[string]sdk.Parameter {
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
 
-	// TODO: add configuration for ordering column (aka primary key)
-	// right now, we will automatically detect the key from the key within the record,
-	// but it would be great to have flexibility in case the user wants to key on a different
-
 	err := sdk.Util.ParseConfig(cfg, &d.Config)
 	if err != nil {
 		return errors.Errorf("failed to parse destination config: %w", err)

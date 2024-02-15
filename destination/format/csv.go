@@ -28,7 +28,13 @@ import (
 )
 
 const (
-	isoFormat = `YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM`
+	isoFormat          = `YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM`
+	snowflakeTimeStamp = "TIMESTAMP_LTZ"
+	snowflakeVarchar   = "VARCHAR"
+	snowflakeVariant   = "VARIANT"
+	snowflakeIntiger   = "INTEGER"
+	snowflakeBoolean   = "BOOLEAN"
+	snowflakeFloat     = "FLOAT"
 )
 
 type recordSummary struct {
@@ -36,6 +42,13 @@ type recordSummary struct {
 	createdAt    string
 	deletedAt    string
 	latestRecord *sdk.Record
+}
+
+type meroxaColumns struct {
+	operationColumn string
+	createdAtColumn string
+	updatedAtColumn string
+	deletedAtColumn string
 }
 
 func MakeCSVBytes(
@@ -54,17 +67,24 @@ func MakeCSVBytes(
 	updatesWriter := csv.NewWriter(updateGzipWriter)
 
 	// we need to store the operation in a column, to detect updates & deletes
-	operationColumn := fmt.Sprintf("%s_operation", prefix)
-	createdAtColumn := fmt.Sprintf("%s_created_at", prefix)
-	updatedAtColumn := fmt.Sprintf("%s_updated_at", prefix)
-	deletedAtColumn := fmt.Sprintf("%s_deleted_at", prefix)
+	meroxaColumns := meroxaColumns{
+		operationColumn: fmt.Sprintf("%s_operation", prefix),
+		createdAtColumn: fmt.Sprintf("%s_created_at", prefix),
+		updatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
+		deletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
+	}
 
-	schema[operationColumn] = "VARCHAR"
-	schema[createdAtColumn] = "TIMESTAMP_LTZ"
-	schema[updatedAtColumn] = "TIMESTAMP_LTZ"
-	schema[deletedAtColumn] = "TIMESTAMP_LTZ"
+	schema[meroxaColumns.operationColumn] = snowflakeVarchar
+	schema[meroxaColumns.createdAtColumn] = snowflakeTimeStamp
+	schema[meroxaColumns.updatedAtColumn] = snowflakeTimeStamp
+	schema[meroxaColumns.deletedAtColumn] = snowflakeTimeStamp
 
-	csvColumnOrder := []string{operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn}
+	csvColumnOrder := []string{
+		meroxaColumns.operationColumn,
+		meroxaColumns.createdAtColumn,
+		meroxaColumns.updatedAtColumn,
+		meroxaColumns.deletedAtColumn,
+	}
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
@@ -86,17 +106,17 @@ func MakeCSVBytes(
 			csvColumnOrder = append(csvColumnOrder, key)
 			switch val.(type) {
 			case int, int8, int16, int32, int64:
-				schema[key] = "INTEGER"
+				schema[key] = snowflakeIntiger
 			case float32, float64:
-				schema[key] = "FLOAT"
+				schema[key] = snowflakeFloat
 			case bool:
-				schema[key] = "BOOLEAN"
+				schema[key] = snowflakeBoolean
 			case nil:
 				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-				schema[key] = "VARIANT"
+				schema[key] = snowflakeVariant
 			default:
-				schema[key] = "VARCHAR"
+				schema[key] = snowflakeVarchar
 			}
 		}
 	}
@@ -164,7 +184,12 @@ func MakeCSVBytes(
 			insertW := csv.NewWriter(insertsBuffers[index])
 			updateW := csv.NewWriter(updatesBuffers[index])
 
-			inserts, updates, err := createCSVRecords(ctx, recordChunks[index], insertW, updateW, csvColumnOrder, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn)
+			inserts, updates, err := createCSVRecords(ctx,
+				recordChunks[index],
+				insertW,
+				updateW,
+				csvColumnOrder,
+				meroxaColumns)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
 				return
@@ -227,8 +252,12 @@ func MakeCSVBytes(
 	return csvColumnOrder, nil
 }
 
-func createCSVRecords(ctx context.Context, recordSummaries []*recordSummary, insertsWriter, updatesWriter *csv.Writer,
-	csvColumnOrder []string, operationColumn, createdAtColumn, updatedAtColumn, deletedAtColumn string,
+func createCSVRecords(
+	ctx context.Context,
+	recordSummaries []*recordSummary,
+	insertsWriter, updatesWriter *csv.Writer,
+	csvColumnOrder []string,
+	m meroxaColumns,
 ) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
 
@@ -247,13 +276,13 @@ func createCSVRecords(ctx context.Context, recordSummaries []*recordSummary, ins
 
 		for j, c := range csvColumnOrder {
 			switch {
-			case c == operationColumn:
+			case c == m.operationColumn:
 				row[j] = r.Operation.String()
-			case c == createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+			case c == m.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
 				row[j] = s.createdAt
-			case c == updatedAtColumn && r.Operation == sdk.OperationUpdate:
+			case c == m.updatedAtColumn && r.Operation == sdk.OperationUpdate:
 				row[j] = s.updatedAt
-			case c == deletedAtColumn && r.Operation == sdk.OperationDelete:
+			case c == m.deletedAtColumn && r.Operation == sdk.OperationDelete:
 				row[j] = s.deletedAt
 			case data[c] == nil:
 				row[j] = ""

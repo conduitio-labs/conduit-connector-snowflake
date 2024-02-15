@@ -22,12 +22,12 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Validations: []sdk.Validation{},
 		},
 		"snowflake.format": {
-			Default:     "",
+			Default:     "csv",
 			Description: "Data type of file we upload and copy data from to snowflake",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},
-				sdk.ValidationInclusion{List: []string{"csv", "avro"}},
+				sdk.ValidationInclusion{List: []string{"csv"}},
 			},
 		},
 		"snowflake.namingPrefix": {
