@@ -31,6 +31,10 @@ import (
 	sf "github.com/snowflakedb/gosnowflake"
 )
 
+const (
+	csvFileFormatName = "CSV_CONDUIT_SNOWFLAKE"
+)
+
 // Writer is an interface that is responsible for persisting record that Destination
 // has accumulated in its buffers. The default writer the Destination would use is
 // SnowflakeWriter, others exists to test local behavior.
@@ -52,9 +56,10 @@ type SnowflakeCSV struct {
 
 	evolver *schema.Evolver
 
-	insertsBuf *bytes.Buffer
-	updatesBuf *bytes.Buffer
-	schema     schema.Schema
+	insertsBuf    *bytes.Buffer
+	updatesBuf    *bytes.Buffer
+	compressedBuf *bytes.Buffer
+	schema        schema.Schema
 }
 
 type setListMode string
@@ -95,6 +100,18 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
+	if _, err := db.ExecContext(
+		ctx,
+		fmt.Sprintf(`
+			CREATE OR REPLACE FILE FORMAT %s
+				TYPE = 'csv'
+				FIELD_DELIMITER = ','
+				FIELD_OPTIONALLY_ENCLOSED_BY='"'
+		`, csvFileFormatName),
+	); err != nil {
+		return nil, errors.Errorf("failed to create custom csv file format: %w", err)
+	}
+
 	return &SnowflakeCSV{
 		Prefix:        cfg.Prefix,
 		PrimaryKey:    cfg.PrimaryKey,
@@ -106,18 +123,20 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		evolver:       schema.NewEvolver(db),
 		insertsBuf:    &bytes.Buffer{},
 		updatesBuf:    &bytes.Buffer{},
+		compressedBuf: &bytes.Buffer{},
 	}, nil
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+	/*
+		dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+		sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+			sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
-		return errors.Errorf("failed to gracefully close the connection: %w", err)
-	}
-
+			return errors.Errorf("failed to gracefully close the connection: %w", err)
+		}
+	*/
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
@@ -140,13 +159,15 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
 		}
 
-		migrated, err := s.evolver.Migrate(ctx, s.TableName, s.schema)
-		if err != nil {
-			return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
-		}
+		// N.B. Disable until table is created by the migrator
+		//
+		// migrated, err := s.evolver.Migrate(ctx, s.TableName, s.schema)
+		// if err != nil {
+		//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
+		// }
 
 		sdk.Logger(ctx).Debug().
-			Bool("success", migrated).
+			// Bool("success", migrated).
 			Msg("schema initialized and migration completed")
 	}
 
@@ -245,26 +266,30 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.Buffer) error {
 	start := time.Now()
 
-	// preallocate buf, but this should be a buf pool
-	compressedBuf := bytes.NewBuffer(make([]byte, buf.Len()/2))
-	gzip := gzip.NewWriter(compressedBuf)
+	defer s.compressedBuf.Reset()
 
-	if _, err := buf.WriteTo(gzip); err != nil {
+	gzbuf := gzip.NewWriter(s.compressedBuf)
+
+	if _, err := buf.WriteTo(gzbuf); err != nil {
 		return errors.Errorf("failed to compress buffer: %w", err)
+	}
+
+	if err := gzbuf.Close(); err != nil {
+		return errors.Errorf("failed to close gzip stream: %w", err)
 	}
 
 	sdk.Logger(ctx).Debug().
 		Dur("duration", time.Since(start)).
-		Int("compression_ratio", buf.Len()/compressedBuf.Len()).
+		Int("compression_ratio", buf.Len()/s.compressedBuf.Len()).
 		Msg("finished compressing")
 
-	ctx = sf.WithFileStream(ctx, compressedBuf)
+	ctx = sf.WithFileStream(ctx, s.compressedBuf)
 	ctx = sf.WithFileTransferOptions(ctx, &sf.SnowflakeFileTransferOptions{
 		RaisePutGetError: true,
 	})
 
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(
-		"PUT file://%s @%s SOURCE_COMPRESSION=true PARALLEL=%d", filename, s.Stage, s.FileThreads,
+		"PUT file://%s @%s SOURCE_COMPRESSION=gzip PARALLEL=%d", filename, s.Stage, s.FileThreads,
 	)); err != nil {
 		return errors.Errorf("failed to upload %q to stage %q: %w", filename, s.Stage, err)
 	}
@@ -312,13 +337,14 @@ func (s *SnowflakeCSV) CopyAndMerge(
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
-			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  csv ) )AS b ON %s
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) )AS b ON %s
 			WHEN MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN UPDATE SET %s
 			WHEN NOT MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN INSERT  (%s) VALUES (%s) ; `,
 			s.TableName,
 			setSelectMerge,
 			s.Stage,
 			insertsFilename,
+			csvFileFormatName,
 			orderingColumnList,
 			// second line
 			s.Prefix,
@@ -347,7 +373,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
-			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  csv ) )AS b ON %s
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) )AS b ON %s
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s
 			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
 			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
@@ -356,6 +382,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 			setSelectMerge,
 			s.Stage,
 			updatesFilename,
+			csvFileFormatName,
 			orderingColumnList,
 			// second line
 			s.Prefix,

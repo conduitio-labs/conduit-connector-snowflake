@@ -25,22 +25,28 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	sf "github.com/snowflakedb/gosnowflake"
+)
+
+const (
+	ErrMissingSQLState = "42S02"
+	ErrMissingCode     = 2003
 )
 
 type snowflkaeTableDef struct {
-	name            string
-	typ             string
-	kind            string
-	isNull          string
-	defaultVal      *string
-	pkey            string
-	uniqKey         string
-	check           *string
-	exp             *string
-	comment         *string
-	policyName      *string
-	privacyDomain   *string
-	schemaEvolution *string
+	name          string
+	typ           string
+	kind          string
+	isNull        string
+	defaultVal    *string
+	pkey          string
+	uniqKey       string
+	check         *string
+	exp           *string
+	comment       *string
+	policyName    *string
+	privacyDomain *string
+	// schemaEvolution *string - only visible when schema evolution is enabled
 }
 
 var snowflakeTypes = map[reflect.Kind]string{
@@ -66,7 +72,7 @@ func NewEvolver(db *sql.DB) *Evolver {
 
 // Migrate evolves the snowflake table to match that of the provided schema.
 func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, error) {
-	start := time.Now()
+	tableFields := make(map[string]string)
 
 	// find all fields of the current table
 	rows, err := e.db.QueryContext(
@@ -74,11 +80,13 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, 
 		fmt.Sprintf("DESC TABLE %s", table),
 	)
 	if err != nil {
+		if notFound(err) {
+			return e.migrateTable(ctx, table, sch, tableFields) // table not found make it
+		}
+
 		return false, errors.Errorf("failed to describe table %q: %w", table, err)
 	}
 	defer rows.Close()
-
-	tableFields := make(map[string]string)
 
 	for rows.Next() {
 		var s snowflkaeTableDef
@@ -87,7 +95,7 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, 
 			&s.name, &s.typ, &s.kind, &s.isNull,
 			&s.defaultVal, &s.pkey, &s.uniqKey,
 			&s.check, &s.exp, &s.comment, &s.policyName,
-			&s.privacyDomain, &s.schemaEvolution,
+			&s.privacyDomain, // &s.schemaEvolution,
 		); err != nil {
 			return false, errors.Errorf("failed to scan rows: %w", err)
 		}
@@ -99,10 +107,16 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, 
 		return false, errors.Errorf("failed to iterate over rows result: %w", err)
 	}
 
+	return e.migrateTable(ctx, table, sch, tableFields)
+}
+
+func (e *Evolver) migrateTable(ctx context.Context, table string, sch Schema, fields map[string]string) (bool, error) {
+	start := time.Now()
+
 	var newColumns []string
 
 	for k, v := range sch {
-		if _, ok := tableFields[k]; ok {
+		if _, ok := fields[k]; ok {
 			continue // exists, ignore type
 		}
 
@@ -136,4 +150,12 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, 
 	sdk.Logger(ctx).Debug().Dur("duration", time.Since(start)).Msgf("finished migrating schema")
 
 	return true, nil
+}
+
+func notFound(err error) bool {
+	if nErr := err.(*sf.SnowflakeError); nErr != nil {
+		return nErr.Number == ErrMissingCode && nErr.SQLState == ErrMissingSQLState
+	}
+
+	return false
 }
