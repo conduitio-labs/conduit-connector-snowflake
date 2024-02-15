@@ -30,7 +30,7 @@ func init() {
 	slices.Sort(values)
 
 	if slices.Compare(keys, values) != 0 {
-		panic("schema types mismatch")
+		panic("schema  types mismatch")
 	}
 }
 
@@ -48,7 +48,7 @@ var schemaTypes = map[string]reflect.Kind{
 	"FLOAT64": reflect.Float64,
 }
 
-func NewSchema(kcs KafkaConnectSchema) (Schema, error) {
+func New(kcs KafkaConnectSchema) (Schema, error) {
 	sch := make(Schema)
 
 	for k, v := range kcs {

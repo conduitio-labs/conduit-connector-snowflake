@@ -133,7 +133,7 @@ func (e *Evolver) Migrate(ctx context.Context, table string, sch Schema) (bool, 
 		return false, errors.Errorf("failed to evolve schema on table %q: %w", table, err)
 	}
 
-	sdk.Logger(ctx).Debug().Dur("duration", time.Now().Sub(start)).Msgf("finished migrating schema")
+	sdk.Logger(ctx).Debug().Dur("duration", time.Since(start)).Msgf("finished migrating schema")
 
 	return true, nil
 }

@@ -16,7 +16,6 @@ package format
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -28,7 +27,6 @@ import (
 )
 
 const (
-	isoFormat          = `YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM`
 	snowflakeTimeStamp = "TIMESTAMP_LTZ"
 	snowflakeVarchar   = "VARCHAR"
 	snowflakeVariant   = "VARIANT"
@@ -61,10 +59,8 @@ func MakeCSVBytes(
 	updatesBuf *bytes.Buffer,
 	numGoroutines int,
 ) (columnOrder []string, err error) {
-	insertGzipWriter := gzip.NewWriter(insertsBuf)
-	updateGzipWriter := gzip.NewWriter(updatesBuf)
-	insertsWriter := csv.NewWriter(insertGzipWriter)
-	updatesWriter := csv.NewWriter(updateGzipWriter)
+	insertsWriter := csv.NewWriter(insertsBuf)
+	updatesWriter := csv.NewWriter(updatesBuf)
 
 	// we need to store the operation in a column, to detect updates & deletes
 	meroxaColumns := meroxaColumns{
@@ -192,6 +188,7 @@ func MakeCSVBytes(
 				meroxaColumns)
 			if err != nil {
 				errChan <- errors.Errorf("failed to create CSV records: %w", err)
+
 				return
 			}
 
@@ -216,17 +213,8 @@ func MakeCSVBytes(
 			return nil, errors.Errorf("failed to write insert headers: %w", err)
 		}
 
-		insertsWriter.Flush()
-		if err := insertsWriter.Error(); err != nil {
-			return nil, errors.Errorf("failed to flush insertsWriter: %w", err)
-		}
-
-		if err := joinBuffers(insertsBuffers, insertGzipWriter); err != nil {
+		if err := joinBuffers(insertsBuffers, insertsBuf); err != nil {
 			return nil, errors.Errorf("failed to join insert buffers: %w", err)
-		}
-
-		if err := insertGzipWriter.Close(); err != nil {
-			return nil, errors.Errorf("failed to close insertGzipWriter: %w", err)
 		}
 	}
 
@@ -235,17 +223,8 @@ func MakeCSVBytes(
 			return nil, errors.Errorf("failed to write update headers: %w", err)
 		}
 
-		updatesWriter.Flush()
-		if err := updatesWriter.Error(); err != nil {
-			return nil, errors.Errorf("failed to flush updatesWriter: %w", err)
-		}
-
-		if err := joinBuffers(updatesBuffers, updateGzipWriter); err != nil {
+		if err := joinBuffers(updatesBuffers, updatesBuf); err != nil {
 			return nil, errors.Errorf("failed to join update buffers: %w", err)
-		}
-
-		if err := updateGzipWriter.Close(); err != nil {
-			return nil, errors.Errorf("failed to close updateGzipWriter: %w", err)
 		}
 	}
 
@@ -253,7 +232,7 @@ func MakeCSVBytes(
 }
 
 func createCSVRecords(
-	ctx context.Context,
+	_ context.Context,
 	recordSummaries []*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
@@ -334,20 +313,26 @@ func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
 	return data, nil
 }
 
-func joinBuffers(buffers []*bytes.Buffer, w *gzip.Writer) error {
-	for _, buf := range buffers {
-		fmt.Printf(" @@@ --- buf bytes  %s /n ", buf.Bytes())
-		if _, err := buf.WriteTo(w); err != nil {
-			w.Close()
+func joinBuffers(buffers []*bytes.Buffer, w *bytes.Buffer) error {
+	var bufsize int
+	for _, b := range buffers {
+		bufsize += b.Len()
+	}
+
+	w.Grow(bufsize)
+
+	for _, b := range buffers {
+		if _, err := b.WriteTo(w); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // splitRecordChunks takes a slice of recordSummary and an integer n, then splits the slice into n chunks.
 // Note: The last chunk may have fewer elements if the slice size is not evenly divisible by n.
-// TODO: replace this with
+// TODO: replace this with.
 func splitRecordChunks(slice []*recordSummary, n int) [][]*recordSummary {
 	var chunks [][]*recordSummary
 
