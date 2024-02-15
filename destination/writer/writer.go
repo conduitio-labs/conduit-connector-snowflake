@@ -95,18 +95,6 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
 	}
 
-	if _, err := db.ExecContext(
-		ctx,
-		fmt.Sprintf(`
-			CREATE TABLE IF NOT EXISTS %s (
-				%s_operation VARCHAR",
-			) ENABLE_SCHEMA_EVOLUTION = true`,
-			cfg.TableName, cfg.Prefix,
-		),
-	); err != nil {
-		return nil, errors.Errorf("failed to create table %q: %w", cfg.TableName, err)
-	}
-
 	return &SnowflakeCSV{
 		Prefix:        cfg.Prefix,
 		PrimaryKey:    cfg.PrimaryKey,
@@ -460,7 +448,7 @@ func (s *SnowflakeCSV) initSchema(ctx context.Context, records []sdk.Record) err
 	}
 
 	sdk.Logger(ctx).Debug().
-		Str("schema", sch.String()).
+		Str("schema", fmt.Sprint(sch)).
 		Dur("duration", time.Since(start)).
 		Msg("schema created")
 
