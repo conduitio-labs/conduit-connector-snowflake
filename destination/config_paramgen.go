@@ -9,6 +9,15 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.compression": {
+			Default:     "gzip",
+			Description: "snowflake.compression to use when staging files in Snowflake",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+				sdk.ValidationInclusion{List: []string{"gzip", "zstd", "copy"}},
+			},
+		},
 		"snowflake.csvGoroutines": {
 			Default:     "1",
 			Description: "For CSV processing, the number of goroutines to concurrently process CSV rows.",

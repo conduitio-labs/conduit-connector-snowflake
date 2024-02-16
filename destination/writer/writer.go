@@ -16,7 +16,6 @@ package writer
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"fmt"
@@ -24,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/compress"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -59,7 +59,9 @@ type SnowflakeCSV struct {
 	insertsBuf    *bytes.Buffer
 	updatesBuf    *bytes.Buffer
 	compressedBuf *bytes.Buffer
-	schema        schema.Schema
+
+	compressor compress.Compressor
+	schema     schema.Schema
 }
 
 type setListMode string
@@ -84,6 +86,7 @@ type SnowflakeConfig struct {
 	Connection    string
 	CSVGoroutines int
 	FileThreads   int
+	Compression   string
 }
 
 // NewCSV takes an SnowflakeConfig reference and produces an SnowflakeCSV Writer.
@@ -112,6 +115,19 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		return nil, errors.Errorf("failed to create custom csv file format: %w", err)
 	}
 
+	var cmper compress.Compressor
+
+	switch cfg.Compression {
+	case compress.TypeGzip:
+		cmper = compress.Gzip{}
+	case compress.TypeZstd:
+		cmper = compress.Zstd{}
+	case compress.TypeCopy:
+		cmper = compress.Copy{}
+	default:
+		return nil, errors.Errorf("unrecognized compression type %q", cfg.Compression)
+	}
+
 	return &SnowflakeCSV{
 		Prefix:        cfg.Prefix,
 		PrimaryKey:    cfg.PrimaryKey,
@@ -121,6 +137,7 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		FileThreads:   cfg.FileThreads,
 		db:            db,
 		evolver:       schema.NewEvolver(db),
+		compressor:    cmper,
 		insertsBuf:    &bytes.Buffer{},
 		updatesBuf:    &bytes.Buffer{},
 		compressedBuf: &bytes.Buffer{},
@@ -265,22 +282,17 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 
 func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.Buffer) error {
 	start := time.Now()
+	sizein := buf.Len()
 
-	defer s.compressedBuf.Reset()
-
-	gzbuf := gzip.NewWriter(s.compressedBuf)
-
-	if _, err := buf.WriteTo(gzbuf); err != nil {
+	if err := s.compressor.Compress(buf, s.compressedBuf); err != nil {
 		return errors.Errorf("failed to compress buffer: %w", err)
 	}
-
-	if err := gzbuf.Close(); err != nil {
-		return errors.Errorf("failed to close gzip stream: %w", err)
-	}
+	defer s.compressedBuf.Reset()
 
 	sdk.Logger(ctx).Debug().
 		Dur("duration", time.Since(start)).
-		Int("compression_ratio", buf.Len()/s.compressedBuf.Len()).
+		Int("in", sizein).
+		Int("out", s.compressedBuf.Len()).
 		Msg("finished compressing")
 
 	ctx = sf.WithFileStream(ctx, s.compressedBuf)
@@ -289,7 +301,11 @@ func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.B
 	})
 
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(
-		"PUT file://%s @%s SOURCE_COMPRESSION=gzip PARALLEL=%d", filename, s.Stage, s.FileThreads,
+		"PUT file://%s @%s SOURCE_COMPRESSION=%s PARALLEL=%d",
+		filename,
+		s.Stage,
+		s.compressor.Name(),
+		s.FileThreads,
 	)); err != nil {
 		return errors.Errorf("failed to upload %q to stage %q: %w", filename, s.Stage, err)
 	}
@@ -337,7 +353,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
-			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) )AS b ON %s
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN UPDATE SET %s
 			WHEN NOT MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN INSERT  (%s) VALUES (%s) ; `,
 			s.TableName,
@@ -373,7 +389,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 
 		//nolint:gosec // not an issue
 		queryMergeInto := fmt.Sprintf(
-			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) )AS b ON %s
+			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s
 			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
 			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)

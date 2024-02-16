@@ -82,6 +82,7 @@ func (d *Destination) Open(ctx context.Context) error {
 			Connection:    d.Config.Connection,
 			CSVGoroutines: d.Config.CSVGoroutines,
 			FileThreads:   d.Config.FileUploadThreads,
+			Compression:   d.Config.Compression,
 		})
 		if err != nil {
 			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)
@@ -96,6 +97,8 @@ func (d *Destination) Open(ctx context.Context) error {
 
 func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	// TODO: change to debug, using info for now to test with mdpx
+	start := time.Now()
+
 	sdk.Logger(ctx).Info().Msgf("batch contains %d records", len(records))
 
 	// TLDR - we don't need to implement custom batching logic, it's already handled
@@ -109,6 +112,8 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	if err != nil {
 		return 0, errors.Errorf("failed to write records: %w", err)
 	}
+
+	sdk.Logger(ctx).Debug().Dur("duration", time.Since(start)).Msgf("finished processing records")
 
 	return n, nil
 }
