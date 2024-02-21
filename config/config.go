@@ -16,9 +16,6 @@ package config
 
 // Config represents configuration needed for Snowflake.
 type Config struct {
-	// Connection string connection to snowflake DB.
-	// Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
-	Connection string `json:"snowflake.url" validate:"required"`
 	// Table name.
 	Table string `json:"snowflake.table" validate:"required"`
 }

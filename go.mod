@@ -4,17 +4,15 @@ go 1.21.4
 
 require (
 	github.com/conduitio/conduit-connector-sdk v0.8.0
-	github.com/go-deeper/chunks v1.0.0
 	github.com/go-errors/errors v1.5.1
 	github.com/go-playground/validator/v10 v10.17.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
-	github.com/hamba/avro/v2 v2.19.0
 	github.com/huandu/go-sqlbuilder v1.25.0
 	github.com/jmoiron/sqlx v1.3.5
+	github.com/klauspost/compress v1.17.4
 	github.com/snowflakedb/gosnowflake v1.7.2
-	github.com/sourcegraph/conc v0.3.0
 	go.uber.org/multierr v1.11.0
 )
 
@@ -48,15 +46,10 @@ require (
 	github.com/form3tech-oss/jwt-go v3.2.5+incompatible // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
-	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect

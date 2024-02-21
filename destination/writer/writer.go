@@ -145,15 +145,13 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	/*
-		dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
-		sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-			sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
-			return errors.Errorf("failed to gracefully close the connection: %w", err)
-		}
-	*/
+		return errors.Errorf("failed to gracefully close the connection: %w", err)
+	}
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
 
@@ -348,7 +346,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 	sdk.Logger(ctx).Debug().Msgf("insertsFilename=%s, updatesFilename=%s", insertsFilename, updatesFilename)
 
 	if insertsFilename != "" {
-		// COPY INTO for inserts
+		// MERGE for inserts
 		sdk.Logger(ctx).Debug().Msg("constructing merge query for inserts")
 
 		//nolint:gosec // not an issue

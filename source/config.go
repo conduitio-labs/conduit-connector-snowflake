@@ -20,6 +20,9 @@ import "github.com/conduitio-labs/conduit-connector-snowflake/config"
 
 type Config struct {
 	config.Config
+	// Connection string connection to snowflake DB.
+	// Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
+	Connection string `json:"snowflake.url" validate:"required"`
 	// Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.
 	Columns []string `json:"snowflake.columns" default:"false"`
 	// Primary keys

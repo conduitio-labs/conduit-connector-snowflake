@@ -16,6 +16,8 @@ package destination
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 const (
 	defaultBatchDelay = time.Second * 5
 	defaultBatchSize  = 1000
+	keepAliveParam    = "CLIENT_SESSION_KEEP_ALIVE"
 )
 
 type Destination struct {
@@ -74,12 +77,13 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 func (d *Destination) Open(ctx context.Context) error {
 	switch strings.ToUpper(d.Config.Format) {
 	case format.TypeCSV.String():
+		connectionString := d.configureURL()
 		w, err := writer.NewCSV(ctx, &writer.SnowflakeConfig{
 			Prefix:        d.Config.NamingPrefix,
 			PrimaryKey:    d.Config.PrimaryKey,
 			Stage:         d.Config.Stage,
 			TableName:     d.Config.Table,
-			Connection:    d.Config.Connection,
+			Connection:    connectionString,
 			CSVGoroutines: d.Config.CSVGoroutines,
 			FileThreads:   d.Config.FileUploadThreads,
 			Compression:   d.Config.Compression,
@@ -128,4 +132,30 @@ func (d *Destination) Teardown(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (d *Destination) configureURL() string {
+	paramMap := map[string]string{
+		"warehouse":    d.Config.Warehouse,
+		keepAliveParam: strconv.FormatBool(d.Config.KeepAlive),
+	}
+
+	paramStrings := make([]string, len(paramMap))
+	i := 0
+	for k, v := range paramMap {
+		paramStrings[i] = fmt.Sprintf("%s=%s", k, v)
+		i++
+	}
+
+	paramStr := strings.Join(paramStrings, "&")
+
+	return fmt.Sprintf("%s:%s@%s:%d/%s/%s?%s",
+		d.Config.Username,
+		d.Config.Password,
+		d.Config.Host,
+		d.Config.Port,
+		d.Config.Database,
+		d.Config.Schema,
+		paramStr,
+	)
 }

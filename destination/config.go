@@ -22,8 +22,24 @@ import (
 
 type Config struct {
 	config.Config
-	// Snowflake Stage data is copied into before merge
-	Stage string `json:"snowflake.stage" default:"0"`
+	// Username for the snowflake connection
+	Username string `json:"snowflake.username" validate:"required"`
+	// Password for the snowflake connection
+	Password string `json:"snowflake.password" validate:"required"`
+	// Host for the snowflake connection
+	Host string `json:"snowflake.host" validate:"required"`
+	// Port for the snowflake connection
+	Port int `json:"snowflake.port" validate:"required"`
+	// Database for the snowflake connection
+	Database string `json:"snowflake.database" validate:"required"`
+	// Schema for the snowflake connection
+	Schema string `json:"snowflake.schema" validate:"required"`
+	// Warehouse for the snowflake connection
+	Warehouse string `json:"snowflake.warehouse" validate:"required"`
+	// Whether to keep the session alive even when the connection is idle.
+	KeepAlive bool `json:"snowflake.keepAlive" default:"true"`
+	// Snowflake Stage to use for uploading files before merging into destination table.
+	Stage string `json:"snowflake.stage" validate:"required"`
 	// Primary key of the source table
 	PrimaryKey string `json:"snowflake.primaryKey" validate:"required"`
 	// Prefix to append to update_at , deleted_at, create_at at destination table

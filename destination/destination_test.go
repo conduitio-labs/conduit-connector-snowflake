@@ -177,6 +177,13 @@ func Test_ParseConfig(t *testing.T) {
 	exampleConfig := map[string]string{
 		"snowflake.stage":        "orders_stage",
 		"snowflake.primaryKey":   "id",
+		"snowflake.username":     "u",
+		"snowflake.password":     "p",
+		"snowflake.host":         "localhost",
+		"snowflake.port":         "1818",
+		"snowflake.database":     "db",
+		"snowflake.schema":       "schema",
+		"snowflake.warehouse":    "testWarehouse",
 		"snowflake.namingPrefix": "meroxa",
 		"snowflake.format":       "csv",
 		"sdk.batch.size":         "10",
@@ -187,9 +194,15 @@ func Test_ParseConfig(t *testing.T) {
 
 	want := Config{
 		Config: config.Config{
-			Table:      "orders",
-			Connection: "u:p@localhost:1818/db/schema",
+			Table: "orders",
 		},
+		Username:     "u",
+		Password:     "p",
+		Host:         "localhost",
+		Port:         1818,
+		Database:     "db",
+		Schema:       "schema",
+		Warehouse:    "testWarehouse",
 		NamingPrefix: "meroxa",
 		PrimaryKey:   "id",
 		Stage:        "orders_stage",

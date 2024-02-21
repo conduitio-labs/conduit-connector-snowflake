@@ -24,6 +24,14 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Type:        sdk.ParameterTypeInt,
 			Validations: []sdk.Validation{},
 		},
+		"snowflake.database": {
+			Default:     "",
+			Description: "snowflake.database for the snowflake connection",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
+		},
 		"snowflake.fileUploadThreads": {
 			Default:     "30",
 			Description: "Number of threads to run for PUT file uploads.",
@@ -39,11 +47,41 @@ func (Config) Parameters() map[string]sdk.Parameter {
 				sdk.ValidationInclusion{List: []string{"csv"}},
 			},
 		},
+		"snowflake.host": {
+			Default:     "",
+			Description: "snowflake.host for the snowflake connection",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
+		},
+		"snowflake.keepAlive": {
+			Default:     "true",
+			Description: "Whether to keep the session alive even when the connection is idle.",
+			Type:        sdk.ParameterTypeBool,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.namingPrefix": {
 			Default:     "meroxa",
 			Description: "Prefix to append to update_at , deleted_at, create_at at destination table",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{},
+		},
+		"snowflake.password": {
+			Default:     "",
+			Description: "snowflake.password for the snowflake connection",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
+		},
+		"snowflake.port": {
+			Default:     "",
+			Description: "snowflake.port for the snowflake connection",
+			Type:        sdk.ParameterTypeInt,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
 		},
 		"snowflake.primaryKey": {
 			Default:     "",
@@ -53,11 +91,21 @@ func (Config) Parameters() map[string]sdk.Parameter {
 				sdk.ValidationRequired{},
 			},
 		},
-		"snowflake.stage": {
-			Default:     "0",
-			Description: "Snowflake snowflake.stage data is copied into before merge",
+		"snowflake.schema": {
+			Default:     "",
+			Description: "snowflake.schema for the snowflake connection",
 			Type:        sdk.ParameterTypeString,
-			Validations: []sdk.Validation{},
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
+		},
+		"snowflake.stage": {
+			Default:     "",
+			Description: "Snowflake snowflake.stage to use for uploading files before merging into destination table.",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
 		},
 		"snowflake.table": {
 			Default:     "",
@@ -67,9 +115,17 @@ func (Config) Parameters() map[string]sdk.Parameter {
 				sdk.ValidationRequired{},
 			},
 		},
-		"snowflake.url": {
+		"snowflake.username": {
 			Default:     "",
-			Description: "snowflake.url string connection to snowflake DB. Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-snowflake.url_String",
+			Description: "snowflake.username for the snowflake connection",
+			Type:        sdk.ParameterTypeString,
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
+		},
+		"snowflake.warehouse": {
+			Default:     "",
+			Description: "snowflake.warehouse for the snowflake connection",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},
