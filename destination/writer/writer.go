@@ -169,22 +169,27 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 
-	if s.schema == nil {
-		if err := s.initSchema(ctx, records); err != nil {
-			return 0, errors.Errorf("failed to initialize schema from records: %w", err)
-		}
+	// if s.schema == nil {
+	// 	if err := s.initSchema(ctx, records); err != nil {
+	// 		return 0, errors.Errorf("failed to initialize schema from records: %w", err)
+	// 	}
 
-		// N.B. Disable until table is created by the migrator
-		//
-		// migrated, err := s.evolver.Migrate(ctx, s.TableName, s.schema)
-		// if err != nil {
-		//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
-		// }
+	// 	// N.B. Disable until table is created by the migrator
+	// 	//
+	// 	// migrated, err := s.evolver.Migrate(ctx, s.TableName, s.schema)
+	// 	// if err != nil {
+	// 	//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
+	// 	// }
 
-		sdk.Logger(ctx).Debug().
-			// Bool("success", migrated).
-			Msg("schema initialized and migration completed")
-	}
+	// 	sdk.Logger(ctx).Debug().
+	// 		// Bool("success", migrated).
+	// 		Msg("schema initialized and migration completed")
+	// }
+
+	// log first record temporarily for debugging
+	sdk.Logger(ctx).Debug().Msgf("payload=%+v", records[0].Payload)
+	sdk.Logger(ctx).Debug().Msgf("payload.before=%+v", records[0].Payload.Before)
+	sdk.Logger(ctx).Debug().Msgf("payload.after=%+v", records[0].Payload.After)
 
 	schema := make(map[string]string)
 

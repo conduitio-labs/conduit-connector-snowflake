@@ -30,7 +30,7 @@ const (
 	snowflakeTimeStamp = "TIMESTAMP_LTZ"
 	snowflakeVarchar   = "VARCHAR"
 	snowflakeVariant   = "VARIANT"
-	snowflakeIntiger   = "INTEGER"
+	snowflakeInteger   = "INTEGER"
 	snowflakeBoolean   = "BOOLEAN"
 	snowflakeFloat     = "FLOAT"
 )
@@ -102,7 +102,7 @@ func MakeCSVBytes(
 			csvColumnOrder = append(csvColumnOrder, key)
 			switch val.(type) {
 			case int, int8, int16, int32, int64:
-				schema[key] = snowflakeIntiger
+				schema[key] = snowflakeInteger
 			case float32, float64:
 				schema[key] = snowflakeFloat
 			case bool:
