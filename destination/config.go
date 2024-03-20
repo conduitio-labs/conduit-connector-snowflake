@@ -43,7 +43,7 @@ type Config struct {
 	// Primary key of the source table
 	PrimaryKey string `json:"snowflake.primaryKey" validate:"required"`
 	// Prefix to append to update_at , deleted_at, create_at at destination table
-	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa"`
+	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa" validate:"required"`
 	// Data type of file we upload and copy data from to snowflake
 	Format string `json:"snowflake.format" default:"csv" validate:"required,inclusion=csv"`
 	// For CSV processing, the number of goroutines to concurrently process CSV rows.

@@ -65,7 +65,9 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Default:     "meroxa",
 			Description: "Prefix to append to update_at , deleted_at, create_at at destination table",
 			Type:        sdk.ParameterTypeString,
-			Validations: []sdk.Validation{},
+			Validations: []sdk.Validation{
+				sdk.ValidationRequired{},
+			},
 		},
 		"snowflake.password": {
 			Default:     "",

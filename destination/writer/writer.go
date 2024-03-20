@@ -162,10 +162,7 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 }
 
 func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
-	var (
-		colOrder []string
-		err      error
-	)
+	var err error
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 
@@ -190,13 +187,27 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	sdk.Logger(ctx).Debug().Msgf("payload=%+v", records[0].Payload)
 	sdk.Logger(ctx).Debug().Msgf("payload.before=%+v", records[0].Payload.Before)
 	sdk.Logger(ctx).Debug().Msgf("payload.after=%+v", records[0].Payload.After)
-
+	sdk.Logger(ctx).Debug().Msgf("key=%+v", records[0].Key)
+	// extract schema from payload
 	schema := make(map[string]string)
+	csvColumOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
+	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
 
-	colOrder, err = format.MakeCSVBytes(
+		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
+	}
+
+	// check if table already exists on snowflake, if yes, compare schema
+	err = s.CheckTable(ctx, records[0].Operation, s.PrimaryKey, schema)
+	if err != nil {
+		return 0, errors.Errorf("failed to checking table %q on snowflake: %w", s.TableName, err)
+	}
+
+	err = format.MakeCSVBytes(
 		ctx,
 		records,
-		schema,
+		csvColumOrder,
+		*meroxaColumns,
 		s.Prefix,
 		s.PrimaryKey,
 		s.insertsBuf,
@@ -241,7 +252,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		}
 	}
 
-	if err := s.CopyAndMerge(ctx, insertsFilename, updatesFilename, colOrder); err != nil {
+	if err := s.CopyAndMerge(ctx, insertsFilename, updatesFilename, csvColumOrder); err != nil {
 		return 0, errors.Errorf(
 			"failed to merge uploaded stage files %q, %q: %w",
 			insertsFilename,
@@ -251,6 +262,90 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	}
 
 	return len(records), nil
+}
+
+func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, primaryKey string, schema map[string]string) error {
+	snowflakeSchema := make(map[string]string)
+	var columnName, dataType, isNullable string
+
+	query := fmt.Sprintf(`
+					SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
+					FROM INFORMATION_SCHEMA.COLUMNS c
+					WHERE c.TABLE_NAME ilike '%s'
+					ORDER BY c.ORDINAL_POSITION;
+					`, s.TableName)
+
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", query)
+
+	response, err := s.db.Query(query)
+	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
+		return errors.Errorf("failed to check if table exists: %w", err)
+	}
+
+	defer response.Close()
+
+	// grab columns from snowflake if they exist
+	for response.Next() {
+		err := response.Scan(&columnName, &dataType, &isNullable)
+		if err != nil {
+			return err
+		}
+		//snowflake stores varchar as text on schema info, we use varchar in our schema def
+		if dataType == "TEXT" {
+			dataType = "VARCHAR"
+		}
+		snowflakeSchema[strings.ToLower(columnName)] = dataType
+	}
+
+	// if snowflake schema is empty, no need to check anything
+	if len(snowflakeSchema) == 0 {
+		return nil
+	}
+
+	// if operation is delete, we want to ensure that primary key is on dest table as well as meroxa columns
+	if operation == sdk.OperationDelete {
+		_, ok := snowflakeSchema[primaryKey]
+		if ok {
+			return nil
+		}
+		err := schemaMatches(schema, snowflakeSchema)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		// if its not delete, schemas should match exactly
+		if len(schema) != len(snowflakeSchema) {
+			sdk.Logger(ctx).Debug().Msgf("Snowflake Table Schema (%+v)", snowflakeSchema)
+			sdk.Logger(ctx).Debug().Msgf("Source Table Schema (%+v)", schema)
+			return errors.Errorf("table already exists on snowflake, source schema number of columns %d doesn't match destination table %d",
+				len(schema),
+				len(snowflakeSchema))
+		}
+
+		err := schemaMatches(schema, snowflakeSchema)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func schemaMatches(schema, snowflakeSchema map[string]string) error {
+	for k, v := range schema {
+		lowerK := strings.ToLower(k)
+		v2, ok := snowflakeSchema[lowerK]
+		if !ok {
+			return errors.Errorf("table already exists on snowflake, column %s doesn't exist on destination table ", k)
+		}
+		if strings.ToLower(v) != strings.ToLower(v2) {
+			return errors.Errorf("table already exists on snowflake, column %s with datatype %s doesn't match on destination table of datatype %s ", k, v, v2)
+		}
+	}
+	return nil
 }
 
 // creates temporary, and destination table if they don't exist already.

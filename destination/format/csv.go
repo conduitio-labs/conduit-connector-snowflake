@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -49,19 +50,12 @@ type meroxaColumns struct {
 	deletedAtColumn string
 }
 
-func MakeCSVBytes(
+func GetDataSchema(
 	ctx context.Context,
 	records []sdk.Record,
 	schema map[string]string,
 	prefix string,
-	primaryKey string,
-	insertsBuf *bytes.Buffer,
-	updatesBuf *bytes.Buffer,
-	numGoroutines int,
-) (columnOrder []string, err error) {
-	insertsWriter := csv.NewWriter(insertsBuf)
-	updatesWriter := csv.NewWriter(updatesBuf)
-
+) ([]string, *meroxaColumns, error) {
 	// we need to store the operation in a column, to detect updates & deletes
 	meroxaColumns := meroxaColumns{
 		operationColumn: fmt.Sprintf("%s_operation", prefix),
@@ -81,20 +75,20 @@ func MakeCSVBytes(
 		meroxaColumns.updatedAtColumn,
 		meroxaColumns.deletedAtColumn,
 	}
+
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
 
 	// Grab the schema from the first record.
 	// TODO: support schema evolution.
 	if len(records) == 0 {
-		return nil, errors.New("unexpected empty slice of records")
+		return nil, nil, errors.New("unexpected empty slice of records")
 	}
 
 	r := records[0]
-
-	data, err := extract(r.Operation, r.Payload)
+	data, err := extract(r.Operation, r.Payload, r.Key)
 	if err != nil {
-		return nil, errors.Errorf("failed to extract payload data: %w", err)
+		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
 
 	for key, val := range data {
@@ -117,6 +111,23 @@ func MakeCSVBytes(
 		}
 	}
 
+	return csvColumnOrder, &meroxaColumns, nil
+}
+
+func MakeCSVBytes(
+	ctx context.Context,
+	records []sdk.Record,
+	csvColumnOrder []string,
+	meroxaColumns meroxaColumns,
+	prefix string,
+	primaryKey string,
+	insertsBuf *bytes.Buffer,
+	updatesBuf *bytes.Buffer,
+	numGoroutines int,
+) (err error) {
+	insertsWriter := csv.NewWriter(insertsBuf)
+	updatesWriter := csv.NewWriter(updatesBuf)
+
 	// loop through records and de-dupe before converting to CSV
 	// this is done beforehand, so we can parallelize the CSV formatting
 	latestRecordMap := make(map[string]*recordSummary, len(records))
@@ -124,10 +135,10 @@ func MakeCSVBytes(
 
 	for i, r := range records {
 		readAt := r.Metadata["opencdc.readAt"]
-		s, err := extract(r.Operation, r.Payload)
+		s, err := extract(r.Operation, r.Payload, r.Key)
 		key := fmt.Sprint(s[primaryKey])
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		l, ok := latestRecordMap[key]
@@ -204,31 +215,31 @@ func MakeCSVBytes(
 	// check for errors from goroutines
 	for err := range errChan {
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	if insertsProcessed {
 		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return nil, errors.Errorf("failed to write insert headers: %w", err)
+			return errors.Errorf("failed to write insert headers: %w", err)
 		}
 
 		if err := joinBuffers(insertsBuffers, insertsBuf); err != nil {
-			return nil, errors.Errorf("failed to join insert buffers: %w", err)
+			return errors.Errorf("failed to join insert buffers: %w", err)
 		}
 	}
 
 	if updatesProcessed {
 		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return nil, errors.Errorf("failed to write update headers: %w", err)
+			return errors.Errorf("failed to write update headers: %w", err)
 		}
 
 		if err := joinBuffers(updatesBuffers, updatesBuf); err != nil {
-			return nil, errors.Errorf("failed to join update buffers: %w", err)
+			return errors.Errorf("failed to join update buffers: %w", err)
 		}
 	}
 
-	return csvColumnOrder, nil
+	return nil
 }
 
 func createCSVRecords(
@@ -248,7 +259,7 @@ func createCSVRecords(
 
 		row := make([]string, len(csvColumnOrder))
 
-		data, err := extract(r.Operation, r.Payload)
+		data, err := extract(r.Operation, r.Payload, r.Key)
 		if err != nil {
 			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
 		}
@@ -295,22 +306,37 @@ func createCSVRecords(
 	return len(inserts), len(updates), nil
 }
 
-func extract(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
+func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.StructuredData, error) {
+	var sdkData sdk.Data
 	if op == sdk.OperationDelete {
-		data, ok := payload.Before.(sdk.StructuredData)
-		if !ok {
-			return nil, errors.Errorf("payload.before does not contain structured data (%T)", payload.Before)
+		sdkData = payload.Before
+	} else {
+		sdkData = payload.After
+	}
+
+	dataStruct, okStruct := sdkData.(sdk.StructuredData)
+	dataRaw, okRaw := sdkData.(sdk.RawData)
+
+	if !okStruct && !okRaw {
+		dataStruct, okStruct = key.(sdk.StructuredData)
+		dataRaw, okRaw = key.(sdk.RawData)
+		if !okRaw && !okStruct {
+			return nil, errors.Errorf("cannot find data either in payload (%T) or key (%T)", sdkData, key)
 		}
+		sdkData = key
+	}
 
+	if okStruct {
+		return dataStruct, nil
+	} else if okRaw {
+		data := make(sdk.StructuredData)
+		if err := json.Unmarshal(dataRaw, &payload); err != nil {
+			return nil, errors.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
+		}
 		return data, nil
+	} else {
+		return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 	}
-
-	data, ok := payload.After.(sdk.StructuredData)
-	if !ok {
-		return nil, errors.Errorf("payload.after does not contain structured data (%T)", payload.After)
-	}
-
-	return data, nil
 }
 
 func joinBuffers(buffers []*bytes.Buffer, w *bytes.Buffer) error {
