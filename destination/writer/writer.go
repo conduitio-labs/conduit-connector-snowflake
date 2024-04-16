@@ -190,7 +190,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	sdk.Logger(ctx).Debug().Msgf("key=%+v", records[0].Key)
 	// extract schema from payload
 	schema := make(map[string]string)
-	csvColumOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
+	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
 
@@ -206,7 +206,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	err = format.MakeCSVBytes(
 		ctx,
 		records,
-		csvColumOrder,
+		csvColumnOrder,
 		*meroxaColumns,
 		s.Prefix,
 		s.PrimaryKey,
@@ -252,7 +252,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		}
 	}
 
-	if err := s.CopyAndMerge(ctx, insertsFilename, updatesFilename, csvColumOrder); err != nil {
+	if err := s.Merge(ctx, insertsFilename, updatesFilename, csvColumnOrder); err != nil {
 		return 0, errors.Errorf(
 			"failed to merge uploaded stage files %q, %q: %w",
 			insertsFilename,
@@ -415,7 +415,7 @@ func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.B
 	return nil
 }
 
-func (s *SnowflakeCSV) CopyAndMerge(
+func (s *SnowflakeCSV) Merge(
 	ctx context.Context,
 	insertsFilename,
 	updatesFilename string,
@@ -426,7 +426,7 @@ func (s *SnowflakeCSV) CopyAndMerge(
 		return err
 	}
 
-	sdk.Logger(ctx).Info().Msg("start of copyandmerge")
+	sdk.Logger(ctx).Debug().Msg("start of merge")
 
 	defer func() {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {

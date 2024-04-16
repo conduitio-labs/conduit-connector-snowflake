@@ -202,9 +202,14 @@ func MakeCSVBytes(
 
 				return
 			}
+			
+			if inserts > 0 {
+				insertsProcessed = true
+			}
 
-			insertsProcessed = inserts > 0
-			updatesProcessed = updates > 0
+			if updates > 0 {
+				updatesProcessed = true
+			}
 		}(i)
 	}
 
