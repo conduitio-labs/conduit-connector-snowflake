@@ -125,6 +125,7 @@ func GetDataSchema(
 	return csvColumnOrder, &connectorColumns, nil
 }
 
+//nolint:gocyclo // TODO: refactor this function, make it more modular and readable.
 func MakeCSVBytes(
 	ctx context.Context,
 	records []sdk.Record,
@@ -175,9 +176,7 @@ func MakeCSVBytes(
 	}
 
 	// Process CSV records in parallel with goroutines
-	var (
-		wg                                 sync.WaitGroup
-	)
+	var wg sync.WaitGroup
 	insertsBuffers := make([]*bytes.Buffer, numGoroutines)
 	updatesBuffers := make([]*bytes.Buffer, numGoroutines)
 	errChan := make(chan error, numGoroutines)
