@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -61,7 +60,7 @@ type SnowflakeCSV struct {
 	compressedBuf *bytes.Buffer
 
 	compressor compress.Compressor
-	schema     schema.Schema
+	// schema     schema.Schema
 }
 
 type setListMode string
@@ -70,9 +69,6 @@ const (
 	insertSetMode setListMode = "insert"
 	updateSetMode setListMode = "update"
 	deleteSetMode setListMode = "delete"
-
-	valueSchema = "kafkaconnect.value.schema"
-	keySchema   = "kafkaconnect.key.schema"
 )
 
 var _ Writer = (*SnowflakeCSV)(nil)
@@ -148,9 +144,9 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
+		sdk.Logger(ctx).Err(err).Msg("failed to drop stage")
 
-		return errors.Errorf("failed to gracefully close the connection: %w", err)
+		return errors.Errorf("failed to drop stage: %w", err)
 	}
 	if err := s.db.Close(); err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
@@ -208,7 +204,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		records,
 		csvColumnOrder,
 		*meroxaColumns,
-		s.Prefix,
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
@@ -226,7 +221,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		s.updatesBuf.Reset()
 	}()
 
-	err = s.SetupTables(ctx, schema)
+	err = s.SetupTables(ctx, schema, csvColumnOrder)
 	if err != nil {
 		return 0, errors.Errorf("failed to set up snowflake table %q: %w", s.TableName, err)
 	}
@@ -264,10 +259,13 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	return len(records), nil
 }
 
-func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, primaryKey string, schema map[string]string) error {
+func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
+	primaryKey string, schema map[string]string,
+) error {
 	snowflakeSchema := make(map[string]string)
 	var columnName, dataType, isNullable string
 
+	//nolint:gosec // not an issue
 	query := fmt.Sprintf(`
 					SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
 					FROM INFORMATION_SCHEMA.COLUMNS c
@@ -280,6 +278,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, 
 	response, err := s.db.Query(query)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
+
 		return errors.Errorf("failed to check if table exists: %w", err)
 	}
 
@@ -291,11 +290,17 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, 
 		if err != nil {
 			return err
 		}
-		//snowflake stores varchar as text on schema info, we use varchar in our schema def
+		// snowflake stores varchar as text on schema info, we use varchar in our schema def
 		if dataType == "TEXT" {
 			dataType = "VARCHAR"
 		}
 		snowflakeSchema[strings.ToLower(columnName)] = dataType
+	}
+
+	if err := response.Err(); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("error grabbing columns")
+
+		return errors.Errorf("error grabbing columns: %w", err)
 	}
 
 	// if snowflake schema is empty, no need to check anything
@@ -313,13 +318,14 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, 
 		if err != nil {
 			return err
 		}
-
 	} else {
 		// if its not delete, schemas should match exactly
 		if len(schema) != len(snowflakeSchema) {
 			sdk.Logger(ctx).Debug().Msgf("Snowflake Table Schema (%+v)", snowflakeSchema)
 			sdk.Logger(ctx).Debug().Msgf("Source Table Schema (%+v)", schema)
-			return errors.Errorf("table already exists on snowflake, source schema number of columns %d doesn't match destination table %d",
+
+			return errors.Errorf("table already exists on snowflake, source schema number of "+
+				"columns %d doesn't match destination table %d",
 				len(schema),
 				len(snowflakeSchema))
 		}
@@ -328,7 +334,6 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation, 
 		if err != nil {
 			return err
 		}
-
 	}
 
 	return nil
@@ -341,15 +346,17 @@ func schemaMatches(schema, snowflakeSchema map[string]string) error {
 		if !ok {
 			return errors.Errorf("table already exists on snowflake, column %s doesn't exist on destination table ", k)
 		}
-		if strings.ToLower(v) != strings.ToLower(v2) {
-			return errors.Errorf("table already exists on snowflake, column %s with datatype %s doesn't match on destination table of datatype %s ", k, v, v2)
+		if strings.EqualFold(v, v2) {
+			return errors.Errorf("table already exists on snowflake, column %s with datatype %s "+
+				"doesn't match on destination table of datatype %s ", k, v, v2)
 		}
 	}
+
 	return nil
 }
 
 // creates temporary, and destination table if they don't exist already.
-func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string) error {
+func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string, columnOrder []string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
@@ -359,7 +366,7 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 
 	defer tx.Rollback() // nolint:errcheck,nolintlint
 
-	columnsSQL := buildSchema(schema)
+	columnsSQL := buildSchema(schema, columnOrder)
 
 	queryCreateTable := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s (
@@ -563,40 +570,40 @@ func (s *SnowflakeCSV) buildSetList(table1, table2 string, cols []string, mode s
 }
 
 // initSchema creates a schema definition from the first record which has the value schema.
-func (s *SnowflakeCSV) initSchema(ctx context.Context, records []sdk.Record) error {
-	start := time.Now()
+// func (s *SnowflakeCSV) initSchema(ctx context.Context, records []sdk.Record) error {
+// 	start := time.Now()
 
-	i := slices.IndexFunc(records, func(r sdk.Record) bool {
-		return r.Metadata != nil && r.Metadata[valueSchema] != ""
-	})
+// 	i := slices.IndexFunc(records, func(r sdk.Record) bool {
+// 		return r.Metadata != nil && r.Metadata[valueSchema] != ""
+// 	})
 
-	if i < 0 {
-		return errors.Errorf("failed to find record with schema")
-	}
+// 	if i < 0 {
+// 		return errors.Errorf("failed to find record with schema")
+// 	}
 
-	if ks, ok := records[i].Metadata[keySchema]; ok {
-		_ = ks // do something with it
-	}
+// 	if ks, ok := records[i].Metadata[keySchema]; ok {
+// 		_ = ks // do something with it
+// 	}
 
-	ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
-	if err != nil {
-		return errors.Errorf("failed to parse kafka schema: %w", err)
-	}
+// 	ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
+// 	if err != nil {
+// 		return errors.Errorf("failed to parse kafka schema: %w", err)
+// 	}
 
-	sch, err := schema.New(ksch)
-	if err != nil {
-		return errors.Errorf("failed to construct avro schema: %w", err)
-	}
+// 	sch, err := schema.New(ksch)
+// 	if err != nil {
+// 		return errors.Errorf("failed to construct avro schema: %w", err)
+// 	}
 
-	sdk.Logger(ctx).Debug().
-		Str("schema", fmt.Sprint(sch)).
-		Dur("duration", time.Since(start)).
-		Msg("schema created")
+// 	sdk.Logger(ctx).Debug().
+// 		Str("schema", fmt.Sprint(sch)).
+// 		Dur("duration", time.Since(start)).
+// 		Msg("schema created")
 
-	s.schema = sch
+// 	s.schema = sch
 
-	return nil
-}
+// 	return nil
+// }
 
 func buildSelectMerge(cols []string) string {
 	ret := make([]string, len(cols))
@@ -607,12 +614,13 @@ func buildSelectMerge(cols []string) string {
 	return strings.Join(ret, ", ")
 }
 
-func buildSchema(schema map[string]string) string {
+func buildSchema(schema map[string]string, columnOrder []string) string {
 	cols := make([]string, len(schema))
-	i := 0
-	for colName, sqlType := range schema {
+
+	// we use the column order to make the query string determinstic
+	for i, colName := range columnOrder {
+		sqlType := schema[colName]
 		cols[i] = strings.Join([]string{colName, sqlType}, " ")
-		i++
 	}
 
 	return strings.Join(cols, ", ")

@@ -20,6 +20,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -43,7 +44,7 @@ type recordSummary struct {
 	latestRecord *sdk.Record
 }
 
-type meroxaColumns struct {
+type ConnectorColumns struct {
 	operationColumn string
 	createdAtColumn string
 	updatedAtColumn string
@@ -55,26 +56,21 @@ func GetDataSchema(
 	records []sdk.Record,
 	schema map[string]string,
 	prefix string,
-) ([]string, *meroxaColumns, error) {
+) ([]string, *ConnectorColumns, error) {
 	// we need to store the operation in a column, to detect updates & deletes
-	meroxaColumns := meroxaColumns{
+	connectorColumns := ConnectorColumns{
 		operationColumn: fmt.Sprintf("%s_operation", prefix),
 		createdAtColumn: fmt.Sprintf("%s_created_at", prefix),
 		updatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
 		deletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
 	}
 
-	schema[meroxaColumns.operationColumn] = snowflakeVarchar
-	schema[meroxaColumns.createdAtColumn] = snowflakeTimeStamp
-	schema[meroxaColumns.updatedAtColumn] = snowflakeTimeStamp
-	schema[meroxaColumns.deletedAtColumn] = snowflakeTimeStamp
+	schema[connectorColumns.operationColumn] = snowflakeVarchar
+	schema[connectorColumns.createdAtColumn] = snowflakeTimeStamp
+	schema[connectorColumns.updatedAtColumn] = snowflakeTimeStamp
+	schema[connectorColumns.deletedAtColumn] = snowflakeTimeStamp
 
-	csvColumnOrder := []string{
-		meroxaColumns.operationColumn,
-		meroxaColumns.createdAtColumn,
-		meroxaColumns.updatedAtColumn,
-		meroxaColumns.deletedAtColumn,
-	}
+	csvColumnOrder := []string{}
 
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
@@ -111,15 +107,29 @@ func GetDataSchema(
 		}
 	}
 
-	return csvColumnOrder, &meroxaColumns, nil
+	// sort data column order alphabetically to make deterministic
+	// but keep conduit connector columns at the front for ease of use
+	sort.Strings(csvColumnOrder)
+	csvColumnOrder = append(
+		[]string{
+			connectorColumns.operationColumn,
+			connectorColumns.createdAtColumn,
+			connectorColumns.updatedAtColumn,
+			connectorColumns.deletedAtColumn,
+		},
+		csvColumnOrder...,
+	)
+
+	sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", schema)
+
+	return csvColumnOrder, &connectorColumns, nil
 }
 
 func MakeCSVBytes(
 	ctx context.Context,
 	records []sdk.Record,
 	csvColumnOrder []string,
-	meroxaColumns meroxaColumns,
-	prefix string,
+	meroxaColumns ConnectorColumns,
 	primaryKey string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
@@ -202,7 +212,7 @@ func MakeCSVBytes(
 
 				return
 			}
-			
+
 			if inserts > 0 {
 				insertsProcessed = true
 			}
@@ -252,7 +262,7 @@ func createCSVRecords(
 	recordSummaries []*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
-	m meroxaColumns,
+	m ConnectorColumns,
 ) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
 
@@ -338,10 +348,11 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 		if err := json.Unmarshal(dataRaw, &payload); err != nil {
 			return nil, errors.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
 		}
+
 		return data, nil
-	} else {
-		return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 	}
+
+	return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 }
 
 func joinBuffers(buffers []*bytes.Buffer, w *bytes.Buffer) error {

@@ -27,25 +27,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func Test_MakeCSVBytes(t *testing.T) {
 	testTimestamp := time.Now().UnixMilli()
-	testCases := []struct{
-		desc string
-		records []sdk.Record
-		colOrder []string
-		meroxaColumns meroxaColumns
-		prefix string
-		primaryKey string
+	testCases := []struct {
+		desc            string
+		records         []sdk.Record
+		colOrder        []string
+		meroxaColumns   ConnectorColumns
+		prefix          string
+		primaryKey      string
 		expectedBuffers func() (*bytes.Buffer, *bytes.Buffer)
-		numGoRoutines int
-		expectedErr error
+		numGoRoutines   int
+		expectedErr     error
 	}{
 		{
 			desc: "no duplicates",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -55,14 +54,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("2"),
+					Position:  sdk.Position("2"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -72,14 +71,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "2",
+							"id":        "2",
 							"firstName": "patrick",
-							"lastName": "star",
+							"lastName":  "star",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("3"),
+					Position:  sdk.Position("3"),
 					Operation: sdk.OperationUpdate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -89,14 +88,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "3",
+							"id":        "3",
 							"firstName": "squidward",
-							"lastName": "tentacles",
+							"lastName":  "tentacles",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("4"),
+					Position:  sdk.Position("4"),
 					Operation: sdk.OperationDelete,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -106,34 +105,41 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "4",
+							"id":        "4",
 							"firstName": "eugene",
-							"lastName": "krabs",
+							"lastName":  "krabs",
 						},
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
-			primaryKey: "id",
+			prefix:        "meroxa",
+			primaryKey:    "id",
 			numGoRoutines: 1,
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 				insertWriter := csv.NewWriter(insertBuf)
 				updateWriter := csv.NewWriter(updateBuf)
 
-				insertWriter.Write([]string{"create",fmt.Sprint(testTimestamp),"","","1", "spongebob", "squarepants"})
-				insertWriter.Write([]string{"create",fmt.Sprint(testTimestamp),"","","2", "patrick", "star"})
+				err := insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "1", "spongebob", "squarepants"})
+				require.NoError(t, err)
+				err = insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "2", "patrick", "star"})
+				require.NoError(t, err)
 				insertWriter.Flush()
 
-				updateWriter.Write([]string{"update","",fmt.Sprint(testTimestamp),"","3", "squidward", "tentacles"})
-				updateWriter.Write([]string{"delete","","",fmt.Sprint(testTimestamp),"4", "eugene", "krabs"})
+				err = updateWriter.Write([]string{"update", "", fmt.Sprint(testTimestamp), "", "3", "squidward", "tentacles"})
+				require.NoError(t, err)
+				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "eugene", "krabs"})
+				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -143,7 +149,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 			desc: "multiple goroutines",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -153,14 +159,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("2"),
+					Position:  sdk.Position("2"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -170,14 +176,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "2",
+							"id":        "2",
 							"firstName": "patrick",
-							"lastName": "star",
+							"lastName":  "star",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("3"),
+					Position:  sdk.Position("3"),
 					Operation: sdk.OperationUpdate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -187,14 +193,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "3",
+							"id":        "3",
 							"firstName": "squidward",
-							"lastName": "tentacles",
+							"lastName":  "tentacles",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("4"),
+					Position:  sdk.Position("4"),
 					Operation: sdk.OperationDelete,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -204,34 +210,41 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "4",
+							"id":        "4",
 							"firstName": "eugene",
-							"lastName": "krabs",
+							"lastName":  "krabs",
 						},
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
-			primaryKey: "id",
+			prefix:        "meroxa",
+			primaryKey:    "id",
 			numGoRoutines: 3,
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 				insertWriter := csv.NewWriter(insertBuf)
 				updateWriter := csv.NewWriter(updateBuf)
 
-				insertWriter.Write([]string{"create",fmt.Sprint(testTimestamp),"","","1", "spongebob", "squarepants"})
-				insertWriter.Write([]string{"create",fmt.Sprint(testTimestamp),"","","2", "patrick", "star"})
+				err := insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "1", "spongebob", "squarepants"})
+				require.NoError(t, err)
+				err = insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "2", "patrick", "star"})
+				require.NoError(t, err)
 				insertWriter.Flush()
 
-				updateWriter.Write([]string{"update","",fmt.Sprint(testTimestamp),"","3", "squidward", "tentacles"})
-				updateWriter.Write([]string{"delete","","",fmt.Sprint(testTimestamp),"4", "eugene", "krabs"})
+				err = updateWriter.Write([]string{"update", "", fmt.Sprint(testTimestamp), "", "3", "squidward", "tentacles"})
+				require.NoError(t, err)
+				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "eugene", "krabs"})
+				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -241,7 +254,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 			desc: "create, update, and delete for same ID",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -251,70 +264,76 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationUpdate,
 					Metadata: sdk.Metadata{
-						"opencdc.readAt": fmt.Sprint(testTimestamp+1),
+						"opencdc.readAt": fmt.Sprint(testTimestamp + 1),
 					},
 					Key: sdk.StructuredData{
 						"id": "1",
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob1",
-							"lastName": "squarepants1",
+							"lastName":  "squarepants1",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationDelete,
 					Metadata: sdk.Metadata{
-						"opencdc.readAt": fmt.Sprint(testTimestamp+2),
+						"opencdc.readAt": fmt.Sprint(testTimestamp + 2),
 					},
 					Key: sdk.StructuredData{
 						"id": "1",
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob1",
-							"lastName": "squarepants1",
+							"lastName":  "squarepants1",
 						},
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
+			prefix:     "meroxa",
 			primaryKey: "id",
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-				
+
 				updateWriter := csv.NewWriter(updateBuf)
 				// create and update timestamps are not represented in this scenario
 				// this is to prevent removing the timestamps from the merged records in snowflake
 				// TODO: adjust MERGE query to prevent erased created_at / updated_at, instead
 				// of doing this via CSV recordSummary manipulation
-				updateWriter.Write([]string{"delete","","",fmt.Sprint(testTimestamp+2),"1", "spongebob1", "squarepants1"})
+				err := updateWriter.Write([]string{
+					"delete", "", "", fmt.Sprint(testTimestamp + 2), "1", "spongebob1", "squarepants1",
+				})
+				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -325,7 +344,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 			desc: "duplicate creates for same ID",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -335,14 +354,14 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationCreate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -352,27 +371,33 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
+			prefix:     "meroxa",
 			primaryKey: "id",
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-				
+
 				insertWriter := csv.NewWriter(insertBuf)
-				insertWriter.Write([]string{"create",fmt.Sprint(testTimestamp),"","","1", "spongebob", "squarepants"})
+				err := insertWriter.Write([]string{
+					"create", fmt.Sprint(testTimestamp), "", "", "1", "spongebob", "squarepants",
+				})
+				require.NoError(t, err)
 				insertWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -383,7 +408,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 			desc: "duplicate updates for same ID",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationUpdate,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -393,54 +418,60 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob",
-							"lastName": "squarepants",
+							"lastName":  "squarepants",
 						},
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob1",
-							"lastName": "squarepants1",
+							"lastName":  "squarepants1",
 						},
 					},
 				},
 				{
-					Position: sdk.Position("1"),
+					Position:  sdk.Position("1"),
 					Operation: sdk.OperationUpdate,
 					Metadata: sdk.Metadata{
-						"opencdc.readAt": fmt.Sprint(testTimestamp+1),
+						"opencdc.readAt": fmt.Sprint(testTimestamp + 1),
 					},
 					Key: sdk.StructuredData{
 						"id": "1",
 					},
 					Payload: sdk.Change{
 						Before: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob1",
-							"lastName": "squarepants1",
+							"lastName":  "squarepants1",
 						},
 						After: sdk.StructuredData{
-							"id": "1",
+							"id":        "1",
 							"firstName": "spongebob2",
-							"lastName": "squarepants2",
+							"lastName":  "squarepants2",
 						},
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
+			prefix:     "meroxa",
 			primaryKey: "id",
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-				
+
 				updateWriter := csv.NewWriter(updateBuf)
-				updateWriter.Write([]string{"update","",fmt.Sprint(testTimestamp+1),"","1", "spongebob2", "squarepants2"})
+				err := updateWriter.Write([]string{
+					"update", "", fmt.Sprint(testTimestamp + 1), "", "1", "spongebob2", "squarepants2",
+				})
+				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -451,7 +482,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 			desc: "delete without payload.Before",
 			records: []sdk.Record{
 				{
-					Position: sdk.Position("4"),
+					Position:  sdk.Position("4"),
 					Operation: sdk.OperationDelete,
 					Metadata: sdk.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
@@ -464,21 +495,27 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 				},
 			},
-			colOrder: []string{"meroxa_operation", "meroxa_created_at", "meroxa_updated_at", "meroxa_deleted_at", "id", "firstName", "lastName"},
-			meroxaColumns: meroxaColumns{
+			colOrder: []string{
+				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
+				"meroxa_deleted_at", "id", "firstName", "lastName",
+			},
+			meroxaColumns: ConnectorColumns{
 				operationColumn: "meroxa_operation",
 				createdAtColumn: "meroxa_created_at",
 				updatedAtColumn: "meroxa_updated_at",
 				deletedAtColumn: "meroxa_deleted_at",
 			},
-			prefix: "meroxa",
-			primaryKey: "id",
+			prefix:        "meroxa",
+			primaryKey:    "id",
 			numGoRoutines: 1,
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer){
+			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
 				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-				
+
 				updateWriter := csv.NewWriter(updateBuf)
-				updateWriter.Write([]string{"delete","","",fmt.Sprint(testTimestamp),"4", "", ""})
+				err := updateWriter.Write([]string{
+					"delete", "", "", fmt.Sprint(testTimestamp), "4", "", "",
+				})
+				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf
@@ -495,13 +532,12 @@ func Test_MakeCSVBytes(t *testing.T) {
 			}
 			actualInsertBuf := bytes.NewBuffer(nil)
 			actualUpdateBuf := bytes.NewBuffer(nil)
-			
+
 			err := MakeCSVBytes(
-				ctx, 
-				tc.records, 
-				tc.colOrder, 
-				tc.meroxaColumns, 
-				tc.prefix,
+				ctx,
+				tc.records,
+				tc.colOrder,
+				tc.meroxaColumns,
 				tc.primaryKey,
 				actualInsertBuf,
 				actualUpdateBuf,
@@ -513,7 +549,6 @@ func Test_MakeCSVBytes(t *testing.T) {
 				require.ErrorContains(t, err, tc.expectedErr.Error())
 			} else {
 				require.NoError(t, err)
-				
 
 				// order is not guaranteed, so we should sort before comp
 				expInsertCSV := strings.Split(expectedInsertBuf.String(), "\n")
