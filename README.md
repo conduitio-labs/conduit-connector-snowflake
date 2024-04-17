@@ -31,9 +31,22 @@ The config passed to `Configure` can contain the following fields.
 
 | name             | description                                                                                                                                                                                                                                     | required | example                                                |
 |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
-| `connection`     | Snowflake connection string.<br/>Supported formats:<br><code>user:password@my_organization-my_account/dbname/schemaname</code> or <br><code>username[:password]@hostname:port/dbname/schemaname </code><br><b>Important</b>: Schema is required | yes      | "user:password@my_organization-my_account/mydb/schema" |
+| `username`     | Snowflake username | yes      | "username" |
+| `password`     | Snowflake password | yes      | "password" |
+| `host`     | Host for snowflake instance | yes      | 443 |
+| `database`     | Database you wish to use in your Snowflake account | yes      | "userdb" |
+| `schema`     | Schema you wish to use in your Snowflake account | yes      | "STREAM_DATA" |
+| `warehouse`     | Warehouse you wish to use in your Snowflake account | yes      | "COMPUTE_WH" |
+| `stage`     | Snowflake Stage to use for uploading files before merging into destination table. | yes      | "ordersStage" |
+| `primaryKey`     | Primary key of the source data | yes      | "id" |
+| `namingPrefix`     | Prefix to append to update_at , deleted_at, create_at at destination table. Default is "meroxa_" | no      | "meroxa" (translates to `meroxa_updated_at` for update timestamps) |
+| `format`     | Data type of file we upload and copy data from to snowflake | yes      | "csv" |
+| `compression`     | Compression to use when staging files in Snowflake | no      | "gzip" |
 | `sdk.batch.size` | Maximum size of batch before it gets written to Snowflake. Default is 1000.| no       | "1000" |
-| `sdk.batch.delay`|  Maximum delay before an incomplete batch is written to the destination. | no       | 5s   
+| `sdk.batch.delay`|  Maximum delay before an incomplete batch is written to the destination. | no       | 5s     |
+| `csvGoRoutines`     | For CSV processing, the number of goroutines to concurrently process CSV rows. | no      | 1 |
+| `fileUploadThreads`     | Number of threads to run for PUT file uploads. | no      | 30 |
+| `keepAlive`     | Whether to keep the session alive even when the connection is idle | no      | true |
 
 ### How to build it
 
