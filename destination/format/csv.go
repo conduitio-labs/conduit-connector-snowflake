@@ -177,11 +177,12 @@ func MakeCSVBytes(
 	// Process CSV records in parallel with goroutines
 	var (
 		wg                                 sync.WaitGroup
-		insertsProcessed, updatesProcessed bool
 	)
 	insertsBuffers := make([]*bytes.Buffer, numGoroutines)
 	updatesBuffers := make([]*bytes.Buffer, numGoroutines)
 	errChan := make(chan error, numGoroutines)
+	insertsProcessedChan := make(chan bool, numGoroutines)
+	updatesProcessedChan := make(chan bool, numGoroutines)
 
 	dedupedRecords := maps.Values(latestRecordMap)
 	recordChunks := splitRecordChunks(dedupedRecords, numGoroutines)
@@ -214,11 +215,11 @@ func MakeCSVBytes(
 			}
 
 			if inserts > 0 {
-				insertsProcessed = true
+				insertsProcessedChan <- true
 			}
 
 			if updates > 0 {
-				updatesProcessed = true
+				updatesProcessedChan <- true
 			}
 		}(i)
 	}
@@ -226,12 +227,22 @@ func MakeCSVBytes(
 	// wait for goroutines to complete
 	wg.Wait()
 	close(errChan)
+	close(insertsProcessedChan)
+	close(updatesProcessedChan)
 
 	// check for errors from goroutines
 	for err := range errChan {
 		if err != nil {
 			return err
 		}
+	}
+
+	var insertsProcessed, updatesProcessed bool
+	for p := range insertsProcessedChan {
+		insertsProcessed = insertsProcessed || p
+	}
+	for p := range updatesProcessedChan {
+		updatesProcessed = updatesProcessed || p
 	}
 
 	if insertsProcessed {
