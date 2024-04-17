@@ -155,3 +155,7 @@ Connectors will transform this data to records.
 
 
 <b>NOTE:</b> please pay attention and don't accidentally delete `stream` and tracking table were created by CDC iterator.
+
+### Snowflake Destination
+
+The Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release.
