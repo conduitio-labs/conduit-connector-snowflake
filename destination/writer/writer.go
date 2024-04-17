@@ -44,12 +44,12 @@ type Writer interface {
 
 // SnowflakeCSV writer stores batch bytes into an SnowflakeCSV bucket as a file.
 type SnowflakeCSV struct {
-	Prefix        string
-	PrimaryKey    string
-	Stage         string
-	TableName     string
-	FileThreads   int
-	CSVGoroutines int
+	Prefix            string
+	PrimaryKey        string
+	Stage             string
+	TableName         string
+	FileThreads       int
+	ProcessingWorkers int
 
 	db *sql.DB
 
@@ -75,14 +75,14 @@ var _ Writer = (*SnowflakeCSV)(nil)
 
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
 type SnowflakeConfig struct {
-	Prefix        string
-	PrimaryKey    string
-	Stage         string
-	TableName     string
-	Connection    string
-	CSVGoroutines int
-	FileThreads   int
-	Compression   string
+	Prefix            string
+	PrimaryKey        string
+	Stage             string
+	TableName         string
+	Connection        string
+	ProcessingWorkers int
+	FileThreads       int
+	Compression       string
 }
 
 // NewCSV takes an SnowflakeConfig reference and produces an SnowflakeCSV Writer.
@@ -125,18 +125,18 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 	}
 
 	return &SnowflakeCSV{
-		Prefix:        cfg.Prefix,
-		PrimaryKey:    cfg.PrimaryKey,
-		Stage:         cfg.Stage,
-		TableName:     cfg.TableName,
-		CSVGoroutines: cfg.CSVGoroutines,
-		FileThreads:   cfg.FileThreads,
-		db:            db,
-		evolver:       schema.NewEvolver(db),
-		compressor:    cmper,
-		insertsBuf:    &bytes.Buffer{},
-		updatesBuf:    &bytes.Buffer{},
-		compressedBuf: &bytes.Buffer{},
+		Prefix:            cfg.Prefix,
+		PrimaryKey:        cfg.PrimaryKey,
+		Stage:             cfg.Stage,
+		TableName:         cfg.TableName,
+		ProcessingWorkers: cfg.ProcessingWorkers,
+		FileThreads:       cfg.FileThreads,
+		db:                db,
+		evolver:           schema.NewEvolver(db),
+		compressor:        cmper,
+		insertsBuf:        &bytes.Buffer{},
+		updatesBuf:        &bytes.Buffer{},
+		compressedBuf:     &bytes.Buffer{},
 	}, nil
 }
 
@@ -207,7 +207,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
-		s.CSVGoroutines,
+		s.ProcessingWorkers,
 	)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")

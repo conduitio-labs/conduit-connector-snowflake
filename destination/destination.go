@@ -79,14 +79,14 @@ func (d *Destination) Open(ctx context.Context) error {
 	case format.TypeCSV.String():
 		connectionString := d.configureURL()
 		w, err := writer.NewCSV(ctx, &writer.SnowflakeConfig{
-			Prefix:        d.Config.NamingPrefix,
-			PrimaryKey:    d.Config.PrimaryKey,
-			Stage:         d.Config.Stage,
-			TableName:     d.Config.Table,
-			Connection:    connectionString,
-			CSVGoroutines: d.Config.CSVGoroutines,
-			FileThreads:   d.Config.FileUploadThreads,
-			Compression:   d.Config.Compression,
+			Prefix:            d.Config.NamingPrefix,
+			PrimaryKey:        d.Config.PrimaryKey,
+			Stage:             d.Config.Stage,
+			TableName:         d.Config.Table,
+			Connection:        connectionString,
+			ProcessingWorkers: d.Config.ProcessingWorkers,
+			FileThreads:       d.Config.FileUploadThreads,
+			Compression:       d.Config.Compression,
 		})
 		if err != nil {
 			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)

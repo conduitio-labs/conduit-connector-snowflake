@@ -18,12 +18,6 @@ func (Config) Parameters() map[string]sdk.Parameter {
 				sdk.ValidationInclusion{List: []string{"gzip", "zstd", "copy"}},
 			},
 		},
-		"snowflake.csvGoroutines": {
-			Default:     "1",
-			Description: "For CSV processing, the number of goroutines to concurrently process CSV rows.",
-			Type:        sdk.ParameterTypeInt,
-			Validations: []sdk.Validation{},
-		},
 		"snowflake.database": {
 			Default:     "",
 			Description: "snowflake.database for the snowflake connection",
@@ -92,6 +86,12 @@ func (Config) Parameters() map[string]sdk.Parameter {
 			Validations: []sdk.Validation{
 				sdk.ValidationRequired{},
 			},
+		},
+		"snowflake.processingWorkers": {
+			Default:     "1",
+			Description: "For CSV processing, the number of goroutines to concurrently process CSV rows.",
+			Type:        sdk.ParameterTypeInt,
+			Validations: []sdk.Validation{},
 		},
 		"snowflake.schema": {
 			Default:     "",

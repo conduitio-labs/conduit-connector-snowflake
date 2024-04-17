@@ -47,7 +47,7 @@ type Config struct {
 	// Data type of file we upload and copy data from to snowflake
 	Format string `json:"snowflake.format" default:"csv" validate:"required,inclusion=csv"`
 	// For CSV processing, the number of goroutines to concurrently process CSV rows.
-	CSVGoroutines int `json:"snowflake.csvGoroutines" default:"1"`
+	ProcessingWorkers int `json:"snowflake.processingWorkers" default:"1"`
 	// Number of threads to run for PUT file uploads.
 	FileUploadThreads int `json:"snowflake.fileUploadThreads" default:"30"`
 	// Compression to use when staging files in Snowflake
@@ -59,6 +59,6 @@ const (
 	SnowflakePrimaryKey        = "snowflake.primaryKey"
 	SnowflakeNamingPrefix      = "snowflake.namingPrefix"
 	SnowflakeFormat            = "snowflake.format"
-	SnowflakeCSVGoRoutines     = "snowflake.csvGoroutines"
+	SnowflakeCSVGoRoutines     = "snowflake.processingWorkers"
 	SnowflakeFileUploadThreads = "snowflake.fileUploadThreads"
 )

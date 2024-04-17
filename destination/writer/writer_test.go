@@ -111,27 +111,27 @@ func TestWriter_Close(t *testing.T) {
 func TestWriter_Write(t *testing.T) {
 	testTimestamp := time.Now().UnixMilli()
 	testCases := []struct {
-		desc          string
-		Prefix        string
-		PrimaryKey    string
-		Stage         string
-		TableName     string
-		FileThreads   int
-		CSVGoroutines int
-		compressor    compress.Compressor
-		records       []sdk.Record
-		dbmock        func() (*sql.DB, sqlmock.Sqlmock)
-		expectedErr   error
+		desc              string
+		Prefix            string
+		PrimaryKey        string
+		Stage             string
+		TableName         string
+		FileThreads       int
+		ProcessingWorkers int
+		compressor        compress.Compressor
+		records           []sdk.Record
+		dbmock            func() (*sql.DB, sqlmock.Sqlmock)
+		expectedErr       error
 	}{
 		{
-			desc:          "successful batch",
-			TableName:     "test",
-			PrimaryKey:    "id",
-			Stage:         "test-stage",
-			Prefix:        "meroxa",
-			CSVGoroutines: 1,
-			FileThreads:   1,
-			compressor:    compress.Copy{},
+			desc:              "successful batch",
+			TableName:         "test",
+			PrimaryKey:        "id",
+			Stage:             "test-stage",
+			Prefix:            "meroxa",
+			ProcessingWorkers: 1,
+			FileThreads:       1,
+			compressor:        compress.Copy{},
 			records: []sdk.Record{
 				{
 					Position:  sdk.Position("1"),
@@ -298,14 +298,14 @@ func TestWriter_Write(t *testing.T) {
 			db, mock := tc.dbmock()
 			defer db.Close()
 			s := &SnowflakeCSV{
-				Prefix:        tc.Prefix,
-				PrimaryKey:    tc.PrimaryKey,
-				Stage:         tc.Stage,
-				TableName:     tc.TableName,
-				FileThreads:   tc.FileThreads,
-				CSVGoroutines: tc.CSVGoroutines,
-				db:            db,
-				compressor:    tc.compressor,
+				Prefix:            tc.Prefix,
+				PrimaryKey:        tc.PrimaryKey,
+				Stage:             tc.Stage,
+				TableName:         tc.TableName,
+				FileThreads:       tc.FileThreads,
+				ProcessingWorkers: tc.ProcessingWorkers,
+				db:                db,
+				compressor:        tc.compressor,
 
 				insertsBuf:    &bytes.Buffer{},
 				updatesBuf:    &bytes.Buffer{},
