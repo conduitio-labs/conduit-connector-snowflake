@@ -41,7 +41,7 @@ The config passed to `Configure` can contain the following fields.
 | `primaryKey`     | Primary key of the source data | yes      | "id" |
 | `namingPrefix`     | Prefix to append to update_at , deleted_at, create_at at destination table. Default is "meroxa_" | no      | "meroxa" (translates to `meroxa_updated_at` for update timestamps) |
 | `format`     | Data type of file we upload and copy data from to snowflake | yes      | "csv" |
-| `compression`     | Compression to use when staging files in Snowflake | no      | "gzip" |
+| `compression`     | Compression to use when staging files in Snowflake | no      | "zstd" |
 | `sdk.batch.size` | Maximum size of batch before it gets written to Snowflake. Default is 1000.| no       | "1000" |
 | `sdk.batch.delay`|  Maximum delay before an incomplete batch is written to the destination. | no       | 5s     |
 | `csvGoRoutines`     | For CSV processing, the number of goroutines to concurrently process CSV rows. | no      | 1 |

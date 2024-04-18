@@ -10,7 +10,7 @@ import (
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
 		"snowflake.compression": {
-			Default:     "gzip",
+			Default:     "zstd",
 			Description: "snowflake.compression to use when staging files in Snowflake",
 			Type:        sdk.ParameterTypeString,
 			Validations: []sdk.Validation{

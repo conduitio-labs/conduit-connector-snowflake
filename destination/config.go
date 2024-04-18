@@ -51,7 +51,7 @@ type Config struct {
 	// Number of threads to run for PUT file uploads.
 	FileUploadThreads int `json:"snowflake.fileUploadThreads" default:"30"`
 	// Compression to use when staging files in Snowflake
-	Compression string `json:"snowflake.compression" default:"gzip" validate:"required,inclusion=gzip|zstd|copy"`
+	Compression string `json:"snowflake.compression" default:"zstd" validate:"required,inclusion=gzip|zstd|copy"`
 }
 
 const (
