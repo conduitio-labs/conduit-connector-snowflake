@@ -25,13 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	source "github.com/conduitio-labs/conduit-connector-snowflake/source"
+	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/google/uuid"
-	builder "github.com/huandu/go-sqlbuilder"
+	"github.com/huandu/go-sqlbuilder"
+	"github.com/pkg/errors"
 	"go.uber.org/goleak"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 )
 
 // driver Configurable Acceptance test driver.
@@ -106,8 +107,8 @@ func TestAcceptance(t *testing.T) {
 
 	cfg := map[string]string{
 		config.KeyConnection:     connectionURL,
-		config.KeyPrimaryKeys:    "ID",
-		config.KeyOrderingColumn: "ID",
+		source.KeyPrimaryKeys:    "ID",
+		source.KeyOrderingColumn: "ID",
 	}
 
 	sdk.AcceptanceTest(t, &driver{
@@ -116,7 +117,7 @@ func TestAcceptance(t *testing.T) {
 				Connector:         Connector,
 				SourceConfig:      cfg,
 				DestinationConfig: cfg,
-				BeforeTest:        beforeTest(t, cfg),
+				BeforeTest:        beforeTest(cfg),
 				GoleakOptions: []goleak.Option{
 					// Snowflake driver has those leaks. Issue: https://github.com/snowflakedb/gosnowflake/issues/588
 					goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
@@ -190,12 +191,12 @@ func randomIdentifier(t *testing.T) string {
 func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
 	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
-		return fmt.Errorf("structurize data")
+		return errors.Errorf("structurize data")
 	}
 
 	cols, vals := extractColumnsAndValues(payload)
 
-	sqlbuilder := builder.NewInsertBuilder()
+	sqlbuilder := sqlbuilder.NewInsertBuilder()
 	sqlbuilder.InsertInto(table)
 	sqlbuilder.Cols(cols...)
 	sqlbuilder.Values(vals...)
@@ -228,7 +229,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 	structuredData := make(sdk.StructuredData)
 	err := json.Unmarshal(data.Bytes(), &structuredData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data into structured data: %w", err)
+		return nil, errors.Errorf("failed to unmarshal data into structured data: %q", err)
 	}
 
 	structuredDataUpper := make(sdk.StructuredData)
@@ -236,7 +237,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 		if parsedValue, ok := value.(map[string]any); ok {
 			valueJSON, err := json.Marshal(parsedValue)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal map into json: %w", err)
+				return nil, errors.Errorf("failed to marshal map into json: %q", err)
 			}
 
 			structuredDataUpper[strings.ToUpper(key)] = string(valueJSON)
@@ -251,7 +252,7 @@ func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
 }
 
 // beforeTest creates new table before each test.
-func beforeTest(t *testing.T, cfg map[string]string) func(t *testing.T) {
+func beforeTest(cfg map[string]string) func(t *testing.T) {
 	return func(t *testing.T) {
 		table := randomIdentifier(t)
 		t.Logf("table under test: %v", table)

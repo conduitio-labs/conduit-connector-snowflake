@@ -18,17 +18,15 @@ import (
 	"context"
 	"fmt"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
-
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 // Source connector.
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   config.Config
+	config   Config
 	iterator Iterator
 }
 
@@ -37,57 +35,17 @@ func New() sdk.Source {
 	return &Source{}
 }
 
-// Parameters returns a map of named sdk.Parameters that describe how to configure the Source.
 func (s *Source) Parameters() map[string]sdk.Parameter {
-	return map[string]sdk.Parameter{
-		config.KeyConnection: {
-			Default:     "",
-			Required:    true,
-			Description: "Snowflake connection string.",
-		},
-		config.KeyTable: {
-			Default:     "",
-			Required:    true,
-			Description: "The table name that the connector should read.",
-		},
-		config.KeyOrderingColumn: {
-			Default:  "",
-			Required: true,
-			Description: "The name of a column that the connector will use for ordering rows. " +
-				"Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.",
-		},
-		config.KeyColumns: {
-			Default:     "",
-			Required:    false,
-			Description: "Comma separated list of column names that should be included in each Record's payload.",
-		},
-		config.KeyPrimaryKeys: {
-			Default:     "",
-			Required:    false,
-			Description: "The list of the column names that records should use for their `Key` fields.",
-		},
-		config.KeySnapshot: {
-			Default:  "true",
-			Required: false,
-			Description: "Whether or not the plugin will take a snapshot of the entire table before starting cdc " +
-				"mode, by default true.",
-		},
-		config.KeyBatchSize: {
-			Default:     "1000",
-			Required:    false,
-			Description: "Size of batch",
-		},
-	}
+	return Config{}.Parameters()
 }
 
-// Configure parses and stores configurations, returns an error in case of invalid configuration.
-func (s *Source) Configure(ctx context.Context, cfgRaw map[string]string) error {
-	cfg, err := config.Parse(cfgRaw)
-	if err != nil {
-		return err
-	}
+func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
+	sdk.Logger(ctx).Debug().Msg("Configuring Source Connector.")
 
-	s.config = cfg
+	err := sdk.Util.ParseConfig(cfg, &s.config)
+	if err != nil {
+		return fmt.Errorf("failed to parse source config : %w", err)
+	}
 
 	return nil
 }
@@ -125,7 +83,7 @@ func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
 }
 
 // Teardown gracefully shutdown connector.
-func (s *Source) Teardown(ctx context.Context) error {
+func (s *Source) Teardown(_ context.Context) error {
 	if s.iterator != nil {
 		err := s.iterator.Stop()
 		if err != nil {

@@ -16,10 +16,10 @@ package position
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
 )
 
 // IteratorType describe position type.
@@ -70,7 +70,7 @@ func ParseSDKPosition(p sdk.Position) (*Position, error) {
 	case TypeCDC:
 		return &pos, nil
 	default:
-		return &pos, fmt.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
+		return &pos, errors.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
 	}
 }
 

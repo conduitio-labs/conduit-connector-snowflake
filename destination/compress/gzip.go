@@ -1,4 +1,4 @@
-// Copyright © 2022 Meroxa, Inc.
+// Copyright © 2024 Meroxa, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package compress
 
 import (
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"compress/gzip"
+	"io"
+
+	"github.com/go-errors/errors"
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+var _ Compressor = (*Gzip)(nil)
+
+type Gzip struct{}
+
+func (Gzip) Compress(in io.Reader, out io.Writer) error {
+	w := gzip.NewWriter(out)
+	if _, err := io.Copy(w, in); err != nil {
+		return errors.Errorf("failed to copy bytes to gzip writer: %w", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return errors.Errorf("failed to flush gzip writer: %w", err)
+	}
+
+	return nil
+}
+
+func (Gzip) Name() string {
+	return TypeGzip
 }

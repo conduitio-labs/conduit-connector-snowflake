@@ -17,14 +17,13 @@ package iterator
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/jmoiron/sqlx"
-
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/go-errors/errors"
+	"github.com/jmoiron/sqlx"
 )
 
 // snapshotIterator to iterate snowflake objects.
@@ -59,9 +58,7 @@ func newSnapshotIterator(
 	batchSize int,
 	position *position.Position,
 ) (*snapshotIterator, error) {
-	var (
-		err error
-	)
+	var err error
 
 	iterator := &snapshotIterator{
 		snowflake:      snowflake,
@@ -76,7 +73,7 @@ func newSnapshotIterator(
 	if position == nil {
 		iterator.maxValue, err = iterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
 		if err != nil {
-			return nil, fmt.Errorf("get max value: %w", err)
+			return nil, errors.Errorf("get max value: %w", err)
 		}
 	} else {
 		iterator.maxValue = position.SnapshotMaxValue
@@ -103,7 +100,7 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 			return false, ctx.Err()
 		}
 
-		return false, fmt.Errorf("get rows: %w", err)
+		return false, errors.Errorf("get rows: %w", err)
 	}
 
 	// check new batch.
@@ -115,10 +112,10 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
+func (i *snapshotIterator) Next(_ context.Context) (sdk.Record, error) {
 	row := make(map[string]any)
 	if err := i.rows.MapScan(row); err != nil {
-		return sdk.Record{}, fmt.Errorf("scan rows: %w", err)
+		return sdk.Record{}, errors.Errorf("scan rows: %w", err)
 	}
 
 	if _, ok := row[i.orderingColumn]; !ok {
@@ -134,14 +131,14 @@ func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	sdkPos, err := pos.ConvertToSDKPosition()
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("convert position %w", err)
+		return sdk.Record{}, errors.Errorf("convert position %w", err)
 	}
 
 	key := make(sdk.StructuredData)
 	for n := range i.keys {
 		val, ok := row[i.keys[n]]
 		if !ok {
-			return sdk.Record{}, fmt.Errorf("key column %q not found", i.keys[n])
+			return sdk.Record{}, errors.Errorf("key column %q not found", i.keys[n])
 		}
 
 		key[i.keys[n]] = val
@@ -149,7 +146,7 @@ func (i *snapshotIterator) Next(ctx context.Context) (sdk.Record, error) {
 
 	transformedRowBytes, err := json.Marshal(row)
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("marshal row: %w", err)
+		return sdk.Record{}, errors.Errorf("marshal row: %w", err)
 	}
 
 	i.position = &pos
@@ -165,7 +162,7 @@ func (i *snapshotIterator) Stop() error {
 	if i.rows != nil {
 		err := i.rows.Close()
 		if err != nil {
-			return fmt.Errorf("close rows: %w", err)
+			return errors.Errorf("close rows: %w", err)
 		}
 	}
 

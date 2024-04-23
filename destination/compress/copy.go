@@ -1,4 +1,4 @@
-// Copyright © 2022 Meroxa, Inc.
+// Copyright © 2024 Meroxa, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package compress
 
 import (
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"io"
+
+	"github.com/go-errors/errors"
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+var _ Compressor = (*Copy)(nil)
+
+type Copy struct{}
+
+func (Copy) Compress(in io.Reader, out io.Writer) error {
+	if _, err := io.Copy(out, in); err != nil {
+		return errors.Errorf("failed to plain copy bytes to writer: %w", err)
+	}
+
+	return nil
+}
+
+func (Copy) Name() string {
+	return TypeCopy
 }

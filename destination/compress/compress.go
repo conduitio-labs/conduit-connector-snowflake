@@ -1,4 +1,4 @@
-// Copyright © 2022 Meroxa, Inc.
+// Copyright © 2024 Meroxa, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package compress
 
-import (
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+import "io"
+
+type Type string
+
+const (
+	TypeGzip = "gzip"
+	TypeZstd = "zstd"
+	TypeCopy = "copy"
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+type Compressor interface {
+	Compress(in io.Reader, out io.Writer) error
+	Name() string
 }
