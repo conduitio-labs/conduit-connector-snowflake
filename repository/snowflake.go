@@ -24,7 +24,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
+	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint // Required for snowflake driver.
 )
 
 var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
@@ -118,7 +118,7 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 		return err
 	}
 
-	defer tx.Rollback() // nolint:errcheck,nolintlint
+	defer tx.Rollback() //nolint:errcheck // Don't care about rollback error.
 
 	_, err = tx.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Snowflake) GetTrackingData(
 		return nil, err
 	}
 
-	defer tx.Rollback() // nolint:errcheck,nolintlint
+	defer tx.Rollback() //nolint:errcheck // Don't care about rollback error.
 
 	// Consume data.
 	_, err = tx.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
@@ -176,7 +176,6 @@ func (s *Snowflake) GetTrackingData(
 		return nil, errors.Errorf("consume data: %w", err)
 	}
 
-	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
 	if err != nil {
 		return nil, errors.Errorf("run query: %w", err)
@@ -210,6 +209,9 @@ func (s *Snowflake) GetTrackingData(
 
 		result = append(result, row)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("run query: %w", err)
+	}
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
@@ -220,19 +222,24 @@ func (s *Snowflake) GetTrackingData(
 
 // TableExists check if table exist.
 func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error) {
-	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsTableExist, strings.ToUpper(table)))
 	if err != nil {
 		return false, err
 	}
+
 	defer rows.Close()
 
-	return rows.Next(), nil
+	exists := rows.Next()
+
+	if err = rows.Err(); err != nil {
+		return false, fmt.Errorf("table exists: %w", err)
+	}
+
+	return exists, nil
 }
 
 // GetMaxValue get max value by ordering column.
 func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
-	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))
 	if err != nil {
 		return nil, errors.Errorf("query get max value: %w", err)
@@ -247,6 +254,9 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 			return nil, er
 		}
 	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("query get max value: %w", err)
+	}
 
 	return maxValue, nil
 }
@@ -255,6 +265,7 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	var columns []string
 
+	//nolint:sqlclosecheck // false positive https://github.com/ryanrolds/sqlclosecheck/issues/35
 	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
 	if err != nil {
 		return nil, errors.Errorf("query get max value: %w", err)
