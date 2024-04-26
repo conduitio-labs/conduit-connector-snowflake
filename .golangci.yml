@@ -2,7 +2,7 @@ linters-settings:
   gofmt:
     simplify: false
   govet:
-    check-shadowing: false
+    shadow: false
   nolintlint:
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
@@ -25,7 +25,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
     # - depguard
     - dogsled
     - durationcheck
@@ -72,7 +71,6 @@ linters:
     - predeclared
     - rowserrcheck
     - staticcheck
-    - structcheck
     - stylecheck
     - sqlclosecheck
     # - tagliatelle
@@ -83,7 +81,6 @@ linters:
     - unconvert
     # - unparam
     - unused
-    - varcheck
     - wastedassign
     - whitespace
   # - wrapcheck
