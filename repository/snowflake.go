@@ -209,8 +209,8 @@ func (s *Snowflake) GetTrackingData(
 
 		result = append(result, row)
 	}
-	if rows.Err() != nil {
-		return nil, fmt.Errorf("run query: %w", rows.Err())
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("run query: %w", err)
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -231,7 +231,7 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 
 	exists := rows.Next()
 
-	if rows.Err() != nil {
+	if err = rows.Err(); err != nil {
 		return false, fmt.Errorf("table exists: %w", err)
 	}
 
@@ -254,7 +254,7 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 			return nil, er
 		}
 	}
-	if rows.Err() != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("query get max value: %w", err)
 	}
 
