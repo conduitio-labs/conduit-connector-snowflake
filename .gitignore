@@ -3,3 +3,6 @@
 
 # Binary built with `make build`
 /conduit-connector-snowflake
+
+# local env file
+.env

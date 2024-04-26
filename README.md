@@ -13,6 +13,8 @@ snowflake connector.
 
 ### Configuration
 
+## Source
+
 The config passed to `Configure` can contain the following fields.
 
 | name             | description                                                                                                                                                                                                                                     | required | example                                                |
@@ -24,6 +26,27 @@ The config passed to `Configure` can contain the following fields.
 | `orderingColumn` | The name of a column that the connector will use for ordering rows. Its values must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.                                                                           | yes      | "id"                                                   |
 | `snapshot`       | Whether or not the plugin will take a snapshot of the entire table before starting cdc mode, by default true.                                                                                                                                   | no       | "false"                                                |
 | `batchSize`      | Size of batch. By default is 1000. <b>Important:</b> Please don't update this variable after the pipeline starts, it will cause problem with position.                                                                                          | no       | "1000"                                                 |
+
+## Destination
+
+| name             | description                                                                                                                                                                                                                                     | required | example                                                |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|--------------------------------------------------------|
+| `username`     | Snowflake username | yes      | "username" |
+| `password`     | Snowflake password | yes      | "password" |
+| `host`     | Host for snowflake instance | yes      | 443 |
+| `database`     | Database you wish to use in your Snowflake account | yes      | "userdb" |
+| `schema`     | Schema you wish to use in your Snowflake account | yes      | "STREAM_DATA" |
+| `warehouse`     | Warehouse you wish to use in your Snowflake account | yes      | "COMPUTE_WH" |
+| `stage`     | Snowflake Stage to use for uploading files before merging into destination table. | yes      | "ordersStage" |
+| `primaryKey`     | Primary key of the source data | yes      | "id" |
+| `namingPrefix`     | Prefix to append to update_at , deleted_at, create_at at destination table. Default is "meroxa_" | no      | "meroxa" (translates to `meroxa_updated_at` for update timestamps) |
+| `format`     | Data type of file we upload and copy data from to snowflake | yes      | "csv" |
+| `compression`     | Compression to use when staging files in Snowflake | no      | "zstd" |
+| `sdk.batch.size` | Maximum size of batch before it gets written to Snowflake. Default is 1000.| no       | "1000" |
+| `sdk.batch.delay`|  Maximum delay before an incomplete batch is written to the destination. | no       | 5s     |
+| `csvGoRoutines`     | For CSV processing, the number of goroutines to concurrently process CSV rows. | no      | 1 |
+| `fileUploadThreads`     | Number of threads to run for PUT file uploads. | no      | 30 |
+| `keepAlive`     | Whether to keep the session alive even when the connection is idle | no      | true |
 
 ### How to build it
 
@@ -132,3 +155,7 @@ Connectors will transform this data to records.
 
 
 <b>NOTE:</b> please pay attention and don't accidentally delete `stream` and tracking table were created by CDC iterator.
+
+### Snowflake Destination
+
+The Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release.

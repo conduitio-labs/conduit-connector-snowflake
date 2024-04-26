@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package format
 
-import (
-	snowflake "github.com/conduitio-labs/conduit-connector-snowflake"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+//go:generate stringer -type=Type -trimprefix=Type -linecomment
+type Type int
+
+const (
+	TypeCSV Type = iota
 )
 
-func main() {
-	sdk.Serve(snowflake.Connector)
+var All = []Type{
+	TypeCSV,
 }

@@ -21,14 +21,13 @@ import (
 	"strings"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/go-errors/errors"
 	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/snowflakedb/gosnowflake" //nolint:revive,nolintlint
 )
 
-var (
-	MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
-)
+var MetadataFields = []string{MetadataColumnAction, MetadataColumnUpdate, MetadataColumnTime}
 
 // Snowflake repository.
 type Snowflake struct {
@@ -39,19 +38,19 @@ type Snowflake struct {
 func Create(ctx context.Context, connectionData string) (*Snowflake, error) {
 	db, err := sqlx.Open("snowflake", connectionData)
 	if err != nil {
-		return nil, fmt.Errorf("open db: %w", err)
+		return nil, errors.Errorf("open db: %w", err)
 	}
 
 	defer db.Close()
 
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ping db: %w", err)
+		return nil, errors.Errorf("ping db: %w", err)
 	}
 
 	conn, err := db.Connx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create conn: %w", err)
+		return nil, errors.Errorf("create conn: %w", err)
 	}
 
 	return &Snowflake{conn: conn}, nil
@@ -99,7 +98,7 @@ func (s *Snowflake) GetRows(
 
 	rows, err := s.conn.QueryxContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("execute query: %w", err)
+		return nil, errors.Errorf("execute query: %w", err)
 	}
 
 	return rows, nil
@@ -123,27 +122,27 @@ func (s *Snowflake) CreateTrackingTable(ctx context.Context, trackingTable, tabl
 
 	_, err = tx.ExecContext(ctx, buildCreateTrackingTable(trackingTable, table))
 	if err != nil {
-		return fmt.Errorf("create tracking table: %w", err)
+		return errors.Errorf("create tracking table: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnAction))
 	if err != nil {
-		return fmt.Errorf("add metadata action column: %w", err)
+		return errors.Errorf("add metadata action column: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, buildAddBoolColumn(trackingTable, MetadataColumnUpdate))
 	if err != nil {
-		return fmt.Errorf("add metadata update column: %w", err)
+		return errors.Errorf("add metadata update column: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, buildAddStringColumn(trackingTable, MetadataColumnRow))
 	if err != nil {
-		return fmt.Errorf("add metadata row column: %w", err)
+		return errors.Errorf("add metadata row column: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, buildAddTimestampColumn(trackingTable, MetadataColumnTime))
 	if err != nil {
-		return fmt.Errorf("add metadata timestamp column: %w", err)
+		return errors.Errorf("add metadata timestamp column: %w", err)
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -174,19 +173,20 @@ func (s *Snowflake) GetTrackingData(
 	// Consume data.
 	_, err = tx.ExecContext(ctx, buildConsumeDataQuery(trackingTable, stream, fields))
 	if err != nil {
-		return nil, fmt.Errorf("consume data: %w", err)
+		return nil, errors.Errorf("consume data: %w", err)
 	}
 
+	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := tx.QueryContext(ctx, buildGetTrackingData(trackingTable, fields, offset, limit))
 	if err != nil {
-		return nil, fmt.Errorf("run query: %w", err)
+		return nil, errors.Errorf("run query: %w", err)
 	}
 
 	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, fmt.Errorf("get columns: %w", err)
+		return nil, errors.Errorf("get columns: %w", err)
 	}
 
 	result := make([]map[string]interface{}, 0)
@@ -201,7 +201,7 @@ func (s *Snowflake) GetTrackingData(
 		}
 
 		if er := rows.Scan(colValues...); er != nil {
-			return nil, fmt.Errorf("scan: %w", err)
+			return nil, errors.Errorf("scan: %w", err)
 		}
 
 		for i, col := range columns {
@@ -223,6 +223,7 @@ func (s *Snowflake) GetTrackingData(
 
 // TableExists check if table exist.
 func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error) {
+	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryIsTableExist, strings.ToUpper(table)))
 	if err != nil {
 		return false, err
@@ -241,9 +242,10 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 
 // GetMaxValue get max value by ordering column.
 func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
+	//nolint: rowserrcheck //TODO: fix - this is disabled as we're working on destination.
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))
 	if err != nil {
-		return nil, fmt.Errorf("query get max value: %w", err)
+		return nil, errors.Errorf("query get max value: %w", err)
 	}
 
 	defer rows.Close()
@@ -268,14 +270,14 @@ func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string,
 
 	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
 	if err != nil {
-		return nil, fmt.Errorf("query get max value: %w", err)
+		return nil, errors.Errorf("query get max value: %w", err)
 	}
 	defer rows.Close()
 
 	dest := make(map[string]any)
 	for rows.Next() {
 		if err = rows.MapScan(dest); err != nil {
-			return nil, fmt.Errorf("scan primary key row: %w", err)
+			return nil, errors.Errorf("scan primary key row: %w", err)
 		}
 
 		columns = append(columns, dest[columnName].(string))
