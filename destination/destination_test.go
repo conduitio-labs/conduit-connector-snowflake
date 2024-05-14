@@ -19,7 +19,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer/mock"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -188,20 +187,17 @@ func Test_ParseConfig(t *testing.T) {
 		"snowflake.format":       "csv",
 		"sdk.batch.size":         "10",
 		"sdk.batch.delay":        "1s",
-		"snowflake.url":          "u:p@localhost:1818/db/schema",
 		"snowflake.table":        "orders",
 	}
 
 	want := Config{
-		Config: config.Config{
-			Table: "orders",
-		},
 		Username:     "u",
 		Password:     "p",
 		Host:         "localhost",
 		Port:         1818,
 		Database:     "db",
 		Schema:       "schema",
+		Table: "orders",
 		Warehouse:    "testWarehouse",
 		NamingPrefix: "meroxa",
 		PrimaryKey:   "id",

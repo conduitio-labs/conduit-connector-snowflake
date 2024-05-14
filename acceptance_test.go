@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	source "github.com/conduitio-labs/conduit-connector-snowflake/source"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -66,7 +65,7 @@ func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record 
 	defer conn.Close()
 
 	for _, r := range records {
-		er := writeRecord(conn, r, d.Config.SourceConfig[config.KeyTable])
+		er := writeRecord(conn, r, d.Config.SourceConfig[source.KeyTable])
 		if er != nil {
 			t.Errorf("write to snowflake %s", err)
 		}
@@ -106,7 +105,7 @@ func TestAcceptance(t *testing.T) {
 	}
 
 	cfg := map[string]string{
-		config.KeyConnection:     connectionURL,
+		source.KeyConnection:     connectionURL,
 		source.KeyPrimaryKeys:    "ID",
 		source.KeyOrderingColumn: "ID",
 	}
@@ -257,9 +256,9 @@ func beforeTest(cfg map[string]string) func(t *testing.T) {
 		table := randomIdentifier(t)
 		t.Logf("table under test: %v", table)
 
-		cfg[config.KeyTable] = table
+		cfg[source.KeyTable] = table
 
-		err := setupTestDB(t, cfg[config.KeyConnection], table)
+		err := setupTestDB(t, cfg[source.KeyConnection], table)
 		if err != nil {
 			t.Fatal(err)
 		}

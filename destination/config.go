@@ -14,14 +14,13 @@
 
 package destination
 
-import (
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
-)
+import sdk "github.com/conduitio/conduit-connector-sdk"
 
 //go:generate paramgen -output=config_paramgen.go Config
 
+type TableFn func(sdk.Record) (string, error)
+
 type Config struct {
-	config.Config
 	// Username for the snowflake connection
 	Username string `json:"snowflake.username" validate:"required"`
 	// Password for the snowflake connection
@@ -34,6 +33,8 @@ type Config struct {
 	Database string `json:"snowflake.database" validate:"required"`
 	// Schema for the snowflake connection
 	Schema string `json:"snowflake.schema" validate:"required"`
+	// Destination snowflake table. Support Go Templates for multiple collections.
+	Table string `json:"table" default:"{{ index .Metadata \"opencdc.collection\" }}"`
 	// Warehouse for the snowflake connection
 	Warehouse string `json:"snowflake.warehouse" validate:"required"`
 	// Whether to keep the session alive even when the connection is idle.

@@ -14,12 +14,9 @@
 
 package source
 
-import "github.com/conduitio-labs/conduit-connector-snowflake/config"
-
 //go:generate paramgen -output=config_paramgen.go Config
 
 type Config struct {
-	config.Config
 	// Connection string connection to snowflake DB.
 	// Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
 	Connection string `json:"snowflake.url" validate:"required"`
@@ -33,11 +30,16 @@ type Config struct {
 	BatchSize int `json:"snowflake.batchsize" default:"0"`
 	// Snapshot
 	Snapshot bool `json:"snowflake.snapshot" default:"false"`
+	// Table name.
+	Table string `json:"snowflake.table" validate:"required"`
 }
 
 const (
-	KeyColumns = "snowflake.columns"
 	// KeyPrimaryKeys is the list of the column names.
+	KeyColumns = "snowflake.columns"
+	// KeyConnection - string for connect to db2.
+	KeyConnection string = "snowflake.url"
+	// KeyPrimaryKeys is the list of the primary keys.
 	KeyPrimaryKeys string = "snowflake.primaryKeys"
 	// KeyOrderingColumn is a config name for an ordering column.
 	KeyOrderingColumn = "snowflake.orderingColumn"
@@ -45,4 +47,6 @@ const (
 	KeySnapshot = "snowflake.snapshot"
 	// KeyBatchSize is a config name for a batch size.
 	KeyBatchSize = "snowflake.batchSize"
+	// KeyTable database table name.
+	KeyTable string = "snowflake.table"
 )

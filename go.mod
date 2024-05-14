@@ -4,9 +4,9 @@ go 1.22.2
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/conduitio/conduit-connector-sdk v0.8.0
 	github.com/go-errors/errors v1.5.1
-	github.com/go-playground/validator/v10 v10.19.0
 	github.com/golang/mock v1.6.0
 	github.com/golangci/golangci-lint v1.57.2
 	github.com/google/go-cmp v0.6.0
@@ -21,7 +21,6 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.4.0
-	go.uber.org/multierr v1.11.0
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 )
 
@@ -53,8 +52,6 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.6.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
-	github.com/go-playground/locales v0.14.1 // indirect
-	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
@@ -168,7 +165,6 @@ require (
 	github.com/kyoh86/exportloopref v0.1.11 // indirect
 	github.com/ldez/gomoddirectives v0.2.4 // indirect
 	github.com/ldez/tagliatelle v0.5.0 // indirect
-	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/leonklingele/grouper v1.1.1 // indirect
 	github.com/lufeee/execinquery v1.2.1 // indirect
 	github.com/macabu/inamedparam v0.1.3 // indirect
@@ -249,6 +245,7 @@ require (
 	go-simpler.org/sloglint v0.5.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/automaxprocs v1.5.3 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20240314144324-c7f7c6466f7f // indirect

@@ -39,7 +39,7 @@ const (
 // has accumulated in its buffers. The default writer the Destination would use is
 // SnowflakeWriter, others exists to test local behavior.
 type Writer interface {
-	Write(context.Context, []sdk.Record) (int, error)
+	Write(context.Context, map[string][]sdk.Record) (int, error)
 	Close(context.Context) error
 }
 
@@ -158,7 +158,7 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	return nil
 }
 
-func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
+func (s *SnowflakeCSV) Write(ctx context.Context, records map[string][]sdk.Record) (int, error) {
 	var err error
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)

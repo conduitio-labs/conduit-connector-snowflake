@@ -15,12 +15,15 @@
 package destination
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/sprig"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -38,6 +41,7 @@ type Destination struct {
 
 	Config Config
 	Writer writer.Writer
+	getTableName TableFn
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
@@ -112,6 +116,25 @@ func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, err
 	// control the size of records & timing of when Write() method is invoked.
 	// FYI - these are only implemented in the SDK for destinations
 
+	// check if multiple collections is being used
+	// TODO: revisit this to use smarter preallocation for large batches
+	recordsPerTable := map[string][]sdk.Record{}
+	for _, r := range records {
+		table, err := d.getTableName(r)
+		if err != nil {
+			return 0, fmt.Errorf("invalid table name or table function: %w", err)
+		}
+		if recs, ok := recordsPerTable[table]; ok {
+			// TODO: revisit this to use smarter preallocation for large batches. this approach is just to prove the concept.
+			recs = append(recs, r)
+			recordsPerTable[table] = recs
+		} else {
+			recordsPerTable[table] = []sdk.Record{r}
+		}
+	}
+
+	// if so, split the record batches into multiple batches by destination table
+
 	n, err := d.Writer.Write(ctx, records)
 	if err != nil {
 		return 0, errors.Errorf("failed to write records: %w", err)
@@ -158,4 +181,33 @@ func (d *Destination) configureURL() string {
 		d.Config.Schema,
 		paramStr,
 	)
+}
+
+// TableFunction returns a function that determines the table for each record individually.
+// The function might be returning a static table name.
+// If the table is neither static nor a template, an error is returned.
+func (c Config) TableFunction() (f TableFn, err error) {
+	// Not a template, i.e. it's a static table name
+	if !strings.HasPrefix(c.Table, "{{") && !strings.HasSuffix(c.Table, "}}") {
+		return func(_ sdk.Record) (string, error) {
+			return c.Table, nil
+		}, nil
+	}
+
+	// Try to parse the table
+	t, err := template.New("table").Funcs(sprig.FuncMap()).Parse(c.Table)
+	if err != nil {
+		// The table is not a valid Go template.
+		return nil, fmt.Errorf("table is neither a valid static table nor a valid Go template: %w", err)
+	}
+
+	// The table is a valid template, return TableFn.
+	var buf bytes.Buffer
+	return func(r sdk.Record) (string, error) {
+		buf.Reset()
+		if err := t.Execute(&buf, r); err != nil {
+			return "", fmt.Errorf("failed to execute table template: %w", err)
+		}
+		return buf.String(), nil
+	}, nil
 }
