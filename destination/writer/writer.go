@@ -346,7 +346,7 @@ func schemaMatches(schema, snowflakeSchema map[string]string) error {
 		if !ok {
 			return errors.Errorf("table already exists on snowflake, column %s doesn't exist on destination table ", k)
 		}
-		if strings.EqualFold(v, v2) {
+		if !strings.EqualFold(v, v2) {
 			return errors.Errorf("table already exists on snowflake, column %s with datatype %s "+
 				"doesn't match on destination table of datatype %s ", k, v, v2)
 		}
