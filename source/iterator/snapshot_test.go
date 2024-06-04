@@ -33,8 +33,12 @@ var (
 	maxValue       = 12
 	pos            = &position.Position{
 		IteratorType:             position.TypeSnapshot,
-		SnapshotLastProcessedVal: 12,
-		SnapshotMaxValue:         12,
+		Snapshots: position.SnapshotPositions{
+			"test": position.SnapshotPosition{
+				SnapshotLastProcessedVal: 12,
+				SnapshotMaxValue:         12,
+			},
+		},
 	}
 )
 

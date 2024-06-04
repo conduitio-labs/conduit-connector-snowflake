@@ -35,11 +35,7 @@ type Position struct {
 	// IteratorType - shows in what iterator was created position.
 	IteratorType IteratorType
 
-	// Snapshot information.
-	// SnapshotLastProcessedVal - last processed value from ordering column.
-	SnapshotLastProcessedVal any
-	// SnapshotMaxValue max value by  ordering column, when snapshot starts work.
-	SnapshotMaxValue any
+	Snapshots SnapshotPositions `json:"snapshots,omitempty"`
 
 	// CDC information
 	// IndexInBatch - index position in current batch.
@@ -49,6 +45,17 @@ type Position struct {
 
 	// Time Created time.
 	Time time.Time
+}
+
+type SnapshotPositions map[string]SnapshotPosition
+
+// Snapshot information.
+type SnapshotPosition struct {
+	// SnapshotLastProcessedVal - last processed value from ordering column.
+	SnapshotLastProcessedVal any
+	// SnapshotMaxValue max value by ordering column, when snapshot starts work.
+	SnapshotMaxValue any
+	Done             bool `json:"done,omitempty"`
 }
 
 // ParseSDKPosition parses SDK position and returns Position.

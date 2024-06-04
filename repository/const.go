@@ -30,6 +30,7 @@ const (
 	queryIsTableExist        = `SHOW TABLES LIKE '%s'`
 	queryGetMaxValue         = `SELECT MAX(%s) FROM %s`
 	queryGetPrimaryKeys      = `SHOW PRIMARY KEYS IN TABLE %s`
+	queryShowColumns         = `SHOW COLUMNS IN TABLE %s`
 
-	columnName = "column_name"
+	keyName = "column_name"
 )

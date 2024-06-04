@@ -32,13 +32,12 @@ type CDCIterator struct {
 	// repository for run queries to snowflake.
 	snowflake Repository
 
-	// table - table in snowflake for getting currentBatch.
-	table string
-	// columns list of table columns for record payload
-	// if empty - will get all columns.
-	columns []string
+	// tables - table in snowflake for getting currentBatch.
+	tables       []string
 	// keys is the list of the column names that iterator use for setting key in record.
-	keys []string
+	tableKeys    map[string][]string
+	// columns list of table columns for record payload
+	tableCols    map[string][]string
 
 	// index - current index of element in current batch which iterator converts to record.
 	index int
@@ -50,18 +49,19 @@ type CDCIterator struct {
 	currentBatch []map[string]interface{}
 }
 
+// In progress - refactor the CDC iterator to handle multiple tables.
 func NewCDCIterator(
 	snowflake Repository,
-	table string,
-	keys, columns []string,
+	tables []string,
+	keys, columns map[string][]string,
 	index, offset, butchSize int,
 	currentBatch []map[string]interface{},
 ) *CDCIterator {
 	return &CDCIterator{
 		snowflake:    snowflake,
-		table:        table,
-		columns:      columns,
-		keys:         keys,
+		tables:        tables,
+		tableCols:    columns,
+		tableKeys:    keys,
 		index:        index,
 		offset:       offset,
 		batchSize:    butchSize,
@@ -123,7 +123,7 @@ func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 
 	pos := position.Position{
 		IteratorType:             position.TypeCDC,
-		SnapshotLastProcessedVal: nil,
+		Snapshots: nil,
 		IndexInBatch:             c.index,
 		BatchID:                  c.offset,
 		Time:                     time.Now(),

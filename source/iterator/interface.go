@@ -26,18 +26,33 @@ type Repository interface {
 	// GetRows - get rows from table.
 	GetRows(ctx context.Context, table, orderingColumn string, fields []string, pos *position.Position, maxValue any,
 		limit int) (*sqlx.Rows, error)
+	
 	// CreateStream - create stream.
 	CreateStream(ctx context.Context, stream, table string) error
+	
 	// GetTrackingData - get rows from tracking table.
 	GetTrackingData(ctx context.Context, stream, trackingTable string, fields []string,
 		offset, limit int,
 	) ([]map[string]interface{}, error)
+	
 	// CreateTrackingTable - create tracking table.
 	CreateTrackingTable(ctx context.Context, trackingTable, table string) error
+	
 	// GetMaxValue get max value by ordering column.
 	GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error)
+	
 	// Close - shutdown repository.
 	Close() error
+	
 	// GetPrimaryKeys returns all primary keys of the table.
 	GetPrimaryKeys(ctx context.Context, table string) ([]string, error)
+	
+	// TableExists ensures that the table provided exists in the snowflake schema & database.
+	TableExists(ctx context.Context, table string) (bool, error)
+
+	// ColumnsExist ensures that the table contains the columns provided.
+	ColumnsExist(ctx context.Context, table string, columns []string) (bool, []string, error)
+
+	// KeysExist ensures that the table contains the primary keys provided.
+	KeysExist(ctx context.Context, table string, columns []string) (bool, []string, error)
 }

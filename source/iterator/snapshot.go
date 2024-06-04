@@ -16,145 +16,102 @@ package iterator
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
-	"time"
+	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/conduitio/conduit-commons/csync"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"github.com/jmoiron/sqlx"
+	"gopkg.in/tomb.v2"
 )
 
 // snapshotIterator to iterate snowflake objects.
 type snapshotIterator struct {
-	rows *sqlx.Rows
-
 	// repository for run queries to snowflake.
 	snowflake Repository
+	t       *tomb.Tomb
+	workers []*FetchWorker
+	acks    csync.WaitGroup
 
-	// table - table in snowflake for getting currentBatch.
-	table string
-	// columns list of table columns for record payload
+	conf snapshotIteratorConfig
+
+	lastPosition position.Position
+
+	data chan FetchData
+}
+
+type snapshotIteratorConfig struct {
+	Position     position.Position
+	// Tables to fetch rows from.
+	Tables       []string
+	// TableKeys: map of the column names per table that iterator use for setting key in record.
+	TableKeys    map[string][]string
+	// TableCols: map of columns per table for record payload
 	// if empty - will get all columns.
-	columns []string
-	// keys is the list of the column names that iterator use for setting key in record.
-	keys []string
-	// batchSize size of batch.
+	TableCols    	map[string][]string
+	// TableOrderingCol: map of ordering column per table
+	// if empty - will use the key instead.
+	TableOrderingCol    	map[string]string
+	// maxValue max value by ordering column per table when snapshot starts works
+	maxValue map[string]any
+	// size of snapshot batches to fetch
 	batchSize int
-	// orderingColumn Name of column what iterator using for sorting data.
-	orderingColumn string
-	// position last recorded position.
-	position *position.Position
-	// maxValue max value by ordering column when snapshot starts works
-	maxValue any
 }
 
 func newSnapshotIterator(
 	ctx context.Context,
 	snowflake Repository,
-	table, orderingColumn string,
-	keys, columns []string,
+	conf snapshotIteratorConfig,
 	batchSize int,
 	position *position.Position,
 ) (*snapshotIterator, error) {
 	var err error
 
-	iterator := &snapshotIterator{
+	t, _ := tomb.WithContext(ctx)
+	it := &snapshotIterator{
 		snowflake:      snowflake,
-		table:          table,
-		columns:        columns,
-		keys:           keys,
-		orderingColumn: orderingColumn,
-		batchSize:      batchSize,
-		position:       position,
+		t: t,
+		conf: conf,
 	}
-
-	if position == nil {
-		iterator.maxValue, err = iterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
-		if err != nil {
-			return nil, errors.Errorf("get max value: %w", err)
+	
+	for _, table := range conf.Tables {
+		p, ok := position.Snapshots[table]
+		if position == nil || position.Snapshots == nil || !ok {
+			p.SnapshotMaxValue, err = it.snowflake.GetMaxValue(ctx, table, conf.TableOrderingCol[table])
+			if err != nil {
+				return nil, errors.Errorf("get max value: %w", err)
+			}
 		}
-	} else {
-		iterator.maxValue = position.SnapshotMaxValue
 	}
 
-	return iterator, nil
-}
-
-// HasNext check ability to get next record.
-func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
-	var err error
-
-	if i.rows != nil && i.rows.Next() {
-		return true, nil
+	if err := it.initFetchers(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize table fetchers: %w", err)
 	}
 
-	i.rows, err = i.snowflake.GetRows(ctx, i.table, i.orderingColumn, i.columns,
-		i.position, i.maxValue, i.batchSize)
-	if err != nil {
-		// Snowflake library can return specific error for context cancel
-		// Connector can't return this error and connector replace to
-		// context cancel error
-		if strings.Contains(err.Error(), snowflakeErrorCodeQueryNotExecuting) {
-			return false, ctx.Err()
-		}
+	it.startWorkers()
 
-		return false, errors.Errorf("get rows: %w", err)
-	}
-
-	// check new batch.
-	if i.rows != nil && i.rows.Next() {
-		return true, nil
-	}
-
-	return false, nil
+	return it, nil
 }
 
 // Next get new record.
 func (i *snapshotIterator) Next(_ context.Context) (sdk.Record, error) {
-	row := make(map[string]any)
-	if err := i.rows.MapScan(row); err != nil {
-		return sdk.Record{}, errors.Errorf("scan rows: %w", err)
-	}
-
-	if _, ok := row[i.orderingColumn]; !ok {
-		return sdk.Record{}, ErrOrderingColumnIsNotExist
-	}
-
-	pos := position.Position{
-		IteratorType:             position.TypeSnapshot,
-		SnapshotLastProcessedVal: row[i.orderingColumn],
-		SnapshotMaxValue:         i.maxValue,
-		Time:                     time.Now(),
-	}
-
-	sdkPos, err := pos.ConvertToSDKPosition()
-	if err != nil {
-		return sdk.Record{}, errors.Errorf("convert position %w", err)
-	}
-
-	key := make(sdk.StructuredData)
-	for n := range i.keys {
-		val, ok := row[i.keys[n]]
-		if !ok {
-			return sdk.Record{}, errors.Errorf("key column %q not found", i.keys[n])
+	select {
+	case <-ctx.Done():
+		return sdk.Record{}, fmt.Errorf("iterator stopped: %w", ctx.Err())
+	case d, ok := <-i.data:
+		if !ok { // closed
+			if err := i.t.Err(); err != nil {
+				return sdk.Record{}, fmt.Errorf("fetchers exited unexpectedly: %w", err)
+			}
+			if err := i.acks.Wait(ctx); err != nil {
+				return sdk.Record{}, fmt.Errorf("failed to wait for acks: %w", err)
+			}
+			return sdk.Record{}, ErrIteratorDone
 		}
 
-		key[i.keys[n]] = val
+		i.acks.Add(1)
+		return i.buildRecord(d), nil
 	}
-
-	transformedRowBytes, err := json.Marshal(row)
-	if err != nil {
-		return sdk.Record{}, errors.Errorf("marshal row: %w", err)
-	}
-
-	i.position = &pos
-
-	metadata := sdk.Metadata(map[string]string{metadataTable: i.table})
-	metadata.SetCreatedAt(time.Now())
-
-	return sdk.Util.Source.NewRecordSnapshot(sdkPos, metadata, key, sdk.RawData(transformedRowBytes)), nil
 }
 
 // Stop shutdown iterator.
@@ -172,6 +129,55 @@ func (i *snapshotIterator) Stop() error {
 // Ack check if record with position was recorded.
 func (i *snapshotIterator) Ack(ctx context.Context, rp sdk.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(rp)).Msg("got ack")
+	i.acks.Done()
+	return nil
+}
+
+func (i *snapshotIterator) Teardown(_ context.Context) error {
+	if i.t != nil {
+		i.t.Kill(errors.New("tearing down snapshot iterator"))
+	}
 
 	return nil
+}
+
+func (i *snapshotIterator) initFetchers(ctx context.Context) error {
+	var errs []error
+
+	i.workers = make([]*FetchWorker, len(i.conf.Tables))
+
+	for j, t := range i.conf.Tables {
+		w := NewFetchWorker(i.snowflake, i.data, FetchConfig{
+			Table:        t,
+			Keys:          i.conf.TableKeys[t],
+			Columns: i.conf.TableCols[t],
+			FetchSize: i.conf.batchSize,
+			Position:     i.lastPosition,
+		})
+
+		if err := w.Validate(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("failed to validate table fetcher %q config: %w", t, err))
+		}
+
+		i.workers[j] = w
+	}
+
+	return errors.Join(errs...)
+}
+
+func (i *snapshotIterator) startWorkers() {
+	for j := range i.workers {
+		f := i.workers[j]
+		i.t.Go(func() error {
+			ctx := i.t.Context(nil) //nolint:staticcheck // This is the correct usage of tomb.Context
+			if err := f.Run(ctx); err != nil {
+				return fmt.Errorf("fetcher for table %q exited: %w", f.conf.Table, err)
+			}
+			return nil
+		})
+	}
+	go func() {
+		<-i.t.Dead()
+		close(i.data)
+	}()
 }

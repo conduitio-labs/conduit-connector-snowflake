@@ -86,7 +86,7 @@ func (s *Snowflake) GetRows(
 	sb.OrderBy(orderingColumn)
 	if pos != nil {
 		sb.Where(
-			sb.GreaterThan(orderingColumn, pos.SnapshotLastProcessedVal),
+			sb.GreaterThan(orderingColumn, pos.Snapshots[table].SnapshotLastProcessedVal),
 		)
 	}
 	if !isNil(maxValue) {
@@ -238,6 +238,81 @@ func (s *Snowflake) TableExists(ctx context.Context, table string) (bool, error)
 	return exists, nil
 }
 
+// Columns Exist checks if the columns provided exist.
+// It returns a bool indicating if the columns exist, an optional slice containing the missing columns,
+// and an error if the check failed.
+func (s *Snowflake) ColumnsExist(ctx context.Context, table string, columns []string) (bool, []string, error) {
+	if len(columns) == 0 {
+		return false, nil, errors.New("empty columns provided to ColumnsExist")
+	}
+	//nolint:sqlclosecheck // false positive https://github.com/ryanrolds/sqlclosecheck/issues/35
+	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryShowColumns, table))
+	if err != nil {
+		return false, nil, errors.Errorf("failed to show columns: %w", err)
+	}
+	defer rows.Close()
+	
+	queryCols := make(map[string]struct{})
+	queryResult := make(map[string]any)
+	for rows.Next() {
+		if err = rows.MapScan(queryResult); err != nil {
+			return false, nil, errors.Errorf("failed to scan column: %w", err)
+		}
+		col := queryResult[keyName].(string)
+		queryCols[col] = struct{}{}
+	}
+
+	missingColumns := []string{}
+
+	for _, c := range columns {
+		if _, ok := queryCols[c]; !ok {
+			missingColumns = append(missingColumns, c)
+		}
+	}
+
+	if len(missingColumns) > 0 {
+		return false, missingColumns, nil
+	}
+
+	return true, nil, nil
+}
+
+// KeysExist ensures that the table contains the primary keys provided.
+func (s *Snowflake) KeysExist(ctx context.Context, table string, keys []string) (bool, []string, error) {
+	if len(keys) == 0 {
+		return false, nil, errors.New("empty keys provided to KeysExist")
+	}
+	//nolint:sqlclosecheck // false positive https://github.com/ryanrolds/sqlclosecheck/issues/35
+	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
+	if err != nil {
+		return false, nil, errors.Errorf("failed to show keys: %w", err)
+	}
+	defer rows.Close()
+
+	queryCols := make(map[string]struct{})
+	queryResult := make(map[string]any)
+	for rows.Next() {
+		if err = rows.MapScan(queryResult); err != nil {
+			return false, nil, errors.Errorf("failed to scan keys: %w", err)
+		}
+		col := queryResult[keyName].(string)
+		queryCols[col] = struct{}{}
+	}
+
+	missingKeys := []string{}
+
+	for _, c := range keys {
+		if _, ok := queryCols[c]; !ok {
+			missingKeys = append(missingKeys, c)
+		}
+	}
+
+	if len(missingKeys) > 0 {
+		return false, missingKeys, nil
+	}
+
+	return true, nil, nil
+}
 // GetMaxValue get max value by ordering column.
 func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn string) (any, error) {
 	rows, err := s.conn.QueryContext(ctx, fmt.Sprintf(queryGetMaxValue, orderingColumn, table))
@@ -278,7 +353,7 @@ func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string,
 			return nil, errors.Errorf("scan primary key row: %w", err)
 		}
 
-		columns = append(columns, dest[columnName].(string))
+		columns = append(columns, dest[keyName].(string))
 	}
 
 	return columns, nil

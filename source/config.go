@@ -33,11 +33,17 @@ type Config struct {
 	BatchSize int `json:"snowflake.batchsize" default:"0"`
 	// Snapshot
 	Snapshot bool `json:"snowflake.snapshot" default:"false"`
+	// Tables is a List of table names to read from, separated by a comma, e.g.:"table1,table2".
+	// Use "*" if you'd like to listen to all tables.
+	Tables []string `json:"tables"`
 }
 
 const (
+	// AllTablesWildcard can be used if you'd like to listen to all tables.
+	AllTablesWildcard = "*"
+	// KeyColumns is the list of the columns.
 	KeyColumns = "snowflake.columns"
-	// KeyPrimaryKeys is the list of the column names.
+	// KeyPrimaryKeys is the list of the primary keys.
 	KeyPrimaryKeys string = "snowflake.primaryKeys"
 	// KeyOrderingColumn is a config name for an ordering column.
 	KeyOrderingColumn = "snowflake.orderingColumn"
@@ -46,3 +52,11 @@ const (
 	// KeyBatchSize is a config name for a batch size.
 	KeyBatchSize = "snowflake.batchSize"
 )
+
+// Init sets the desired value on Tables, parsing from the url
+func (c Config) Init() Config {
+	// parse from url
+
+	// add to c.Tables
+	return c
+}
