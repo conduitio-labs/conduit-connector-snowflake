@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"sync"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -175,92 +174,47 @@ func MakeCSVBytes(
 		}
 	}
 
-	// Process CSV records in parallel with goroutines
-	var wg sync.WaitGroup
-	insertsBuffers := make([]*bytes.Buffer, numGoroutines)
-	updatesBuffers := make([]*bytes.Buffer, numGoroutines)
-	errChan := make(chan error, numGoroutines)
-	insertsProcessedChan := make(chan bool, numGoroutines)
-	updatesProcessedChan := make(chan bool, numGoroutines)
+	// Process CSV records
 
 	dedupedRecords := maps.Values(latestRecordMap)
-	recordChunks := splitRecordChunks(dedupedRecords, numGoroutines)
-
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
-	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines in %d chunks",
-		numGoroutines, len(recordChunks))
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
+	insertsBuffer := new(bytes.Buffer)
+	updatesBuffer := new(bytes.Buffer)
 
-			// each goroutine gets its own set of buffers
-			insertsBuffers[index] = new(bytes.Buffer)
-			updatesBuffers[index] = new(bytes.Buffer)
+	insertW := csv.NewWriter(insertsBuffer)
+	updateW := csv.NewWriter(updatesBuffer)
 
-			insertW := csv.NewWriter(insertsBuffers[index])
-			updateW := csv.NewWriter(updatesBuffers[index])
-
-			inserts, updates, err := createCSVRecords(ctx,
-				recordChunks[index],
-				insertW,
-				updateW,
-				csvColumnOrder,
-				meroxaColumns)
-			if err != nil {
-				errChan <- errors.Errorf("failed to create CSV records: %w", err)
-
-				return
-			}
-
-			if inserts > 0 {
-				insertsProcessedChan <- true
-			}
-
-			if updates > 0 {
-				updatesProcessedChan <- true
-			}
-		}(i)
+	inserts, updates, err := createCSVRecords(ctx,
+		dedupedRecords,
+		insertW,
+		updateW,
+		csvColumnOrder,
+		meroxaColumns)
+	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to create CSV records")
+		return err
 	}
 
-	// wait for goroutines to complete
-	wg.Wait()
-	close(errChan)
-	close(insertsProcessedChan)
-	close(updatesProcessedChan)
+	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
+	sdk.Logger(ctx).Debug().Msgf("num updates/deletes in CSV buffer: %d", updates)
 
-	// check for errors from goroutines
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
-	}
-
-	var insertsProcessed, updatesProcessed bool
-	for p := range insertsProcessedChan {
-		insertsProcessed = insertsProcessed || p
-	}
-	for p := range updatesProcessedChan {
-		updatesProcessed = updatesProcessed || p
-	}
-
-	if insertsProcessed {
+	if inserts > 0 {
 		if err := insertsWriter.Write(csvColumnOrder); err != nil {
 			return errors.Errorf("failed to write insert headers: %w", err)
 		}
 
-		if err := joinBuffers(insertsBuffers, insertsBuf); err != nil {
+		if err := joinBuffers(insertsBuf, insertsBuffer); err != nil {
 			return errors.Errorf("failed to join insert buffers: %w", err)
 		}
 	}
 
-	if updatesProcessed {
+	if updates > 0 {
 		if err := updatesWriter.Write(csvColumnOrder); err != nil {
 			return errors.Errorf("failed to write update headers: %w", err)
 		}
 
-		if err := joinBuffers(updatesBuffers, updatesBuf); err != nil {
+		if err := joinBuffers(updatesBuf, updatesBuffer); err != nil {
 			return errors.Errorf("failed to join update buffers: %w", err)
 		}
 	}
@@ -366,57 +320,14 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 	return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 }
 
-func joinBuffers(buffers []*bytes.Buffer, w *bytes.Buffer) error {
-	var bufsize int
-	for _, b := range buffers {
-		bufsize += b.Len()
-	}
+// Writes the contents of buffer b to buffer a.
+func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
+	a.Grow(a.Len())
 
-	w.Grow(bufsize)
 
-	for _, b := range buffers {
-		if _, err := b.WriteTo(w); err != nil {
-			return err
-		}
+	if _, err := b.WriteTo(a); err != nil {
+		return err
 	}
 
 	return nil
-}
-
-// splitRecordChunks takes a slice of recordSummary and an integer n, then splits the slice into n chunks.
-// Note: The last chunk may have fewer elements if the slice size is not evenly divisible by n.
-// TODO: replace this with.
-func splitRecordChunks(slice []*recordSummary, n int) [][]*recordSummary {
-	var chunks [][]*recordSummary
-
-	// Calculate chunk size
-	totalLen := len(slice)
-	if n <= 0 {
-		n = 1 // Ensure there is at least one chunk
-	}
-	chunkSize := totalLen / n
-	remainder := totalLen % n
-
-	start := 0
-	for i := 0; i < n; i++ {
-		end := start + chunkSize
-		if i < remainder {
-			end++ // Distribute the remainder among the first few chunks
-		}
-
-		// Adjust end if it goes beyond the slice length
-		if end > totalLen {
-			end = totalLen
-		}
-
-		chunks = append(chunks, slice[start:end])
-		start = end
-
-		// Break the loop early if we've already included all elements
-		if start >= totalLen {
-			break
-		}
-	}
-
-	return chunks
 }
