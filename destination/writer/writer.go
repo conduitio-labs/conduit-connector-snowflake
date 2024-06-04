@@ -480,13 +480,19 @@ func (s *SnowflakeCSV) Merge(
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
 
-		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
+		res, err := tx.ExecContext(ctx, queryMergeInto)
+		if err != nil {
 			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, insertsFilename)
 
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
 		}
 
-		sdk.Logger(ctx).Info().Msg("ran MERGE for inserts")
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
+		}
+
+		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
 	}
 
 	if updatesFilename != "" {
@@ -523,13 +529,19 @@ func (s *SnowflakeCSV) Merge(
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
 
-		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
+		res, err := tx.ExecContext(ctx, queryMergeInto)
+		if err != nil {
 			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, updatesFilename)
 
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
 		}
 
-		sdk.Logger(ctx).Info().Msg("ran MERGE for updates/deletes")
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+		}
+
+		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
 	}
 
 	if err := tx.Commit(); err != nil {

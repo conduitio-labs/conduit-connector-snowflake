@@ -186,7 +186,7 @@ func MakeCSVBytes(
 	dedupedRecords := maps.Values(latestRecordMap)
 	recordChunks := splitRecordChunks(dedupedRecords, numGoroutines)
 
-	sdk.Logger(ctx).Debug().Msgf("num of records in batch before deduping: %d", len(dedupedRecords))
+	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
 	sdk.Logger(ctx).Debug().Msgf("processing %d goroutines in %d chunks",
 		numGoroutines, len(recordChunks))
 
