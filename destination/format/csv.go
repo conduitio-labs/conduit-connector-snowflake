@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -38,9 +39,9 @@ const (
 )
 
 type recordSummary struct {
-	updatedAt    string
-	createdAt    string
-	deletedAt    string
+	updatedAt    time.Time
+	createdAt    time.Time
+	deletedAt    time.Time
 	latestRecord *sdk.Record
 }
 
@@ -97,14 +98,12 @@ func GetDataSchema(
 				schema[key] = snowflakeFloat
 			case bool:
 				schema[key] = snowflakeBoolean
+			case time.Time, *time.Time:
+				schema[key] = snowflakeTimeStamp
 			case nil:
 				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
 				schema[key] = snowflakeVariant
-			case time.Time:
-				schema[key] = snowflakeTimeStamp
-			case *time.Time:
-				schema[key] = snowflakeTimeStamp
 			default:
 				schema[key] = snowflakeVarchar
 			}
@@ -135,6 +134,7 @@ func MakeCSVBytes(
 	records []sdk.Record,
 	csvColumnOrder []string,
 	meroxaColumns ConnectorColumns,
+	schema map[string]string,
 	primaryKey string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
@@ -149,7 +149,12 @@ func MakeCSVBytes(
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch before deduping: %d", len(records))
 
 	for i, r := range records {
-		readAt := r.Metadata["opencdc.readAt"]
+		readAtMicro, err := strconv.ParseInt(r.Metadata["opencdc.readAt"], 10, 64)
+		if err != nil {
+			return err
+		}
+		readAt := time.UnixMicro(readAtMicro)
+
 		s, err := extract(r.Operation, r.Payload, r.Key)
 		key := fmt.Sprint(s[primaryKey])
 		if err != nil {
@@ -166,7 +171,7 @@ func MakeCSVBytes(
 
 		switch r.Operation {
 		case sdk.OperationUpdate:
-			if l.updatedAt < readAt {
+			if readAt.Before(l.updatedAt) {
 				l.updatedAt = readAt
 				l.latestRecord = &records[i]
 			}
@@ -195,6 +200,7 @@ func MakeCSVBytes(
 		insertW,
 		updateW,
 		csvColumnOrder,
+		schema,
 		meroxaColumns)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to create CSV records")
@@ -232,6 +238,7 @@ func createCSVRecords(
 	recordSummaries []*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
+	schema map[string]string,
 	m ConnectorColumns,
 ) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
@@ -254,13 +261,22 @@ func createCSVRecords(
 			case c == m.operationColumn:
 				row[j] = r.Operation.String()
 			case c == m.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
-				row[j] = s.createdAt
+				row[j] = fmt.Sprint(s.createdAt.UnixMicro())
 			case c == m.updatedAtColumn && r.Operation == sdk.OperationUpdate:
-				row[j] = s.updatedAt
+				row[j] = fmt.Sprint(s.updatedAt.UnixMicro())
 			case c == m.deletedAtColumn && r.Operation == sdk.OperationDelete:
-				row[j] = s.deletedAt
+				row[j] = fmt.Sprint(s.deletedAt.UnixMicro())
 			case data[c] == nil:
 				row[j] = ""
+			// Handle timestamps
+			// TODO: streamline this, this is getting messy
+			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) && 
+				schema[c] == snowflakeTimeStamp:
+				t, ok := data[c].(time.Time)
+				if !ok {
+					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
+				}
+				row[j] = fmt.Sprint(t.UnixMicro())
 			default:
 				row[j] = fmt.Sprint(data[c])
 			}

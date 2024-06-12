@@ -204,6 +204,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		records,
 		csvColumnOrder,
 		*meroxaColumns,
+		schema,
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
