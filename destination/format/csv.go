@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -100,6 +101,10 @@ func GetDataSchema(
 				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
 				schema[key] = snowflakeVariant
+			case time.Time:
+				schema[key] = snowflakeTimeStamp
+			case *time.Time:
+				schema[key] = snowflakeTimeStamp
 			default:
 				schema[key] = snowflakeVarchar
 			}
