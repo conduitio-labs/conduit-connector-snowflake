@@ -208,7 +208,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
-		s.ProcessingWorkers,
 	)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
@@ -429,6 +428,8 @@ func (s *SnowflakeCSV) Merge(
 	updatesFilename string,
 	colOrder []string,
 ) error {
+	logger := sdk.Logger(ctx)
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -438,7 +439,7 @@ func (s *SnowflakeCSV) Merge(
 
 	defer func() {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			sdk.Logger(ctx).Err(err).Msg("rolling back transaction")
+			logger.Err(err).Msg("rolling back transaction")
 		}
 	}()
 
@@ -451,14 +452,15 @@ func (s *SnowflakeCSV) Merge(
 	colListB := buildFinalColumnList("b", ".", colOrder)
 	setSelectMerge := buildSelectMerge(colOrder)
 
-	sdk.Logger(ctx).Debug().Msgf("insertsFilename=%s, updatesFilename=%s", insertsFilename, updatesFilename)
+	logger.Debug().
+		Str("inserts_file_name", insertsFilename).
+		Str("updates_file_name", updatesFilename).
+		Msg("starting merge for uploaded files")
+
+	var queries []string
 
 	if insertsFilename != "" {
-		// MERGE for inserts
-		sdk.Logger(ctx).Debug().Msg("constructing merge query for inserts")
-
-		//nolint:gosec // not an issue
-		queryMergeInto := fmt.Sprintf(
+		queries = append(queries, fmt.Sprintf(
 			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN UPDATE SET %s
 			WHEN NOT MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN INSERT  (%s) VALUES (%s) ; `,
@@ -477,30 +479,12 @@ func (s *SnowflakeCSV) Merge(
 			s.Prefix,
 			colListA,
 			colListB,
-		)
-
-		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
-
-		res, err := tx.ExecContext(ctx, queryMergeInto)
-		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, insertsFilename)
-
-			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
-		}
-
-		rowsAffected, err := res.RowsAffected()
-		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
-		}
-
-		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
+		))
+		logger.Debug().Msg("query for merging inserts queued up")
 	}
 
 	if updatesFilename != "" {
-		sdk.Logger(ctx).Debug().Msg("constructing merge query for update / delete")
-
-		//nolint:gosec // not an issue
-		queryMergeInto := fmt.Sprintf(
+		queries = append(queries, fmt.Sprintf(
 			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s
 			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
@@ -526,27 +510,42 @@ func (s *SnowflakeCSV) Merge(
 			s.Prefix,
 			colListA,
 			colListB,
-		)
+		))
 
-		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
+		logger.Debug().Msg("query for merging updates queued up")
+	}
 
-		res, err := tx.ExecContext(ctx, queryMergeInto)
+	for _, q := range queries {
+		execAt := time.Now()
+		logger.Debug().Str("query", q).Msg("executing query")
+
+		res, err := tx.ExecContext(ctx, q)
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, updatesFilename)
+			logger.Error().Err(err).
+				Str("table", s.TableName).
+				Str("query", q).
+				Dur("elapsed", time.Since(execAt)).
+				Msg("failed to execute query")
 
-			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
+			return errors.Errorf("failed to execute query: %w", err)
 		}
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+			logger.Error().Err(err).
+				Str("table", s.TableName).
+				Dur("elapsed", time.Since(execAt)).
+				Msgf("failed to retrieve number of affected rows")
 		}
 
-		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
+		logger.Info().
+			Str("query", q).
+			Dur("elapsed", time.Since(execAt)).
+			Int64("rows_affected", rowsAffected).Msg("query executed")
 	}
 
 	if err := tx.Commit(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("transaction failed")
+		logger.Error().Err(err).Msg("tx failed")
 
 		return errors.Errorf("transaction failed: %w", err)
 	}
