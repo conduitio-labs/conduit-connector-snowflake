@@ -128,6 +128,7 @@ func GetDataSchema(
 	return csvColumnOrder, &connectorColumns, nil
 }
 
+//nolint:gocyclo // TODO: refactor this function, make it more modular and readable.
 func MakeCSVBytes(
 	ctx context.Context,
 	records []sdk.Record,
@@ -137,18 +138,15 @@ func MakeCSVBytes(
 	primaryKey string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
+	numGoroutines int,
 ) (err error) {
-	logger := sdk.Logger(ctx)
-
 	insertsWriter := csv.NewWriter(insertsBuf)
 	updatesWriter := csv.NewWriter(updatesBuf)
 
 	// loop through records and de-dupe before converting to CSV
 	// this is done beforehand, so we can parallelize the CSV formatting
 	latestRecordMap := make(map[string]*recordSummary, len(records))
-
-	logger.Debug().Int("num_record", len(records)).
-		Msg("starting to compact records for duplicates")
+	sdk.Logger(ctx).Debug().Msgf("num of records in batch before deduping: %d", len(records))
 
 	for i, r := range records {
 		readAtMicro, err := strconv.ParseInt(r.Metadata["opencdc.readAt"], 10, 64)
@@ -158,11 +156,10 @@ func MakeCSVBytes(
 		readAt := time.UnixMicro(readAtMicro)
 
 		s, err := extract(r.Operation, r.Payload, r.Key)
+		key := fmt.Sprint(s[primaryKey])
 		if err != nil {
 			return err
 		}
-
-		key := fmt.Sprint(s[primaryKey])
 
 		l, ok := latestRecordMap[key]
 		if !ok {
@@ -188,12 +185,9 @@ func MakeCSVBytes(
 	}
 
 	// Process CSV records
+
 	dedupedRecords := maps.Values(latestRecordMap)
-	logger.Debug().
-		Int("num_records", len(records)).
-		Int("num_records_after_compact", len(dedupedRecords)).
-		Int("delta", len(records)-len(dedupedRecords)).
-		Msg("records compaction complete")
+	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
 
 	insertsBuffer := new(bytes.Buffer)
 	updatesBuffer := new(bytes.Buffer)
@@ -210,14 +204,11 @@ func MakeCSVBytes(
 		meroxaColumns)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to create CSV records")
-
 		return err
 	}
 
-	logger.Debug().
-		Int("num_inserts", inserts).
-		Int("num_updates", updates).
-		Msg("csv records written to buffer")
+	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
+	sdk.Logger(ctx).Debug().Msgf("num updates/deletes in CSV buffer: %d", updates)
 
 	if inserts > 0 {
 		if err := insertsWriter.Write(csvColumnOrder); err != nil {
@@ -243,7 +234,7 @@ func MakeCSVBytes(
 }
 
 func createCSVRecords(
-	ctx context.Context,
+	_ context.Context,
 	recordSummaries []*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
@@ -266,34 +257,28 @@ func createCSVRecords(
 		}
 
 		for j, c := range csvColumnOrder {
-			switch c {
-			case m.operationColumn:
+			switch {
+			case c == m.operationColumn:
 				row[j] = r.Operation.String()
-			case m.createdAtColumn, m.updatedAtColumn, m.deletedAtColumn:
-				switch r.Operation {
-				case sdk.OperationCreate, sdk.OperationSnapshot:
-					row[j] = strconv.FormatInt(s.createdAt.UnixMicro(), 10)
-				case sdk.OperationUpdate:
-					row[j] = strconv.FormatInt(s.updatedAt.UnixMicro(), 10)
-				case sdk.OperationDelete:
-					row[j] = strconv.FormatInt(s.deletedAt.UnixMicro(), 10)
-				default:
-					sdk.Logger(ctx).Warn().
-						Str("at", "createCSVRecords").
-						Stringer("operation", r.Operation).
-						Msg("unknown operation when parsing record")
+			case c == m.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+				row[j] = fmt.Sprint(s.createdAt.UnixMicro())
+			case c == m.updatedAtColumn && r.Operation == sdk.OperationUpdate:
+				row[j] = fmt.Sprint(s.updatedAt.UnixMicro())
+			case c == m.deletedAtColumn && r.Operation == sdk.OperationDelete:
+				row[j] = fmt.Sprint(s.deletedAt.UnixMicro())
+			case data[c] == nil:
+				row[j] = ""
+			// Handle timestamps
+			// TODO: streamline this, this is getting messy
+			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) && 
+				schema[c] == snowflakeTimeStamp:
+				t, ok := data[c].(time.Time)
+				if !ok {
+					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
 				}
+				row[j] = fmt.Sprint(t.UnixMicro())
 			default:
-				switch t := data[c].(type) {
-				case time.Time:
-					row[j] = strconv.FormatInt(t.UnixMicro(), 10)
-				default:
-					if schema[c] == snowflakeTimeStamp {
-						return 0, 0, errors.Errorf("invalid timestamp (%v) on column %q: %+v", t, c, data[c])
-					}
-
-					row[j] = fmt.Sprint(data[c])
-				}
+				row[j] = fmt.Sprint(data[c])
 			}
 		}
 
@@ -358,7 +343,8 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 
 // Writes the contents of buffer b to buffer a.
 func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
-	a.Grow(b.Len())
+	a.Grow(a.Len())
+
 
 	if _, err := b.WriteTo(a); err != nil {
 		return err
