@@ -32,25 +32,54 @@ import (
 // Map between snowflake retrieved types and connector defined types
 // TODO: just create the table with the types on the left to make this simpler.
 var SnowflakeTypeMapping = map[string]string{
-	SnowflakeFixed:     SnowflakeInteger,
-	SnowflakeReal:      SnowflakeFloat,
-	SnowflakeText:      SnowflakeVarchar,
-	SnowflakeTimeStamp: SnowflakeTimeStamp,
-	SnowflakeBoolean:   SnowflakeBoolean,
-	SnowflakeVariant:   SnowflakeVariant,
+	SnowflakeFixed:        SnowflakeInteger,
+	SnowflakeReal:         SnowflakeFloat,
+	SnowflakeText:         SnowflakeVarchar,
+	SnowflakeBinary:       SnowflakeBinary,
+	SnowflakeBoolean:      SnowflakeBoolean,
+	SnowflakeDate:         SnowflakeDate,
+	SnowflakeTimestampNTZ: SnowflakeTimestampNTZ,
+	SnowflakeTimestampLTZ: SnowflakeTimestampLTZ,
+	SnowflakeTimestampTZ:  SnowflakeTimestampTZ,
+	SnowflakeVariant:      SnowflakeVariant,
+	SnowflakeObject:       SnowflakeObject,
+	SnowflakeArray:        SnowflakeArray,
+	SnowflakeVector:       SnowflakeVector,
 }
 
 const (
-	SnowflakeTimeStamp = "TIMESTAMP_LTZ"
-	SnowflakeVarchar   = "VARCHAR"
-	SnowflakeVariant   = "VARIANT"
-	SnowflakeInteger   = "INTEGER"
-	SnowflakeBoolean   = "BOOLEAN"
-	SnowflakeFloat     = "FLOAT"
+	// numeric types
+	SnowflakeInteger = "INTEGER"
+	SnowflakeFloat   = "FLOAT"
+	SnowflakeFixed   = "FIXED"
+	SnowflakeReal    = "REAL"
 
-	SnowflakeText  = "TEXT"
-	SnowflakeFixed = "FIXED"
-	SnowflakeReal  = "REAL"
+	// string & binary types
+	SnowflakeText    = "TEXT"
+	SnowflakeBinary  = "BINARY"
+	SnowflakeVarchar = "VARCHAR"
+
+	// logical data types
+	SnowflakeBoolean = "BOOLEAN"
+
+	// date & time types
+	SnowflakeTimestampLTZ = "TIMESTAMP_LTZ"
+	SnowflakeTimestampNTZ = "TIMESTAMP_NTZ"
+	SnowflakeTimestampTZ  = "TIMESTAMP_TZ"
+	SnowflakeTime         = "TIME"
+	SnowflakeDate         = "DATE"
+
+	// semi-structured data types
+	SnowflakeVariant = "VARIANT"
+	SnowflakeObject  = "OBJECT"
+	SnowflakeArray   = "ARRAY"
+
+	// geospatial data types
+	SnowflakeGeography = "GEOGRAPHY"
+	SnowflakeGeometry  = "GEOMETRY"
+
+	// vector data types
+	SnowflakeVector = "VECTOR"
 )
 
 type recordSummary struct {
@@ -82,9 +111,9 @@ func GetDataSchema(
 	}
 
 	schema[connectorColumns.operationColumn] = SnowflakeVarchar
-	schema[connectorColumns.createdAtColumn] = SnowflakeTimeStamp
-	schema[connectorColumns.updatedAtColumn] = SnowflakeTimeStamp
-	schema[connectorColumns.deletedAtColumn] = SnowflakeTimeStamp
+	schema[connectorColumns.createdAtColumn] = SnowflakeTimestampLTZ
+	schema[connectorColumns.updatedAtColumn] = SnowflakeTimestampLTZ
+	schema[connectorColumns.deletedAtColumn] = SnowflakeTimestampLTZ
 
 	csvColumnOrder := []string{}
 
@@ -114,7 +143,7 @@ func GetDataSchema(
 			case bool:
 				schema[key] = SnowflakeBoolean
 			case time.Time, *time.Time:
-				schema[key] = SnowflakeTimeStamp
+				schema[key] = SnowflakeTimestampLTZ
 			case nil:
 				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
@@ -286,7 +315,7 @@ func createCSVRecords(
 			// Handle timestamps
 			// TODO: streamline this, this is getting messy
 			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) &&
-				schema[c] == SnowflakeTimeStamp:
+				schema[c] == SnowflakeTimestampLTZ:
 				t, ok := data[c].(time.Time)
 				if !ok {
 					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
