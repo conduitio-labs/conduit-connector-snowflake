@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -263,20 +264,37 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
-	snowflakeSchema := make(map[string]string)
-	var columnName, dataType, isNullable string
+	//nolint:gosec // not an issue
+	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.TableName)
+	res, err := s.db.Query(showTablesQuery)
+	if err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to show tables")
+
+		return errors.Errorf("failed to check if table exists: %w", err)
+	}
+
+	defer res.Close()
+
+	// table not found
+	if !res.Next() {
+		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.TableName)
+		return nil
+	}
 
 	//nolint:gosec // not an issue
-	query := fmt.Sprintf(`
-					SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
-					FROM INFORMATION_SCHEMA.COLUMNS c
-					WHERE c.TABLE_NAME ilike '%s'
-					ORDER BY c.ORDINAL_POSITION;
-					`, s.TableName)
+	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)
 
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", query)
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", showColumnsQuery)
 
-	response, err := s.db.Query(query)
+	if _, err := s.db.Exec(showColumnsQuery); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
+
+		return errors.Errorf("failed to check if table exists: %w", err)
+	}
+
+	// TODO: wrap in a transaction, this is ugly, but unfortunately recommended by snowflake
+	// https://community.snowflake.com/s/article/Select-the-list-of-columns-in-the-table-without-using-information-schema
+	response, err := s.db.Query("select column_name, data_type from table(result_scan(last_query_id()));")
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
 
@@ -285,17 +303,33 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 
 	defer response.Close()
 
+	snowflakeSchema := make(map[string]string)
 	// grab columns from snowflake if they exist
 	for response.Next() {
-		err := response.Scan(&columnName, &dataType, &isNullable)
+		var columnName, d, finalType string
+		err := response.Scan(&columnName, &d)
 		if err != nil {
 			return err
 		}
-		// snowflake stores varchar as text on schema info, we use varchar in our schema def
-		if dataType == "TEXT" {
-			dataType = "VARCHAR"
+
+		datatypeMap := make(map[string]interface{})
+		json.Unmarshal([]byte(d), &datatypeMap)
+
+		datatype := datatypeMap["type"].(string)
+
+		// ensure that scale is non-zero to determine if it's an integer or not
+		if datatype == format.SnowflakeFixed {
+			scale := datatypeMap["scale"].(int)
+			if scale > 0 {
+				finalType = format.SnowflakeFloat
+			} else {
+				finalType = format.SnowflakeInteger
+			}
+		} else {
+			finalType = format.SnowflakeTypeMapping[datatype]
 		}
-		snowflakeSchema[strings.ToLower(columnName)] = dataType
+
+		snowflakeSchema[strings.ToLower(columnName)] = finalType
 	}
 
 	if err := response.Err(); err != nil {
@@ -308,6 +342,9 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	if len(snowflakeSchema) == 0 {
 		return nil
 	}
+
+	sdk.Logger(ctx).Debug().Msgf("Existing Table Schema (%+v)", snowflakeSchema)
+	sdk.Logger(ctx).Debug().Msgf("Connector Generated Schema (%+v)", schema)
 
 	// if operation is delete, we want to ensure that primary key is on dest table as well as meroxa columns
 	if operation == sdk.OperationDelete {

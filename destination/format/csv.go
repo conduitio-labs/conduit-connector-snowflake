@@ -29,13 +29,28 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+// Map between snowflake retrieved types and connector defined types
+// TODO: just create the table with the types on the left to make this simpler.
+var SnowflakeTypeMapping = map[string]string{
+	SnowflakeFixed:     SnowflakeInteger,
+	SnowflakeReal:      SnowflakeFloat,
+	SnowflakeText:      SnowflakeVarchar,
+	SnowflakeTimeStamp: SnowflakeTimeStamp,
+	SnowflakeBoolean:   SnowflakeBoolean,
+	SnowflakeVariant:   SnowflakeVariant,
+}
+
 const (
-	snowflakeTimeStamp = "TIMESTAMP_LTZ"
-	snowflakeVarchar   = "VARCHAR"
-	snowflakeVariant   = "VARIANT"
-	snowflakeInteger   = "INTEGER"
-	snowflakeBoolean   = "BOOLEAN"
-	snowflakeFloat     = "FLOAT"
+	SnowflakeTimeStamp = "TIMESTAMP_LTZ"
+	SnowflakeVarchar   = "VARCHAR"
+	SnowflakeVariant   = "VARIANT"
+	SnowflakeInteger   = "INTEGER"
+	SnowflakeBoolean   = "BOOLEAN"
+	SnowflakeFloat     = "FLOAT"
+
+	SnowflakeText  = "TEXT"
+	SnowflakeFixed = "FIXED"
+	SnowflakeReal  = "REAL"
 )
 
 type recordSummary struct {
@@ -66,10 +81,10 @@ func GetDataSchema(
 		deletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
 	}
 
-	schema[connectorColumns.operationColumn] = snowflakeVarchar
-	schema[connectorColumns.createdAtColumn] = snowflakeTimeStamp
-	schema[connectorColumns.updatedAtColumn] = snowflakeTimeStamp
-	schema[connectorColumns.deletedAtColumn] = snowflakeTimeStamp
+	schema[connectorColumns.operationColumn] = SnowflakeVarchar
+	schema[connectorColumns.createdAtColumn] = SnowflakeTimeStamp
+	schema[connectorColumns.updatedAtColumn] = SnowflakeTimeStamp
+	schema[connectorColumns.deletedAtColumn] = SnowflakeTimeStamp
 
 	csvColumnOrder := []string{}
 
@@ -93,19 +108,19 @@ func GetDataSchema(
 			csvColumnOrder = append(csvColumnOrder, key)
 			switch val.(type) {
 			case int, int8, int16, int32, int64:
-				schema[key] = snowflakeInteger
+				schema[key] = SnowflakeInteger
 			case float32, float64:
-				schema[key] = snowflakeFloat
+				schema[key] = SnowflakeFloat
 			case bool:
-				schema[key] = snowflakeBoolean
+				schema[key] = SnowflakeBoolean
 			case time.Time, *time.Time:
-				schema[key] = snowflakeTimeStamp
+				schema[key] = SnowflakeTimeStamp
 			case nil:
 				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-				schema[key] = snowflakeVariant
+				schema[key] = SnowflakeVariant
 			default:
-				schema[key] = snowflakeVarchar
+				schema[key] = SnowflakeVarchar
 			}
 		}
 	}
@@ -270,8 +285,8 @@ func createCSVRecords(
 				row[j] = ""
 			// Handle timestamps
 			// TODO: streamline this, this is getting messy
-			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) && 
-				schema[c] == snowflakeTimeStamp:
+			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) &&
+				schema[c] == SnowflakeTimeStamp:
 				t, ok := data[c].(time.Time)
 				if !ok {
 					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
@@ -344,7 +359,6 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 // Writes the contents of buffer b to buffer a.
 func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
 	a.Grow(a.Len())
-
 
 	if _, err := b.WriteTo(a); err != nil {
 		return err
