@@ -319,7 +319,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 
 		// ensure that scale is non-zero to determine if it's an integer or not
 		if datatype == format.SnowflakeFixed {
-			scale := datatypeMap["scale"].(int)
+			scale := datatypeMap["scale"].(float64)
 			if scale > 0 {
 				finalType = format.SnowflakeFloat
 			} else {
