@@ -294,7 +294,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 
 	// TODO: wrap in a transaction, this is ugly, but unfortunately recommended by snowflake
 	// https://community.snowflake.com/s/article/Select-the-list-of-columns-in-the-table-without-using-information-schema
-	response, err := s.db.Query("select column_name, data_type from table(result_scan(last_query_id()));")
+	response, err := s.db.Query(`SELECT "column_name","data_type" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));`)
 	if err != nil {
 		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
 
