@@ -29,6 +29,8 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+const YYYYMMDD = "2006-01-02"
+
 // Map between snowflake retrieved types and connector defined types
 // TODO: just create the table with the types on the left to make this simpler.
 var SnowflakeTypeMapping = map[string]string{
@@ -82,6 +84,49 @@ const (
 	SnowflakeVector = "VECTOR"
 )
 
+// Map from Avro Types to Snowflake Types
+// TODO: be more precise about numeric types.
+var AvroToSnowflakeType = map[string]string{
+	AvroBoolean:         SnowflakeBoolean,
+	AvroInt:             SnowflakeInteger,
+	AvroLong:            SnowflakeInteger,
+	AvroFloat:           SnowflakeFloat,
+	AvroDouble:          SnowflakeFloat,
+	AvroDecimal:         SnowflakeFloat,
+	AvroBytes:           SnowflakeVarchar,
+	AvroString:          SnowflakeVarchar,
+	AvroUUID:            SnowflakeVarchar,
+	AvroDate:            SnowflakeDate,
+	AvroTimeMillis:      SnowflakeTimestampLTZ,
+	AvroTimeMicros:      SnowflakeTimestampLTZ,
+	AvroTimestampMillis: SnowflakeTimestampLTZ,
+	AvroTimestampMicros: SnowflakeTimestampLTZ,
+
+	AvroRecord: SnowflakeObject,
+	AvroArray:  SnowflakeArray,
+	AvroMap:    SnowflakeObject,
+}
+
+const (
+	AvroBoolean         = "boolean"
+	AvroInt             = "int"
+	AvroLong            = "long"
+	AvroFloat           = "float"
+	AvroDouble          = "double"
+	AvroBytes           = "bytes"
+	AvroString          = "string"
+	AvroDecimal         = "decimal"
+	AvroUUID            = "uuid"
+	AvroDate            = "date"
+	AvroTimeMillis      = "time-millis"
+	AvroTimeMicros      = "time-micros"
+	AvroTimestampMillis = "timestamp-millis"
+	AvroTimestampMicros = "timestamp-micros"
+	AvroRecord          = "record"
+	AvroArray           = "array"
+	AvroMap             = "map"
+)
+
 type recordSummary struct {
 	updatedAt    time.Time
 	createdAt    time.Time
@@ -132,24 +177,38 @@ func GetDataSchema(
 		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
 
-	for key, val := range data {
-		if schema[key] == "" {
-			csvColumnOrder = append(csvColumnOrder, key)
-			switch val.(type) {
-			case int, int8, int16, int32, int64:
-				schema[key] = SnowflakeInteger
-			case float32, float64:
-				schema[key] = SnowflakeFloat
-			case bool:
-				schema[key] = SnowflakeBoolean
-			case time.Time, *time.Time:
-				schema[key] = SnowflakeTimestampLTZ
-			case nil:
-				// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-				// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-				schema[key] = SnowflakeVariant
-			default:
-				schema[key] = SnowflakeVarchar
+	avroSchema, okAvro := r.Metadata["avroSchema"]
+	// if we have an avro schema in the metadata, interpret the schema from it
+	if okAvro {
+		var avroSchemaJson map[string]string
+		if err := json.Unmarshal([]byte(avroSchema), &avroSchemaJson); err != nil {
+			return nil, nil, errors.Errorf("could not unmarshal avro schema json: %w", err)
+		}
+
+		for key, val := range avroSchemaJson {
+			schema[key] = AvroToSnowflakeType[val]
+		}
+	} else {
+		// TODO (BEFORE MERGE): move to function
+		for key, val := range data {
+			if schema[key] == "" {
+				csvColumnOrder = append(csvColumnOrder, key)
+				switch val.(type) {
+				case int, int8, int16, int32, int64:
+					schema[key] = SnowflakeInteger
+				case float32, float64:
+					schema[key] = SnowflakeFloat
+				case bool:
+					schema[key] = SnowflakeBoolean
+				case time.Time, *time.Time:
+					schema[key] = SnowflakeTimestampLTZ
+				case nil:
+					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+					schema[key] = SnowflakeVariant
+				default:
+					schema[key] = SnowflakeVarchar
+				}
 			}
 		}
 	}
@@ -283,7 +342,7 @@ func createCSVRecords(
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
 	schema map[string]string,
-	m ConnectorColumns,
+	cnCols ConnectorColumns,
 ) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
 
@@ -302,25 +361,29 @@ func createCSVRecords(
 
 		for j, c := range csvColumnOrder {
 			switch {
-			case c == m.operationColumn:
+			case c == cnCols.operationColumn:
 				row[j] = r.Operation.String()
-			case c == m.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+			case c == cnCols.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
 				row[j] = fmt.Sprint(s.createdAt.UnixMicro())
-			case c == m.updatedAtColumn && r.Operation == sdk.OperationUpdate:
+			case c == cnCols.updatedAtColumn && r.Operation == sdk.OperationUpdate:
 				row[j] = fmt.Sprint(s.updatedAt.UnixMicro())
-			case c == m.deletedAtColumn && r.Operation == sdk.OperationDelete:
+			case c == cnCols.deletedAtColumn && r.Operation == sdk.OperationDelete:
 				row[j] = fmt.Sprint(s.deletedAt.UnixMicro())
 			case data[c] == nil:
 				row[j] = ""
-			// Handle timestamps
+			// Handle timestamps & dates
 			// TODO: streamline this, this is getting messy
-			case (c != m.createdAtColumn && c != m.updatedAtColumn && c != m.deletedAtColumn) &&
-				schema[c] == SnowflakeTimestampLTZ:
+			case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
 				t, ok := data[c].(time.Time)
 				if !ok {
 					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
 				}
-				row[j] = fmt.Sprint(t.UnixMicro())
+
+				if schema[c] == SnowflakeDate {
+					row[j] = t.UTC().Format(YYYYMMDD)
+				} else {
+					row[j] = fmt.Sprint(t.UTC().UnixMicro())
+				}
 			default:
 				row[j] = fmt.Sprint(data[c])
 			}
@@ -394,4 +457,22 @@ func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
 	}
 
 	return nil
+}
+
+func isOperationTimestampColumn(col string, cnCols ConnectorColumns) bool {
+	switch col {
+	case cnCols.operationColumn, cnCols.createdAtColumn, cnCols.updatedAtColumn, cnCols.deletedAtColumn:
+		return true
+	default:
+		return false
+	}
+}
+
+func isDateOrTimeType(in string) bool {
+	switch in {
+	case SnowflakeTimestampLTZ, SnowflakeTimestampNTZ, SnowflakeTimestampTZ, SnowflakeDate, SnowflakeTime:
+		return true
+	default:
+		return false
+	}
 }
