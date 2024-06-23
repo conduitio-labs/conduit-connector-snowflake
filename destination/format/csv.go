@@ -155,9 +155,9 @@ func GetDataSchema(
 	}
 
 	schema[connectorColumns.operationColumn] = SnowflakeVarchar
-	schema[connectorColumns.createdAtColumn] = SnowflakeTimestampLTZ
-	schema[connectorColumns.updatedAtColumn] = SnowflakeTimestampLTZ
-	schema[connectorColumns.deletedAtColumn] = SnowflakeTimestampLTZ
+	schema[connectorColumns.createdAtColumn] = SnowflakeTimestampTZ
+	schema[connectorColumns.updatedAtColumn] = SnowflakeTimestampTZ
+	schema[connectorColumns.deletedAtColumn] = SnowflakeTimestampTZ
 
 	csvColumnOrder := []string{}
 
@@ -203,7 +203,7 @@ func GetDataSchema(
 				case bool:
 					schema[key] = SnowflakeBoolean
 				case time.Time, *time.Time:
-					schema[key] = SnowflakeTimestampLTZ
+					schema[key] = SnowflakeTimestampTZ
 				case nil:
 					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
 					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
@@ -489,13 +489,13 @@ func mapAvroToSnowflake(field *avro.Field) string {
 	case avro.Date:
 		return SnowflakeDate
 	case avro.TimeMillis:
-		return SnowflakeTimestampLTZ
+		return SnowflakeTimestampTZ
 	case avro.TimeMicros:
-		return SnowflakeTimestampLTZ
+		return SnowflakeTimestampTZ
 	case avro.TimestampMillis:
-		return SnowflakeTimestampLTZ
+		return SnowflakeTimestampTZ
 	case avro.TimestampMicros:
-		return SnowflakeTimestampLTZ
+		return SnowflakeTimestampTZ
 	}
 	return AvroToSnowflakeType[field.Type().Type()]
 }

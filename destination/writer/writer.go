@@ -112,6 +112,10 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		return nil, errors.Errorf("failed to create custom csv file format: %w", err)
 	}
 
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIMEZONE = 'UTC'"); err != nil {
+		return nil, errors.Errorf("failed to set session timezone to UTC: %w", err)
+	}
+
 	var cmper compress.Compressor
 
 	switch cfg.Compression {
