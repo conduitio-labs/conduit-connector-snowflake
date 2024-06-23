@@ -26,6 +26,7 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"github.com/hamba/avro"
 	"golang.org/x/exp/maps"
 )
 
@@ -186,16 +187,19 @@ func GetDataSchema(
 		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
 
-	avroSchema, okAvro := r.Metadata["postgres.avro.schema"]
+	avroStr, okAvro := r.Metadata["postgres.avro.schema"]
 	// if we have an avro schema in the metadata, interpret the schema from it
 	if okAvro {
-		var recordSchema AvroRecordSchema
-		if err := json.Unmarshal([]byte(avroSchema), &recordSchema); err != nil {
-			return nil, nil, errors.Errorf("could not unmarshal avro schema json: %w", err)
+		avroSchema, err := avro.Parse(avroStr)
+		if err != nil {
+			return nil, nil, errors.Errorf("could not parse avro schema: %w", err)
 		}
-
-		for _, field := range recordSchema.Fields {
-			schema[field.Name] = AvroToSnowflakeType[field.Type]
+		avroRecordSchema, ok := avroSchema.(*avro.RecordSchema)
+		if !ok {
+			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
+		}
+		for _, field := range avroRecordSchema.Fields() {
+			schema[field.Name()] = AvroToSnowflakeType[field.Type().String()]
 		}
 	} else {
 		// TODO (BEFORE MERGE): move to function
