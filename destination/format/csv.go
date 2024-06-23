@@ -179,6 +179,7 @@ func GetDataSchema(
 	avroStr, okAvro := r.Metadata["postgres.avro.schema"]
 	// if we have an avro schema in the metadata, interpret the schema from it
 	if okAvro {
+		sdk.Logger(ctx).Debug().Msgf("avro schema string: %s", avroStr)
 		avroSchema, err := avro.Parse(avroStr)
 		if err != nil {
 			return nil, nil, errors.Errorf("could not parse avro schema: %w", err)
