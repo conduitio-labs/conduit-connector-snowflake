@@ -141,6 +141,15 @@ type ConnectorColumns struct {
 	deletedAtColumn string
 }
 
+type AvroRecordSchema struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Fields []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	} `json:"fields"`
+}
+
 func GetDataSchema(
 	ctx context.Context,
 	records []sdk.Record,
@@ -177,16 +186,16 @@ func GetDataSchema(
 		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
 
-	avroSchema, okAvro := r.Metadata["avroSchema"]
+	avroSchema, okAvro := r.Metadata["postgres.avro.schema"]
 	// if we have an avro schema in the metadata, interpret the schema from it
 	if okAvro {
-		var avroSchemaJson map[string]string
-		if err := json.Unmarshal([]byte(avroSchema), &avroSchemaJson); err != nil {
+		var recordSchema AvroRecordSchema
+		if err := json.Unmarshal([]byte(avroSchema), &recordSchema); err != nil {
 			return nil, nil, errors.Errorf("could not unmarshal avro schema json: %w", err)
 		}
 
-		for key, val := range avroSchemaJson {
-			schema[key] = AvroToSnowflakeType[val]
+		for _, field := range recordSchema.Fields {
+			schema[field.Name] = AvroToSnowflakeType[field.Type]
 		}
 	} else {
 		// TODO (BEFORE MERGE): move to function
@@ -274,7 +283,7 @@ func MakeCSVBytes(
 
 		switch r.Operation {
 		case sdk.OperationUpdate:
-			if readAt.Before(l.updatedAt) {
+			if readAt.After(l.updatedAt) {
 				l.updatedAt = readAt
 				l.latestRecord = &records[i]
 			}
