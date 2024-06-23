@@ -26,7 +26,7 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"github.com/hamba/avro"
+	"github.com/hamba/avro/v2"
 	"golang.org/x/exp/maps"
 )
 
