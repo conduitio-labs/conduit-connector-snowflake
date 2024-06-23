@@ -30,8 +30,6 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-const YYYYMMDD = "2006-01-02"
-
 // Map between snowflake retrieved types and connector defined types
 // TODO: just create the table with the types on the left to make this simpler.
 var SnowflakeTypeMapping = map[string]string{
@@ -86,26 +84,17 @@ const (
 )
 
 // Map from Avro Types to Snowflake Types
-// TODO: be more precise about numeric types.
-var AvroToSnowflakeType = map[string]string{
-	AvroBoolean:         SnowflakeBoolean,
-	AvroInt:             SnowflakeInteger,
-	AvroLong:            SnowflakeInteger,
-	AvroFloat:           SnowflakeFloat,
-	AvroDouble:          SnowflakeFloat,
-	AvroDecimal:         SnowflakeFloat,
-	AvroBytes:           SnowflakeVarchar,
-	AvroString:          SnowflakeVarchar,
-	AvroUUID:            SnowflakeVarchar,
-	AvroDate:            SnowflakeDate,
-	AvroTimeMillis:      SnowflakeTimestampLTZ,
-	AvroTimeMicros:      SnowflakeTimestampLTZ,
-	AvroTimestampMillis: SnowflakeTimestampLTZ,
-	AvroTimestampMicros: SnowflakeTimestampLTZ,
-
-	AvroRecord: SnowflakeObject,
-	AvroArray:  SnowflakeArray,
-	AvroMap:    SnowflakeObject,
+var AvroToSnowflakeType = map[avro.Type]string{
+	avro.Boolean: SnowflakeBoolean,
+	avro.Int:     SnowflakeInteger,
+	avro.Long:    SnowflakeInteger,
+	avro.Float:   SnowflakeFloat,
+	avro.Double:  SnowflakeFloat,
+	avro.Bytes:   SnowflakeVarchar,
+	avro.String:  SnowflakeVarchar,
+	avro.Record:  SnowflakeObject,
+	avro.Array:   SnowflakeArray,
+	avro.Map:     SnowflakeObject,
 }
 
 const (
@@ -199,7 +188,7 @@ func GetDataSchema(
 			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
 		}
 		for _, field := range avroRecordSchema.Fields() {
-			schema[field.Name()] = AvroToSnowflakeType[field.Type().String()]
+			schema[field.Name()] = mapAvroToSnowflake(field)
 		}
 	} else {
 		// TODO (BEFORE MERGE): move to function
@@ -393,7 +382,7 @@ func createCSVRecords(
 				}
 
 				if schema[c] == SnowflakeDate {
-					row[j] = t.UTC().Format(YYYYMMDD)
+					row[j] = t.UTC().Format(time.DateOnly)
 				} else {
 					row[j] = fmt.Sprint(t.UTC().UnixMicro())
 				}
@@ -488,4 +477,25 @@ func isDateOrTimeType(in string) bool {
 	default:
 		return false
 	}
+}
+
+func mapAvroToSnowflake(field *avro.Field) string {
+	p := field.Type().(*avro.PrimitiveSchema)
+	switch p.Logical().Type() {
+	case avro.Decimal:
+		return SnowflakeFloat
+	case avro.UUID:
+		return SnowflakeVarchar
+	case avro.Date:
+		return SnowflakeDate
+	case avro.TimeMillis:
+		return SnowflakeTimestampLTZ
+	case avro.TimeMicros:
+		return SnowflakeTimestampLTZ
+	case avro.TimestampMillis:
+		return SnowflakeTimestampLTZ
+	case avro.TimestampMicros:
+		return SnowflakeTimestampLTZ
+	}
+	return AvroToSnowflakeType[field.Type().Type()]
 }
