@@ -533,7 +533,7 @@ func mapAvroToSnowflake(_ context.Context, field *avro.Field) (string, error) {
 	// fixed types
 	f, ok := t.(*avro.FixedSchema)
 	if ok && f.Logical().Type() == avro.Decimal {
-		fmt.Println("decimal detected")
+		sdk.Logger(ctx).Trace().Msg("decimal detected")
 
 		return SnowflakeFloat, nil
 	}
