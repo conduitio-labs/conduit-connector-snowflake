@@ -268,7 +268,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
-	//nolint:gosec // not an issue
 	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.TableName)
 	res, err := s.db.Query(showTablesQuery)
 	if err != nil {
@@ -282,10 +281,17 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	// table not found
 	if !res.Next() {
 		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.TableName)
+
 		return nil
 	}
 
-	//nolint:gosec // not an issue
+	// Check for any error that occurred while iterating
+	if err = res.Err(); err != nil {
+		sdk.Logger(ctx).Err(err).Msg("error occurred while iterating")
+
+		return errors.Errorf("error occurred destination/format/csv.go:348:1 iterating: %w", err)
+	}
+
 	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)
 
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", showColumnsQuery)
@@ -311,13 +317,14 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	// grab columns from snowflake if they exist
 	for response.Next() {
 		var columnName, d, finalType string
-		err := response.Scan(&columnName, &d)
-		if err != nil {
+		if err := response.Scan(&columnName, &d); err != nil {
 			return err
 		}
 
 		datatypeMap := make(map[string]interface{})
-		json.Unmarshal([]byte(d), &datatypeMap)
+		if err := json.Unmarshal([]byte(d), &datatypeMap); err != nil {
+			return err
+		}
 
 		datatype := datatypeMap["type"].(string)
 
@@ -531,7 +538,7 @@ func (s *SnowflakeCSV) Merge(
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
+			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename) //nolint:lll // formatted message
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
@@ -580,7 +587,7 @@ func (s *SnowflakeCSV) Merge(
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename) //nolint:lll // formatted message
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)

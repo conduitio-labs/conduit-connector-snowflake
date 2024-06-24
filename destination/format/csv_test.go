@@ -28,6 +28,8 @@ import (
 )
 
 func Test_MakeCSVBytes(t *testing.T) {
+	const avroSchema = `{"name":"conduit.postgres.users_small","type":"record","fields":[{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"id","type":"int"}]}` //nolint: lll // inline schema
+
 	testTimestamp := time.Now().UnixMicro()
 	testCases := []struct {
 		desc            string
@@ -52,7 +54,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
-						"postgres.avro.schema":        "{\"name\":\"conduit.postgres.users_small\",\"type\":\"record\",\"fields\":[{\"name\":\"firstName\",\"type\":\"string\"},{\"name\":\"lastName\",\"type\":\"string\"},{\"name\":\"id\",\"type\":\"int\"}]}",
+						"postgres.avro.schema":        avroSchema,
 					},
 					Key: sdk.StructuredData{
 						"id": "1",
@@ -73,7 +75,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
-						"postgres.avro.schema":        "{\"name\":\"conduit.postgres.users_small\",\"type\":\"record\",\"fields\":[{\"name\":\"firstName\",\"type\":\"string\"},{\"name\":\"lastName\",\"type\":\"string\"},{\"name\":\"id\",\"type\":\"int\"}]}",
+						"postgres.avro.schema":        avroSchema,
 					},
 					Key: sdk.StructuredData{
 						"id": "2",
@@ -94,7 +96,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
-						"postgres.avro.schema":        "{\"name\":\"conduit.postgres.users_small\",\"type\":\"record\",\"fields\":[{\"name\":\"firstName\",\"type\":\"string\"},{\"name\":\"lastName\",\"type\":\"string\"},{\"name\":\"id\",\"type\":\"int\"}]}",
+						"postgres.avro.schema":        avroSchema,
 					},
 					Key: sdk.StructuredData{
 						"id": "3",
@@ -115,7 +117,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
-						"postgres.avro.schema":        "{\"name\":\"conduit.postgres.users_small\",\"type\":\"record\",\"fields\":[{\"name\":\"firstName\",\"type\":\"string\"},{\"name\":\"lastName\",\"type\":\"string\"},{\"name\":\"id\",\"type\":\"int\"}]}",
+						"postgres.avro.schema":        avroSchema,
 					},
 					Key: sdk.StructuredData{
 						"id": "4",
