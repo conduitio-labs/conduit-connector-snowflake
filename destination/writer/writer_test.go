@@ -212,11 +212,16 @@ func TestWriter_Write(t *testing.T) {
 
 				mock.ExpectBegin()
 
-				mock.ExpectExec(`
-				CREATE TABLE IF NOT EXISTS test \( 
-					meroxa_operation VARCHAR, meroxa_created_at TIMESTAMP_LTZ, meroxa_updated_at TIMESTAMP_LTZ, 
-					meroxa_deleted_at TIMESTAMP_LTZ, firstName VARCHAR, id VARCHAR, lastName VARCHAR, PRIMARY KEY \(id\) \)
-				`).
+				mock.ExpectExec(`CREATE TABLE IF NOT EXISTS test \(
+						meroxa_operation VARCHAR,
+						meroxa_created_at TIMESTAMP_TZ,
+						meroxa_updated_at TIMESTAMP_TZ,
+						meroxa_deleted_at TIMESTAMP_TZ,
+						firstName VARCHAR,
+						id VARCHAR,
+						lastName VARCHAR,
+						PRIMARY KEY \(id\)
+					\)`).
 					WillReturnResult(sqlmock.NewResult(1, 1)).
 					WillReturnError(nil)
 
