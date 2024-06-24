@@ -285,11 +285,10 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 		return nil
 	}
 
-	// Check for any error that occurred while iterating
 	if err = res.Err(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("error occurred while iterating")
+		sdk.Logger(ctx).Err(err).Msg("error occurred while checking table rows")
 
-		return errors.Errorf("error occurred destination/format/csv.go:348:1 iterating: %w", err)
+		return errors.Errorf("error occurred while checking table rows: %w", err)
 	}
 
 	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)

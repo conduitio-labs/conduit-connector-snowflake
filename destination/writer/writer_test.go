@@ -206,10 +206,8 @@ func TestWriter_Write(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 
-				mock.ExpectQuery(`SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
-				FROM INFORMATION_SCHEMA.COLUMNS c
-				WHERE c.TABLE_NAME ilike 'test'
-				ORDER BY c.ORDINAL_POSITION`).
+				// Check if table exist and return 0 rows to check `SetupTables` is called
+				mock.ExpectQuery(`SHOW TABLES LIKE 'test'`).
 					WillReturnRows(sqlmock.NewRows([]string{}))
 
 				mock.ExpectBegin()
