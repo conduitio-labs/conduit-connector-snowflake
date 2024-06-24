@@ -314,9 +314,7 @@ func MakeCSVBytes(
 		schema,
 		meroxaColumns)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to create CSV records")
-
-		return err
+		return errors.Errorf("failed to create CSV records")
 	}
 
 	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
