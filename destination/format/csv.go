@@ -189,7 +189,10 @@ func GetDataSchema(
 			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
 		}
 		for _, field := range avroRecordSchema.Fields() {
-			schema[field.Name()] = mapAvroToSnowflake(field)
+			schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
+			}
 		}
 	} else {
 		// TODO (BEFORE MERGE): move to function
@@ -480,23 +483,49 @@ func isDateOrTimeType(in string) bool {
 	}
 }
 
-func mapAvroToSnowflake(field *avro.Field) string {
-	p := field.Type().(*avro.PrimitiveSchema)
-	switch p.Logical().Type() {
-	case avro.Decimal:
-		return SnowflakeFloat
-	case avro.UUID:
-		return SnowflakeVarchar
-	case avro.Date:
-		return SnowflakeDate
-	case avro.TimeMillis:
-		return SnowflakeTimestampTZ
-	case avro.TimeMicros:
-		return SnowflakeTimestampTZ
-	case avro.TimestampMillis:
-		return SnowflakeTimestampTZ
-	case avro.TimestampMicros:
-		return SnowflakeTimestampTZ
+func mapAvroToSnowflake(ctx context.Context, field *avro.Field) (string, error) {
+	t := field.Type()
+
+	// primitive schema
+	p, ok := t.(*avro.PrimitiveSchema)
+	if ok {
+		// check if there's a logical type
+		ls := p.Logical()
+		if ls != nil {
+			switch ls.Type() {
+			case avro.Decimal:
+				return SnowflakeFloat, nil
+			case avro.UUID:
+				return SnowflakeVarchar, nil
+			case avro.Date:
+				return SnowflakeDate, nil
+			case avro.TimeMillis:
+				return SnowflakeTimestampTZ, nil
+			case avro.TimeMicros:
+				return SnowflakeTimestampTZ, nil
+			case avro.TimestampMillis:
+				return SnowflakeTimestampTZ, nil
+			case avro.TimestampMicros:
+				return SnowflakeTimestampTZ, nil
+			}
+		}
+
+		// Otherwise, fall back to primitives
+		sfType, ok := AvroToSnowflakeType[t.Type()]
+		if ok {
+			return sfType, nil
+		}
 	}
-	return AvroToSnowflakeType[field.Type().Type()]
+
+	// fixed types
+	f, ok := t.(*avro.FixedSchema)
+	if ok {
+		switch f.Logical().Type() {
+		case avro.Decimal:
+			fmt.Println("decimal detected")
+			return SnowflakeFloat, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not find snowflake mapping for avro type %s", field.Name())
 }
