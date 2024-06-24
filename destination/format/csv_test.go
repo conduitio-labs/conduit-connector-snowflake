@@ -28,7 +28,25 @@ import (
 )
 
 func Test_MakeCSVBytes(t *testing.T) {
-	const avroSchema = `{"name":"conduit.postgres.users_small","type":"record","fields":[{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"id","type":"int"}]}` //nolint: lll // inline schema
+	const avroSchema = `
+		{
+			"fields": [
+				{
+					"name": "firstName",
+					"type": "string"
+				},
+				{
+					"name": "lastName",
+					"type": "string"
+				},
+				{
+					"name": "id",
+					"type": "int"
+				}
+			],
+			"name": "conduit.postgres.users_small",
+			"type": "record"
+		}`
 
 	testTimestamp := time.Now().UnixMicro()
 	testCases := []struct {
