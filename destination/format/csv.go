@@ -496,7 +496,7 @@ func isDateOrTimeType(in string) bool {
 	}
 }
 
-func mapAvroToSnowflake(_ context.Context, field *avro.Field) (string, error) {
+func mapAvroToSnowflake(ctx context.Context, field *avro.Field) (string, error) {
 	t := field.Type()
 
 	// primitive schema

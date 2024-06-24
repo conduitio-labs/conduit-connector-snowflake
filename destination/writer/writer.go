@@ -537,7 +537,9 @@ func (s *SnowflakeCSV) Merge(
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename) //nolint:lll // formatted message
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
@@ -586,7 +588,9 @@ func (s *SnowflakeCSV) Merge(
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename) //nolint:lll // formatted message
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
