@@ -189,6 +189,7 @@ func GetDataSchema(
 			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
 		}
 		for _, field := range avroRecordSchema.Fields() {
+			csvColumnOrder = append(csvColumnOrder, field.Name())
 			schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
