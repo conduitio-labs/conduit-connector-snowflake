@@ -30,8 +30,9 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-// Map between snowflake retrieved types and connector defined types
 // TODO: just create the table with the types on the left to make this simpler.
+
+// SnowflakeTypeMapping Map between snowflake retrieved types and connector defined types.
 var SnowflakeTypeMapping = map[string]string{
 	SnowflakeFixed:        SnowflakeInteger,
 	SnowflakeReal:         SnowflakeFloat,
@@ -49,41 +50,41 @@ var SnowflakeTypeMapping = map[string]string{
 }
 
 const (
-	// numeric types
+	// numeric types.
 	SnowflakeInteger = "INTEGER"
 	SnowflakeFloat   = "FLOAT"
 	SnowflakeFixed   = "FIXED"
 	SnowflakeReal    = "REAL"
 
-	// string & binary types
+	// string & binary types.
 	SnowflakeText    = "TEXT"
 	SnowflakeBinary  = "BINARY"
 	SnowflakeVarchar = "VARCHAR"
 
-	// logical data types
+	// logical data types.
 	SnowflakeBoolean = "BOOLEAN"
 
-	// date & time types
+	// date & time types.
 	SnowflakeTimestampLTZ = "TIMESTAMP_LTZ"
 	SnowflakeTimestampNTZ = "TIMESTAMP_NTZ"
 	SnowflakeTimestampTZ  = "TIMESTAMP_TZ"
 	SnowflakeTime         = "TIME"
 	SnowflakeDate         = "DATE"
 
-	// semi-structured data types
+	// semi-structured data types.
 	SnowflakeVariant = "VARIANT"
 	SnowflakeObject  = "OBJECT"
 	SnowflakeArray   = "ARRAY"
 
-	// geospatial data types
+	// geospatial data types.
 	SnowflakeGeography = "GEOGRAPHY"
 	SnowflakeGeometry  = "GEOMETRY"
 
-	// vector data types
+	// vector data types.
 	SnowflakeVector = "VECTOR"
 )
 
-// Map from Avro Types to Snowflake Types
+// AvroToSnowflakeType Map from Avro Types to Snowflake Types.
 var AvroToSnowflakeType = map[avro.Type]string{
 	avro.Boolean: SnowflakeBoolean,
 	avro.Int:     SnowflakeInteger,
@@ -238,7 +239,7 @@ func GetDataSchema(
 	return csvColumnOrder, &connectorColumns, nil
 }
 
-//nolint:gocyclo // TODO: refactor this function, make it more modular and readable.
+// TODO: refactor this function, make it more modular and readable.
 func MakeCSVBytes(
 	ctx context.Context,
 	records []sdk.Record,
@@ -248,7 +249,7 @@ func MakeCSVBytes(
 	primaryKey string,
 	insertsBuf *bytes.Buffer,
 	updatesBuf *bytes.Buffer,
-	numGoroutines int,
+	_ int,
 ) (err error) {
 	insertsWriter := csv.NewWriter(insertsBuf)
 	updatesWriter := csv.NewWriter(updatesBuf)
@@ -313,8 +314,7 @@ func MakeCSVBytes(
 		schema,
 		meroxaColumns)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to create CSV records")
-		return err
+		return errors.Errorf("failed to create CSV records")
 	}
 
 	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
@@ -343,6 +343,38 @@ func MakeCSVBytes(
 	return nil
 }
 
+func getColumnValue(
+	c string, r *sdk.Record,
+	s *recordSummary,
+	data map[string]interface{},
+	cnCols ConnectorColumns,
+	schema map[string]string) (string, error) {
+	switch {
+	case c == cnCols.operationColumn:
+		return r.Operation.String(), nil
+	case c == cnCols.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+		return fmt.Sprint(s.createdAt.UnixMicro()), nil
+	case c == cnCols.updatedAtColumn && r.Operation == sdk.OperationUpdate:
+		return fmt.Sprint(s.updatedAt.UnixMicro()), nil
+	case c == cnCols.deletedAtColumn && r.Operation == sdk.OperationDelete:
+		return fmt.Sprint(s.deletedAt.UnixMicro()), nil
+	case data[c] == nil:
+		return "", nil
+	case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
+		t, ok := data[c].(time.Time)
+		if !ok {
+			return "", errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
+		}
+		if schema[c] == SnowflakeDate {
+			return t.UTC().Format(time.DateOnly), nil
+		} else {
+			return fmt.Sprint(t.UTC().UnixMicro()), nil
+		}
+	default:
+		return fmt.Sprint(data[c]), nil
+	}
+}
+
 func createCSVRecords(
 	_ context.Context,
 	recordSummaries []*recordSummary,
@@ -367,33 +399,11 @@ func createCSVRecords(
 		}
 
 		for j, c := range csvColumnOrder {
-			switch {
-			case c == cnCols.operationColumn:
-				row[j] = r.Operation.String()
-			case c == cnCols.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
-				row[j] = fmt.Sprint(s.createdAt.UnixMicro())
-			case c == cnCols.updatedAtColumn && r.Operation == sdk.OperationUpdate:
-				row[j] = fmt.Sprint(s.updatedAt.UnixMicro())
-			case c == cnCols.deletedAtColumn && r.Operation == sdk.OperationDelete:
-				row[j] = fmt.Sprint(s.deletedAt.UnixMicro())
-			case data[c] == nil:
-				row[j] = ""
-			// Handle timestamps & dates
-			// TODO: streamline this, this is getting messy
-			case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
-				t, ok := data[c].(time.Time)
-				if !ok {
-					return 0, 0, errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
-				}
-
-				if schema[c] == SnowflakeDate {
-					row[j] = t.UTC().Format(time.DateOnly)
-				} else {
-					row[j] = fmt.Sprint(t.UTC().UnixMicro())
-				}
-			default:
-				row[j] = fmt.Sprint(data[c])
+			value, err := getColumnValue(c, r, s, data, cnCols, schema)
+			if err != nil {
+				return 0, 0, err
 			}
+			row[j] = value
 		}
 
 		switch r.Operation {
@@ -520,12 +530,10 @@ func mapAvroToSnowflake(ctx context.Context, field *avro.Field) (string, error) 
 
 	// fixed types
 	f, ok := t.(*avro.FixedSchema)
-	if ok {
-		switch f.Logical().Type() {
-		case avro.Decimal:
-			fmt.Println("decimal detected")
-			return SnowflakeFloat, nil
-		}
+	if ok && f.Logical().Type() == avro.Decimal {
+		sdk.Logger(ctx).Trace().Msg("decimal detected")
+
+		return SnowflakeFloat, nil
 	}
 
 	return "", fmt.Errorf("could not find snowflake mapping for avro type %s", field.Name())

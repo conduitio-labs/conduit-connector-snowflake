@@ -149,13 +149,9 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to drop stage")
-
 		return errors.Errorf("failed to drop stage: %w", err)
 	}
 	if err := s.db.Close(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
-
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
@@ -193,8 +189,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	schema := make(map[string]string)
 	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
-
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
@@ -216,8 +210,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		s.ProcessingWorkers,
 	)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
-
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
@@ -268,12 +260,9 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
-	//nolint:gosec // not an issue
 	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.TableName)
 	res, err := s.db.Query(showTablesQuery)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to show tables")
-
 		return errors.Errorf("failed to check if table exists: %w", err)
 	}
 
@@ -282,17 +271,19 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	// table not found
 	if !res.Next() {
 		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.TableName)
+
 		return nil
 	}
 
-	//nolint:gosec // not an issue
+	if err = res.Err(); err != nil {
+		return errors.Errorf("error occurred while checking table rows: %w", err)
+	}
+
 	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)
 
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", showColumnsQuery)
 
 	if _, err := s.db.Exec(showColumnsQuery); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
-
 		return errors.Errorf("failed to check if table exists: %w", err)
 	}
 
@@ -300,8 +291,6 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	// https://community.snowflake.com/s/article/Select-the-list-of-columns-in-the-table-without-using-information-schema
 	response, err := s.db.Query(`SELECT "column_name","data_type" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));`)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
-
 		return errors.Errorf("failed to check if table exists: %w", err)
 	}
 
@@ -311,13 +300,14 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	// grab columns from snowflake if they exist
 	for response.Next() {
 		var columnName, d, finalType string
-		err := response.Scan(&columnName, &d)
-		if err != nil {
+		if err := response.Scan(&columnName, &d); err != nil {
 			return err
 		}
 
 		datatypeMap := make(map[string]interface{})
-		json.Unmarshal([]byte(d), &datatypeMap)
+		if err := json.Unmarshal([]byte(d), &datatypeMap); err != nil {
+			return err
+		}
 
 		datatype := datatypeMap["type"].(string)
 
@@ -337,8 +327,6 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	}
 
 	if err := response.Err(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("error grabbing columns")
-
 		return errors.Errorf("error grabbing columns: %w", err)
 	}
 
@@ -401,8 +389,6 @@ func schemaMatches(schema, snowflakeSchema map[string]string) error {
 func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string, columnOrder []string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
-
 		return errors.Errorf("failed to create transaction: %w", err)
 	}
 
@@ -419,8 +405,6 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTable)
 
 	if _, err = tx.ExecContext(ctx, queryCreateTable); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to create destination table")
-
 		return errors.Errorf("failed to create destination table: %w", err)
 	}
 
@@ -524,14 +508,14 @@ func (s *SnowflakeCSV) Merge(
 
 		res, err := tx.ExecContext(ctx, queryMergeInto)
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, insertsFilename)
-
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
 		}
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
@@ -573,22 +557,20 @@ func (s *SnowflakeCSV) Merge(
 
 		res, err := tx.ExecContext(ctx, queryMergeInto)
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, updatesFilename)
-
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
 		}
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
 	}
 
 	if err := tx.Commit(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("transaction failed")
-
 		return errors.Errorf("transaction failed: %w", err)
 	}
 
