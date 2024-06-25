@@ -206,19 +206,22 @@ func TestWriter_Write(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 
-				mock.ExpectQuery(`SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
-				FROM INFORMATION_SCHEMA.COLUMNS c
-				WHERE c.TABLE_NAME ilike 'test'
-				ORDER BY c.ORDINAL_POSITION`).
+				// Check if table exist and return 0 rows to check `SetupTables` is called
+				mock.ExpectQuery(`SHOW TABLES LIKE 'test'`).
 					WillReturnRows(sqlmock.NewRows([]string{}))
 
 				mock.ExpectBegin()
 
-				mock.ExpectExec(`
-				CREATE TABLE IF NOT EXISTS test \( 
-					meroxa_operation VARCHAR, meroxa_created_at TIMESTAMP_LTZ, meroxa_updated_at TIMESTAMP_LTZ, 
-					meroxa_deleted_at TIMESTAMP_LTZ, firstName VARCHAR, id VARCHAR, lastName VARCHAR, PRIMARY KEY \(id\) \)
-				`).
+				mock.ExpectExec(`CREATE TABLE IF NOT EXISTS test \(
+						meroxa_operation VARCHAR,
+						meroxa_created_at TIMESTAMP_TZ,
+						meroxa_updated_at TIMESTAMP_TZ,
+						meroxa_deleted_at TIMESTAMP_TZ,
+						firstName VARCHAR,
+						id VARCHAR,
+						lastName VARCHAR,
+						PRIMARY KEY \(id\)
+					\)`).
 					WillReturnResult(sqlmock.NewResult(1, 1)).
 					WillReturnError(nil)
 

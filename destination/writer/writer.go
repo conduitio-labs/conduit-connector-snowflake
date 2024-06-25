@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -111,6 +112,10 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 		return nil, errors.Errorf("failed to create custom csv file format: %w", err)
 	}
 
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIMEZONE = 'UTC'"); err != nil {
+		return nil, errors.Errorf("failed to set session timezone to UTC: %w", err)
+	}
+
 	var cmper compress.Compressor
 
 	switch cfg.Compression {
@@ -144,13 +149,9 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to drop stage")
-
 		return errors.Errorf("failed to drop stage: %w", err)
 	}
 	if err := s.db.Close(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to gracefully close the connection")
-
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
 
@@ -188,8 +189,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	schema := make(map[string]string)
 	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
-
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
@@ -204,14 +203,13 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		records,
 		csvColumnOrder,
 		*meroxaColumns,
+		schema,
 		s.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
 		s.ProcessingWorkers,
 	)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to convert records to CSV")
-
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
@@ -262,44 +260,73 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
-	snowflakeSchema := make(map[string]string)
-	var columnName, dataType, isNullable string
-
-	//nolint:gosec // not an issue
-	query := fmt.Sprintf(`
-					SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
-					FROM INFORMATION_SCHEMA.COLUMNS c
-					WHERE c.TABLE_NAME ilike '%s'
-					ORDER BY c.ORDINAL_POSITION;
-					`, s.TableName)
-
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", query)
-
-	response, err := s.db.Query(query)
+	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.TableName)
+	res, err := s.db.Query(showTablesQuery)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to check if table exists")
+		return errors.Errorf("failed to check if table exists: %w", err)
+	}
 
+	defer res.Close()
+
+	// table not found
+	if !res.Next() {
+		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.TableName)
+
+		return nil
+	}
+
+	if err = res.Err(); err != nil {
+		return errors.Errorf("error occurred while checking table rows: %w", err)
+	}
+
+	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)
+
+	sdk.Logger(ctx).Debug().Msgf("executing: %s", showColumnsQuery)
+
+	if _, err := s.db.Exec(showColumnsQuery); err != nil {
+		return errors.Errorf("failed to check if table exists: %w", err)
+	}
+
+	// TODO: wrap in a transaction, this is ugly, but unfortunately recommended by snowflake
+	// https://community.snowflake.com/s/article/Select-the-list-of-columns-in-the-table-without-using-information-schema
+	response, err := s.db.Query(`SELECT "column_name","data_type" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));`)
+	if err != nil {
 		return errors.Errorf("failed to check if table exists: %w", err)
 	}
 
 	defer response.Close()
 
+	snowflakeSchema := make(map[string]string)
 	// grab columns from snowflake if they exist
 	for response.Next() {
-		err := response.Scan(&columnName, &dataType, &isNullable)
-		if err != nil {
+		var columnName, d, finalType string
+		if err := response.Scan(&columnName, &d); err != nil {
 			return err
 		}
-		// snowflake stores varchar as text on schema info, we use varchar in our schema def
-		if dataType == "TEXT" {
-			dataType = "VARCHAR"
+
+		datatypeMap := make(map[string]interface{})
+		if err := json.Unmarshal([]byte(d), &datatypeMap); err != nil {
+			return err
 		}
-		snowflakeSchema[strings.ToLower(columnName)] = dataType
+
+		datatype := datatypeMap["type"].(string)
+
+		// ensure that scale is non-zero to determine if it's an integer or not
+		if datatype == format.SnowflakeFixed {
+			scale := datatypeMap["scale"].(float64)
+			if scale > 0 {
+				finalType = format.SnowflakeFloat
+			} else {
+				finalType = format.SnowflakeInteger
+			}
+		} else {
+			finalType = format.SnowflakeTypeMapping[datatype]
+		}
+
+		snowflakeSchema[strings.ToLower(columnName)] = finalType
 	}
 
 	if err := response.Err(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("error grabbing columns")
-
 		return errors.Errorf("error grabbing columns: %w", err)
 	}
 
@@ -307,6 +334,9 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	if len(snowflakeSchema) == 0 {
 		return nil
 	}
+
+	sdk.Logger(ctx).Debug().Msgf("Existing Table Schema (%+v)", snowflakeSchema)
+	sdk.Logger(ctx).Debug().Msgf("Connector Generated Schema (%+v)", schema)
 
 	// if operation is delete, we want to ensure that primary key is on dest table as well as meroxa columns
 	if operation == sdk.OperationDelete {
@@ -359,8 +389,6 @@ func schemaMatches(schema, snowflakeSchema map[string]string) error {
 func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string, columnOrder []string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to begin transaction")
-
 		return errors.Errorf("failed to create transaction: %w", err)
 	}
 
@@ -377,8 +405,6 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTable)
 
 	if _, err = tx.ExecContext(ctx, queryCreateTable); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("failed to create destination table")
-
 		return errors.Errorf("failed to create destination table: %w", err)
 	}
 
@@ -480,13 +506,19 @@ func (s *SnowflakeCSV) Merge(
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
 
-		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, insertsFilename)
-
+		res, err := tx.ExecContext(ctx, queryMergeInto)
+		if err != nil {
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
 		}
 
-		sdk.Logger(ctx).Info().Msg("ran MERGE for inserts")
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
+		}
+
+		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
 	}
 
 	if updatesFilename != "" {
@@ -523,18 +555,22 @@ func (s *SnowflakeCSV) Merge(
 
 		sdk.Logger(ctx).Debug().Msgf("executing: %s", queryMergeInto)
 
-		if _, err = tx.ExecContext(ctx, queryMergeInto); err != nil {
-			sdk.Logger(ctx).Err(err).Msgf("failed to merge into table %s from %s", s.TableName, updatesFilename)
-
+		res, err := tx.ExecContext(ctx, queryMergeInto)
+		if err != nil {
 			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
 		}
 
-		sdk.Logger(ctx).Info().Msg("ran MERGE for updates/deletes")
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			sdk.Logger(ctx).
+				Err(err).
+				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+		}
+
+		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
 	}
 
 	if err := tx.Commit(); err != nil {
-		sdk.Logger(ctx).Err(err).Msg("transaction failed")
-
 		return errors.Errorf("transaction failed: %w", err)
 	}
 
