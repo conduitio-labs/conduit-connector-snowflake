@@ -17,25 +17,25 @@ package compress
 import (
 	"compress/gzip"
 	"io"
-
-	"github.com/go-errors/errors"
 )
 
 var _ Compressor = (*Gzip)(nil)
 
 type Gzip struct{}
 
-func (Gzip) Compress(in io.Reader, out io.Writer) error {
-	w := gzip.NewWriter(out)
-	if _, err := io.Copy(w, in); err != nil {
-		return errors.Errorf("failed to copy bytes to gzip writer: %w", err)
-	}
+func (Gzip) Compress(in io.Reader) io.Reader {
+	pr, pw := io.Pipe()
+	w := gzip.NewWriter(pw)
 
-	if err := w.Close(); err != nil {
-		return errors.Errorf("failed to flush gzip writer: %w", err)
-	}
+	go func() {
+		defer pw.Close()
+		defer w.Close()
 
-	return nil
+		_, err := io.Copy(w, in)
+		pw.CloseWithError(err)
+	}()
+
+	return pr
 }
 
 func (Gzip) Name() string {

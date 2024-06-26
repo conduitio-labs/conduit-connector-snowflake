@@ -13,20 +13,3 @@
 // limitations under the License.
 
 package writer
-
-import (
-	"context"
-	"strings"
-
-	"github.com/google/uuid"
-)
-
-type reqIDctxKey struct{}
-
-func withRequestID(ctx context.Context) context.Context {
-	return context.WithValue(ctx, reqIDctxKey{}, strings.ReplaceAll(uuid.NewString(), "-", ""))
-}
-
-func requestID(ctx context.Context) string {
-	return (ctx.Value(reqIDctxKey{}).(string))
-}

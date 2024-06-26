@@ -16,20 +16,14 @@ package compress
 
 import (
 	"io"
-
-	"github.com/go-errors/errors"
 )
 
 var _ Compressor = (*Copy)(nil)
 
 type Copy struct{}
 
-func (Copy) Compress(in io.Reader, out io.Writer) error {
-	if _, err := io.Copy(out, in); err != nil {
-		return errors.Errorf("failed to plain copy bytes to writer: %w", err)
-	}
-
-	return nil
+func (Copy) Compress(in io.Reader) io.Reader {
+	return in
 }
 
 func (Copy) Name() string {

@@ -15,9 +15,9 @@
 package compress
 
 import (
+	"fmt"
 	"io"
 
-	"github.com/go-errors/errors"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -25,21 +25,24 @@ var _ Compressor = (*Zstd)(nil)
 
 type Zstd struct{}
 
-func (Zstd) Compress(in io.Reader, out io.Writer) error {
-	w, err := zstd.NewWriter(out, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
+func (Zstd) Compress(in io.Reader) io.Reader {
+	pr, pw := io.Pipe()
+
+	w, err := zstd.NewWriter(pw, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
 	if err != nil {
-		return errors.Errorf("failed to create zstd writer: %w", err)
+		// This would only happen if EncoderLevel is invalid.
+		panic(fmt.Errorf("failed to create zstd writer: %w", err))
 	}
 
-	if _, err = io.Copy(w, in); err != nil {
-		return errors.Errorf("failed to copy bytes to zstd writer: %w", err)
-	}
+	go func() {
+		defer pw.Close()
+		defer w.Close()
 
-	if err := w.Close(); err != nil {
-		return errors.Errorf("failed to flush zstd writer: %w", err)
-	}
+		_, err := io.Copy(w, in)
+		pw.CloseWithError(err)
+	}()
 
-	return nil
+	return pr
 }
 
 func (Zstd) Name() string {

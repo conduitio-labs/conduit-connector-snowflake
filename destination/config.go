@@ -14,7 +14,14 @@
 
 package destination
 
-import sdk "github.com/conduitio/conduit-connector-sdk"
+import (
+	"bytes"
+	"fmt"
+	"github.com/Masterminds/sprig/v3"
+	sdk "github.com/conduitio/conduit-connector-sdk"
+	"strings"
+	"text/template"
+)
 
 //go:generate paramgen -output=config_paramgen.go Config
 
@@ -41,9 +48,9 @@ type Config struct {
 	KeepAlive bool `json:"snowflake.keepAlive" default:"true"`
 	// Snowflake Stage to use for uploading files before merging into destination table.
 	Stage string `json:"snowflake.stage" validate:"required"`
-	// Primary key of the source table
+	// Primary key of the destination table.
 	PrimaryKey string `json:"snowflake.primaryKey" validate:"required"`
-	// Prefix to append to update_at , deleted_at, create_at at destination table
+	// Prefix to append to updated_at , deleted_at, created_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa" validate:"required"`
 	// Data type of file we upload and copy data from to snowflake
 	Format string `json:"snowflake.format" default:"csv" validate:"required,inclusion=csv"`
@@ -55,11 +62,31 @@ type Config struct {
 	Compression string `json:"snowflake.compression" default:"zstd" validate:"required,inclusion=gzip|zstd|copy"`
 }
 
-const (
-	SnowflakeStage             = "snowflake.stage"
-	SnowflakePrimaryKey        = "snowflake.primaryKey"
-	SnowflakeNamingPrefix      = "snowflake.namingPrefix"
-	SnowflakeFormat            = "snowflake.format"
-	SnowflakeCSVGoRoutines     = "snowflake.processingWorkers"
-	SnowflakeFileUploadThreads = "snowflake.fileUploadThreads"
-)
+// TableFunction returns a function that determines the table for each record individually.
+// The function might be returning a static table name.
+// If the table is neither static nor a template, an error is returned.
+func (c Config) TableFunction() (f TableFn, err error) {
+	// Not a template, i.e. it's a static table name
+	if !strings.HasPrefix(c.Table, "{{") && !strings.HasSuffix(c.Table, "}}") {
+		return func(_ sdk.Record) (string, error) {
+			return c.Table, nil
+		}, nil
+	}
+
+	// Try to parse the table
+	t, err := template.New("table").Funcs(sprig.FuncMap()).Parse(c.Table)
+	if err != nil {
+		// The table is not a valid Go template.
+		return nil, fmt.Errorf("table is neither a valid static table nor a valid Go template: %w", err)
+	}
+
+	// The table is a valid template, return TableFn.
+	var buf bytes.Buffer
+	return func(r sdk.Record) (string, error) {
+		buf.Reset()
+		if err := t.Execute(&buf, r); err != nil {
+			return "", fmt.Errorf("failed to execute table template: %w", err)
+		}
+		return buf.String(), nil
+	}, nil
+}

@@ -19,13 +19,13 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"time"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
 	"golang.org/x/exp/maps"
 )
@@ -143,10 +143,10 @@ type AvroRecordSchema struct {
 
 func GetDataSchema(
 	ctx context.Context,
-	records []sdk.Record,
+	record sdk.Record,
 	schema map[string]string,
 	prefix string,
-) ([]string, *ConnectorColumns, error) {
+) ([]string, ConnectorColumns, error) {
 	// we need to store the operation in a column, to detect updates & deletes
 	connectorColumns := ConnectorColumns{
 		operationColumn: fmt.Sprintf("%s_operation", prefix),
@@ -167,33 +167,29 @@ func GetDataSchema(
 
 	// Grab the schema from the first record.
 	// TODO: support schema evolution.
-	if len(records) == 0 {
-		return nil, nil, errors.New("unexpected empty slice of records")
-	}
 
-	r := records[0]
-	data, err := extract(r.Operation, r.Payload, r.Key)
+	data, err := extract(record.Operation, record.Payload, record.Key)
 	if err != nil {
-		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
+		return nil, ConnectorColumns{}, fmt.Errorf("failed to extract payload data: %w", err)
 	}
 
-	avroStr, okAvro := r.Metadata["postgres.avro.schema"]
+	avroStr, okAvro := record.Metadata["postgres.avro.schema"]
 	// if we have an avro schema in the metadata, interpret the schema from it
 	if okAvro {
 		sdk.Logger(ctx).Debug().Msgf("avro schema string: %s", avroStr)
 		avroSchema, err := avro.Parse(avroStr)
 		if err != nil {
-			return nil, nil, errors.Errorf("could not parse avro schema: %w", err)
+			return nil, ConnectorColumns{}, fmt.Errorf("could not parse avro schema: %w", err)
 		}
 		avroRecordSchema, ok := avroSchema.(*avro.RecordSchema)
 		if !ok {
-			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
+			return nil, ConnectorColumns{}, errors.New("could not coerce avro schema into recordSchema")
 		}
 		for _, field := range avroRecordSchema.Fields() {
 			csvColumnOrder = append(csvColumnOrder, field.Name())
 			schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
+				return nil, ConnectorColumns{}, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
 			}
 		}
 	} else {
@@ -236,7 +232,7 @@ func GetDataSchema(
 
 	sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", schema)
 
-	return csvColumnOrder, &connectorColumns, nil
+	return csvColumnOrder, connectorColumns, nil
 }
 
 // TODO: refactor this function, make it more modular and readable.
@@ -247,12 +243,10 @@ func MakeCSVBytes(
 	meroxaColumns ConnectorColumns,
 	schema map[string]string,
 	primaryKey string,
-	insertsBuf *bytes.Buffer,
-	updatesBuf *bytes.Buffer,
+	buf *bytes.Buffer,
 	_ int,
 ) (err error) {
-	insertsWriter := csv.NewWriter(insertsBuf)
-	updatesWriter := csv.NewWriter(updatesBuf)
+	writer := csv.NewWriter(buf)
 
 	// loop through records and de-dupe before converting to CSV
 	// this is done beforehand, so we can parallelize the CSV formatting
@@ -300,45 +294,23 @@ func MakeCSVBytes(
 	dedupedRecords := maps.Values(latestRecordMap)
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
 
-	insertsBuffer := new(bytes.Buffer)
-	updatesBuffer := new(bytes.Buffer)
-
-	insertW := csv.NewWriter(insertsBuffer)
-	updateW := csv.NewWriter(updatesBuffer)
-
-	inserts, updates, err := createCSVRecords(ctx,
+	err = writer.Write(csvColumnOrder)
+	if err != nil {
+		return fmt.Errorf("failed to write headers: %w", err)
+	}
+	err = createCSVRecords(
+		ctx,
 		dedupedRecords,
-		insertW,
-		updateW,
+		writer,
 		csvColumnOrder,
 		schema,
-		meroxaColumns)
+		meroxaColumns,
+	)
 	if err != nil {
-		return errors.Errorf("failed to create CSV records")
+		return fmt.Errorf("failed to create CSV records")
 	}
 
-	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
-	sdk.Logger(ctx).Debug().Msgf("num updates/deletes in CSV buffer: %d", updates)
-
-	if inserts > 0 {
-		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write insert headers: %w", err)
-		}
-
-		if err := joinBuffers(insertsBuf, insertsBuffer); err != nil {
-			return errors.Errorf("failed to join insert buffers: %w", err)
-		}
-	}
-
-	if updates > 0 {
-		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write update headers: %w", err)
-		}
-
-		if err := joinBuffers(updatesBuf, updatesBuffer); err != nil {
-			return errors.Errorf("failed to join update buffers: %w", err)
-		}
-	}
+	sdk.Logger(ctx).Debug().Msgf("num rows in CSV buffer: %d", len(dedupedRecords))
 
 	return nil
 }
@@ -363,7 +335,7 @@ func getColumnValue(
 	case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
 		t, ok := data[c].(time.Time)
 		if !ok {
-			return "", errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
+			return "", fmt.Errorf("invalid timestamp on column %s: %+v", c, data[c])
 		}
 		if schema[c] == SnowflakeDate {
 			return t.UTC().Format(time.DateOnly), nil
@@ -378,14 +350,14 @@ func getColumnValue(
 func createCSVRecords(
 	_ context.Context,
 	recordSummaries []*recordSummary,
-	insertsWriter, updatesWriter *csv.Writer,
+	writer *csv.Writer,
 	csvColumnOrder []string,
 	schema map[string]string,
 	cnCols ConnectorColumns,
-) (numInserts int, numUpdates int, err error) {
-	var inserts, updates [][]string
+) error {
+	rows := make([][]string, len(recordSummaries))
 
-	for _, s := range recordSummaries {
+	for i, s := range recordSummaries {
 		if s.latestRecord == nil {
 			continue
 		}
@@ -395,40 +367,21 @@ func createCSVRecords(
 
 		data, err := extract(r.Operation, r.Payload, r.Key)
 		if err != nil {
-			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
+			return fmt.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for j, c := range csvColumnOrder {
 			value, err := getColumnValue(c, r, s, data, cnCols, schema)
 			if err != nil {
-				return 0, 0, err
+				return err
 			}
 			row[j] = value
 		}
 
-		switch r.Operation {
-		case sdk.OperationCreate, sdk.OperationSnapshot:
-			inserts = append(inserts, row)
-		case sdk.OperationUpdate, sdk.OperationDelete:
-			updates = append(updates, row)
-		default:
-			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
-		}
+		rows[i] = row
 	}
 
-	if len(inserts) > 0 {
-		if err := insertsWriter.WriteAll(inserts); err != nil {
-			return 0, 0, errors.Errorf("failed to write insert records: %w", err)
-		}
-	}
-
-	if len(updates) > 0 {
-		if err := updatesWriter.WriteAll(updates); err != nil {
-			return 0, 0, errors.Errorf("failed to write update records: %w", err)
-		}
-	}
-
-	return len(inserts), len(updates), nil
+	return writer.WriteAll(rows)
 }
 
 func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.StructuredData, error) {
@@ -446,7 +399,7 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 		dataStruct, okStruct = key.(sdk.StructuredData)
 		dataRaw, okRaw = key.(sdk.RawData)
 		if !okRaw && !okStruct {
-			return nil, errors.Errorf("cannot find data either in payload (%T) or key (%T)", sdkData, key)
+			return nil, fmt.Errorf("cannot find data either in payload (%T) or key (%T)", sdkData, key)
 		}
 		sdkData = key
 	}
@@ -456,13 +409,13 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 	} else if okRaw {
 		data := make(sdk.StructuredData)
 		if err := json.Unmarshal(dataRaw, &payload); err != nil {
-			return nil, errors.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
+			return nil, fmt.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
 		}
 
 		return data, nil
 	}
 
-	return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
+	return nil, fmt.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 }
 
 // Writes the contents of buffer b to buffer a.
