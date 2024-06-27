@@ -12,35 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package writer
+package snowflake
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 )
 
-type Table struct {
-	Name     string
-	Database string
-	Schema   string
-	Columns  []Column
-
-	// Connector specific columns (all are also included in Columns)
-	PrimaryKeys []Column
-	Operation   Column
-	CreatedAt   Column
-	UpdatedAt   Column
-	DeletedAt   Column
-}
-
-type Column struct {
-	Name     string
-	DataType DataType
-}
-
+// DataType represents a Snowflake data type.
 type DataType interface {
 	Nullable() bool
 	Type() string
+
+	SQLType() string
 }
 
 var (
@@ -51,13 +36,15 @@ var (
 		DataTypeBinary{}.Type():       DataTypeBinary{},
 		DataTypeBoolean{}.Type():      DataTypeBoolean{},
 		DataTypeDate{}.Type():         DataTypeDate{},
-		DataTypeVariant{}.Type():      DataTypeVariant{},
+		DataTypeTime{}.Type():         DataTypeTime{},
 		DataTypeTimestampLtz{}.Type(): DataTypeTimestampLtz{},
 		DataTypeTimestampNtz{}.Type(): DataTypeTimestampNtz{},
 		DataTypeTimestampTz{}.Type():  DataTypeTimestampTz{},
+		DataTypeVariant{}.Type():      DataTypeVariant{},
 		DataTypeArray{}.Type():        DataTypeArray{},
 		DataTypeObject{}.Type():       DataTypeObject{},
-		DataTypeTime{}.Type():         DataTypeTime{},
+		DataTypeGeography{}.Type():    DataTypeGeography{},
+		DataTypeVector{}.Type():       DataTypeVector{},
 	}
 )
 
@@ -73,6 +60,12 @@ func (dt DataTypeFixed) Nullable() bool {
 func (dt DataTypeFixed) Type() string {
 	return "FIXED"
 }
+func (dt DataTypeFixed) SQLType() string {
+	if dt.Precision > 0 || dt.Scale > 0 {
+		return fmt.Sprintf("NUMBER(%d,%d)", dt.Precision, dt.Scale)
+	}
+	return "NUMBER"
+}
 
 type DataTypeReal struct {
 	IsNullable bool `json:"nullable"`
@@ -82,6 +75,9 @@ func (dt DataTypeReal) Nullable() bool {
 	return dt.IsNullable
 }
 func (dt DataTypeReal) Type() string {
+	return "REAL"
+}
+func (dt DataTypeReal) SQLType() string {
 	return "REAL"
 }
 
@@ -98,6 +94,12 @@ func (dt DataTypeText) Nullable() bool {
 func (dt DataTypeText) Type() string {
 	return "TEXT"
 }
+func (dt DataTypeText) SQLType() string {
+	if dt.Length > 0 {
+		return fmt.Sprintf("TEXT(%d)", dt.Length)
+	}
+	return "TEXT"
+}
 
 type DataTypeBinary struct {
 	IsNullable bool  `json:"nullable"`
@@ -112,6 +114,9 @@ func (dt DataTypeBinary) Nullable() bool {
 func (dt DataTypeBinary) Type() string {
 	return "BINARY"
 }
+func (dt DataTypeBinary) SQLType() string {
+	return "BINARY"
+}
 
 type DataTypeBoolean struct {
 	IsNullable bool `json:"nullable"`
@@ -121,6 +126,9 @@ func (dt DataTypeBoolean) Nullable() bool {
 	return dt.IsNullable
 }
 func (dt DataTypeBoolean) Type() string {
+	return "BOOLEAN"
+}
+func (dt DataTypeBoolean) SQLType() string {
 	return "BOOLEAN"
 }
 
@@ -134,16 +142,27 @@ func (dt DataTypeDate) Nullable() bool {
 func (dt DataTypeDate) Type() string {
 	return "DATE"
 }
-
-type DataTypeVariant struct {
-	IsNullable bool `json:"nullable"`
+func (dt DataTypeDate) SQLType() string {
+	return "DATE"
 }
 
-func (dt DataTypeVariant) Nullable() bool {
+type DataTypeTime struct {
+	IsNullable bool  `json:"nullable"`
+	Precision  int64 `json:"precision"`
+	Scale      int64 `json:"scale"`
+}
+
+func (dt DataTypeTime) Nullable() bool {
 	return dt.IsNullable
 }
-func (dt DataTypeVariant) Type() string {
-	return "VARIANT"
+func (dt DataTypeTime) Type() string {
+	return "TIME"
+}
+func (dt DataTypeTime) SQLType() string {
+	if dt.Scale > 0 {
+		return fmt.Sprintf("TIME(%d)", dt.Scale)
+	}
+	return "TIME"
 }
 
 type DataTypeTimestampLtz struct {
@@ -156,6 +175,12 @@ func (dt DataTypeTimestampLtz) Nullable() bool {
 	return dt.IsNullable
 }
 func (dt DataTypeTimestampLtz) Type() string {
+	return "TIMESTAMP_LTZ"
+}
+func (dt DataTypeTimestampLtz) SQLType() string {
+	if dt.Scale > 0 {
+		return fmt.Sprintf("TIMESTAMP_LTZ(%d)", dt.Scale)
+	}
 	return "TIMESTAMP_LTZ"
 }
 
@@ -171,6 +196,12 @@ func (dt DataTypeTimestampNtz) Nullable() bool {
 func (dt DataTypeTimestampNtz) Type() string {
 	return "TIMESTAMP_NTZ"
 }
+func (dt DataTypeTimestampNtz) SQLType() string {
+	if dt.Scale > 0 {
+		return fmt.Sprintf("TIMESTAMP_NTZ(%d)", dt.Scale)
+	}
+	return "TIMESTAMP_NTZ"
+}
 
 type DataTypeTimestampTz struct {
 	IsNullable bool  `json:"nullable"`
@@ -184,6 +215,26 @@ func (dt DataTypeTimestampTz) Nullable() bool {
 func (dt DataTypeTimestampTz) Type() string {
 	return "TIMESTAMP_TZ"
 }
+func (dt DataTypeTimestampTz) SQLType() string {
+	if dt.Scale > 0 {
+		return fmt.Sprintf("TIMESTAMP_TZ(%d)", dt.Scale)
+	}
+	return "TIMESTAMP_TZ"
+}
+
+type DataTypeVariant struct {
+	IsNullable bool `json:"nullable"`
+}
+
+func (dt DataTypeVariant) Nullable() bool {
+	return dt.IsNullable
+}
+func (dt DataTypeVariant) Type() string {
+	return "VARIANT"
+}
+func (dt DataTypeVariant) SQLType() string {
+	return "VARIANT"
+}
 
 type DataTypeArray struct {
 	IsNullable bool `json:"nullable"`
@@ -193,6 +244,9 @@ func (dt DataTypeArray) Nullable() bool {
 	return dt.IsNullable
 }
 func (dt DataTypeArray) Type() string {
+	return "ARRAY"
+}
+func (dt DataTypeArray) SQLType() string {
 	return "ARRAY"
 }
 
@@ -206,18 +260,56 @@ func (dt DataTypeObject) Nullable() bool {
 func (dt DataTypeObject) Type() string {
 	return "OBJECT"
 }
-
-type DataTypeTime struct {
-	IsNullable bool  `json:"nullable"`
-	Precision  int64 `json:"precision"`
-	Scale      int64 `json:"scale"`
+func (dt DataTypeObject) SQLType() string {
+	return "OBJECT"
 }
 
-func (dt DataTypeTime) Nullable() bool {
+type DataTypeGeography struct {
+	IsNullable bool   `json:"nullable"`
+	OutputType string `json:"outputType"`
+}
+
+func (dt DataTypeGeography) Nullable() bool {
 	return dt.IsNullable
 }
-func (dt DataTypeTime) Type() string {
-	return "TIME"
+func (dt DataTypeGeography) Type() string {
+	return "GEOGRAPHY"
+}
+func (dt DataTypeGeography) SQLType() string {
+	return "GEOGRAPHY"
+}
+
+type DataTypeVector struct {
+	IsNullable  bool     `json:"nullable"`
+	Dimension   int64    `json:"dimension"`
+	ElementType DataType `json:"vectorElementType"`
+}
+
+func (dt DataTypeVector) Nullable() bool {
+	return dt.IsNullable
+}
+func (dt DataTypeVector) Type() string {
+	return "VECTOR"
+}
+func (dt DataTypeVector) SQLType() string {
+	return fmt.Sprintf("VECTOR(%s,%d)", dt.ElementType.SQLType(), dt.Dimension)
+}
+func (dt *DataTypeVector) UnmarshalJSON(b []byte) error {
+	// Create a type alias to avoid infinite recursion when calling json.Unmarshal.
+	type Alias DataTypeVector
+	tmp := struct {
+		*Alias
+		ElementType DataTypeContainer `json:"vectorElementType"`
+	}{
+		Alias: (*Alias)(dt),
+	}
+
+	if err := json.Unmarshal(b, &tmp); err != nil {
+		return err
+	}
+
+	dt.ElementType = tmp.ElementType.Unmarshalled
+	return nil
 }
 
 type DataTypeUnknown struct {
@@ -230,6 +322,9 @@ func (dt DataTypeUnknown) Nullable() bool {
 	return dt.IsNullable
 }
 func (dt DataTypeUnknown) Type() string {
+	return dt.TypeName
+}
+func (dt DataTypeUnknown) SQLType() string {
 	return dt.TypeName
 }
 func (dt *DataTypeUnknown) UnmarshalJSON(b []byte) error {
@@ -308,20 +403,20 @@ func (c *Container[K, V, H]) UnmarshalJSON(b []byte) error {
 // DataTypeContainer is a Container struct that can be used to unmarshal JSON
 // objects into a DataType object based on the 'type' field in the JSON object.
 type DataTypeContainer struct {
-	Container[string, DataType, DataTypeContainerHelper]
+	Container[string, DataType, dataTypeContainerHelper]
 }
 
-// DataTypeContainerHelper is a struct that implements the ContainerHelper
+// dataTypeContainerHelper is a struct that implements the ContainerHelper
 // interface for the DataTypeContainer struct.
-type DataTypeContainerHelper struct {
+type dataTypeContainerHelper struct {
 	Type string `json:"type"`
 }
 
-func (h DataTypeContainerHelper) Key() string {
+func (h dataTypeContainerHelper) Key() string {
 	return h.Type
 }
 
-func (DataTypeContainerHelper) Mapping(t string) DataType {
+func (dataTypeContainerHelper) Mapping(t string) DataType {
 	if dt, ok := KnownDataTypes[t]; ok {
 		return dt
 	}

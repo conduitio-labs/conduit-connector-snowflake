@@ -30,7 +30,7 @@ func init() {
 	slices.Sort(values)
 
 	if slices.Compare(keys, values) != 0 {
-		panic("schema  types mismatch")
+		panic("schema types mismatch")
 	}
 }
 

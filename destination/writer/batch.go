@@ -20,6 +20,8 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema/snowflake"
+
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
@@ -34,7 +36,7 @@ type Batch struct {
 	ID       string
 	Stage    string
 	Type     BatchType
-	Table    Table
+	Table    snowflake.Table
 	Filename string
 
 	Records []sdk.Record
@@ -42,7 +44,7 @@ type Batch struct {
 	mergeQueryTemplate *template.Template
 }
 
-func NewInsertBatch(id, stage string, table Table) *Batch {
+func NewInsertBatch(id, stage string, table snowflake.Table) *Batch {
 	return &Batch{
 		ID:       id,
 		Stage:    stage,
@@ -54,7 +56,7 @@ func NewInsertBatch(id, stage string, table Table) *Batch {
 	}
 }
 
-func NewUpdateBatch(id, stage string, table Table) *Batch {
+func NewUpdateBatch(id, stage string, table snowflake.Table) *Batch {
 	return &Batch{
 		ID:       id,
 		Stage:    stage,

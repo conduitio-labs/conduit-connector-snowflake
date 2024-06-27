@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package writer
+package snowflake
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/matryer/is"
 	"testing"
+
+	"github.com/matryer/is"
 )
 
 func TestDataTypeContainer_JSONUnmarshal(t *testing.T) {
@@ -97,6 +98,36 @@ func TestDataTypeContainer_JSONUnmarshal(t *testing.T) {
 			IsNullable: true,
 			TypeName:   "FOO",
 			Raw:        json.RawMessage(`{"type":"FOO","foo":"bar","nullable":true}`),
+		},
+	}, {
+		have: `{"type":"VARIANT","nullable":true}`,
+		want: DataTypeVariant{
+			IsNullable: true,
+		},
+	}, {
+		have: `{"type":"ARRAY","nullable":true}`,
+		want: DataTypeArray{
+			IsNullable: true,
+		},
+	}, {
+		have: `{"type":"OBJECT","nullable":true}`,
+		want: DataTypeObject{
+			IsNullable: true,
+		},
+	}, {
+		have: `{"type":"GEOGRAPHY","outputType":"OBJECT","nullable":true}`,
+		want: DataTypeGeography{
+			IsNullable: true,
+			OutputType: "OBJECT",
+		},
+	}, {
+		have: `{"type":"VECTOR","nullable":true,"vectorElementType":{"type":"REAL","nullable":true},"dimension":3}`,
+		want: DataTypeVector{
+			IsNullable: true,
+			Dimension:  3,
+			ElementType: DataTypeReal{
+				IsNullable: true,
+			},
 		},
 	}}
 

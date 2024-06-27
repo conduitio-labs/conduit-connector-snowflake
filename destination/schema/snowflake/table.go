@@ -12,4 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package writer
+package snowflake
+
+// Table represents a Snowflake table.
+type Table struct {
+	Name     string
+	Database string
+	Schema   string
+	Columns  []Column
+
+	// Connector specific columns (all are also included in Columns)
+	PrimaryKeys []Column
+	Operation   Column
+	CreatedAt   Column
+	UpdatedAt   Column
+	DeletedAt   Column
+}
+
+// Column represents a Snowflake column.
+type Column struct {
+	Name     string
+	DataType DataType
+}

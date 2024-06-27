@@ -17,17 +17,19 @@ package format
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema/snowflake"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
+	"github.com/matryer/is"
 )
 
 func Test_MakeCSVBytes(t *testing.T) {
+	is := is.New(t)
+
 	const avroSchema = `
 		{
 			"fields": [
@@ -50,16 +52,11 @@ func Test_MakeCSVBytes(t *testing.T) {
 
 	testTimestamp := time.Now().UnixMicro()
 	testCases := []struct {
-		desc            string
-		records         []sdk.Record
-		colOrder        []string
-		meroxaColumns   ConnectorColumns
-		prefix          string
-		primaryKey      string
-		schema          map[string]string
-		expectedBuffers func() (*bytes.Buffer, *bytes.Buffer)
-		numGoRoutines   int
-		expectedErr     error
+		desc        string
+		records     []sdk.Record
+		table       snowflake.Table
+		wantCSV     string
+		expectedErr error
 	}{
 		{
 			desc: "no duplicates",
@@ -149,43 +146,33 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 				},
 			},
-			colOrder: []string{
-				"meroxa_operation", "meroxa_created_at", "meroxa_updated_at",
-				"meroxa_deleted_at", "id", "firstName", "lastName",
+			table: snowflake.Table{
+				Name:     "foo",
+				Database: "bar",
+				Schema:   "baz",
+				Columns: []snowflake.Column{
+					{Name: "meroxa_operation", DataType: snowflake.DataTypeText{IsNullable: true}},
+					{Name: "meroxa_created_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
+					{Name: "meroxa_updated_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
+					{Name: "meroxa_deleted_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
+					{Name: "id", DataType: snowflake.DataTypeFixed{IsNullable: true, Precision: 38}},
+					{Name: "firstName", DataType: snowflake.DataTypeText{IsNullable: true}},
+					{Name: "lastName", DataType: snowflake.DataTypeText{IsNullable: true}},
+				},
+				PrimaryKeys: []snowflake.Column{
+					{Name: "id", DataType: snowflake.DataTypeFixed{IsNullable: true, Precision: 38}},
+				},
+				Operation: snowflake.Column{Name: "meroxa_operation", DataType: snowflake.DataTypeText{IsNullable: true}},
+				CreatedAt: snowflake.Column{Name: "meroxa_created_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
+				UpdatedAt: snowflake.Column{Name: "meroxa_updated_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
+				DeletedAt: snowflake.Column{Name: "meroxa_deleted_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}},
 			},
-			meroxaColumns: ConnectorColumns{
-				operationColumn: "meroxa_operation",
-				createdAtColumn: "meroxa_created_at",
-				updatedAtColumn: "meroxa_updated_at",
-				deletedAtColumn: "meroxa_deleted_at",
-			},
-			prefix:     "meroxa",
-			primaryKey: "id",
-			schema: map[string]string{
-				"id":        SnowflakeInteger,
-				"firstName": SnowflakeVarchar,
-				"lastName":  SnowflakeVarchar,
-			},
-			numGoRoutines: 1,
-			expectedBuffers: func() (*bytes.Buffer, *bytes.Buffer) {
-				insertBuf, updateBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-				insertWriter := csv.NewWriter(insertBuf)
-				updateWriter := csv.NewWriter(updateBuf)
-
-				err := insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "1", "spongebob", "squarepants"})
-				require.NoError(t, err)
-				err = insertWriter.Write([]string{"create", fmt.Sprint(testTimestamp), "", "", "2", "patrick", "star"})
-				require.NoError(t, err)
-				insertWriter.Flush()
-
-				err = updateWriter.Write([]string{"update", "", fmt.Sprint(testTimestamp), "", "3", "squidward", "tentacles"})
-				require.NoError(t, err)
-				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "eugene", "krabs"})
-				require.NoError(t, err)
-				updateWriter.Flush()
-
-				return insertBuf, updateBuf
-			},
+			wantCSV: `meroxa_operation,meroxa_created_at,meroxa_updated_at,meroxa_deleted_at,id,firstName,lastName
+create,` + fmt.Sprint(testTimestamp) + `,,,1,spongebob,squarepants
+create,` + fmt.Sprint(testTimestamp) + `,,,2,patrick,star
+update,,` + fmt.Sprint(testTimestamp) + `,,3,squidward,tentacles
+delete,,,` + fmt.Sprint(testTimestamp) + `,4,eugene,krabs
+`,
 		},
 		// {
 		// 	desc: "multiple goroutines",
@@ -568,41 +555,23 @@ func Test_MakeCSVBytes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ctx := context.Background()
-			var expectedInsertBuf, expectedUpdateBuf *bytes.Buffer
-			if tc.expectedBuffers != nil {
-				expectedInsertBuf, expectedUpdateBuf = tc.expectedBuffers()
-			}
-			actualInsertBuf := bytes.NewBuffer(nil)
-			actualUpdateBuf := bytes.NewBuffer(nil)
+			buf := bytes.NewBuffer(nil)
 
 			err := MakeCSVBytes(
 				ctx,
 				tc.records,
-				tc.colOrder,
-				tc.meroxaColumns,
-				tc.schema,
-				tc.primaryKey,
-				actualInsertBuf,
-				actualUpdateBuf,
-				tc.numGoRoutines,
+				tc.table,
+				buf,
 			)
 
 			if tc.expectedErr != nil {
-				require.Error(t, err)
-				require.ErrorContains(t, err, tc.expectedErr.Error())
+				is.True(err != nil)
+				is.Equal(err.Error(), tc.expectedErr.Error())
 			} else {
-				require.NoError(t, err)
-
-				// order is not guaranteed, so we should sort before comp
-				expInsertCSV := strings.Split(expectedInsertBuf.String(), "\n")
-				actualInsertCSV := strings.Split(actualInsertBuf.String(), "\n")
-
-				require.ElementsMatch(t, expInsertCSV, actualInsertCSV)
-
-				expUpdateCSV := strings.Split(expectedUpdateBuf.String(), "\n")
-				actualUpdateCSV := strings.Split(actualUpdateBuf.String(), "\n")
-
-				require.ElementsMatch(t, expUpdateCSV, actualUpdateCSV)
+				is.NoErr(err)
+				t.Log(buf.String())
+				t.Log(tc.wantCSV)
+				is.Equal("", cmp.Diff(buf.String(), tc.wantCSV))
 			}
 		})
 	}
