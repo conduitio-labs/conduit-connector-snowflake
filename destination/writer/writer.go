@@ -214,7 +214,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	logger.Debug().Msgf("payload.after=%+v", records[0].Payload.After)
 	logger.Debug().Msgf("key=%+v", records[0].Key)
 
-	batches, err := s.BuildBatches(ctx, records)
+	batches, err := s.BuildBatches(ctx, requestID, records)
 	if err != nil {
 		return 0, fmt.Errorf("failed to build batches: %w", err)
 	}
@@ -276,7 +276,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	return len(records), nil
 }
 
-func (s *SnowflakeCSV) BuildBatches(ctx context.Context, records []sdk.Record) ([]*Batch, error) {
+func (s *SnowflakeCSV) BuildBatches(ctx context.Context, id string, records []sdk.Record) ([]*Batch, error) {
 	batches := make(map[string]map[BatchType]*Batch)
 
 	for _, r := range records {
@@ -308,13 +308,13 @@ func (s *SnowflakeCSV) BuildBatches(ctx context.Context, records []sdk.Record) (
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			b, ok = batchGroup[InsertBatch]
 			if !ok {
-				b = NewInsertBatch(uuid.NewString(), s.stage, t)
+				b = NewInsertBatch(id, s.stage, t)
 				batches[tableName][InsertBatch] = b
 			}
 		case sdk.OperationUpdate, sdk.OperationDelete:
 			b, ok = batchGroup[UpdateBatch]
 			if !ok {
-				b = NewUpdateBatch(uuid.NewString(), s.stage, t)
+				b = NewUpdateBatch(id, s.stage, t)
 				batches[tableName][UpdateBatch] = b
 			}
 		default:
