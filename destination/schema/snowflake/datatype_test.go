@@ -138,7 +138,7 @@ func TestDataTypeContainer_JSONUnmarshal(t *testing.T) {
 			err := json.Unmarshal([]byte(tc.have), &dt)
 			is.NoErr(err)
 
-			got := dt.Unmarshalled
+			got := dt.Value
 			is.Equal(got, tc.want)
 		})
 	}

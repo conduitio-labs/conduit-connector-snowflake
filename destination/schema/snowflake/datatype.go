@@ -17,7 +17,8 @@ package snowflake
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
+
+	"github.com/lovromazgon/jsonpoly"
 )
 
 // DataType represents a Snowflake data type.
@@ -308,7 +309,7 @@ func (dt *DataTypeVector) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	dt.ElementType = tmp.ElementType.Unmarshalled
+	dt.ElementType = tmp.ElementType.Value
 	return nil
 }
 
@@ -345,65 +346,10 @@ func (dt *DataTypeUnknown) UnmarshalJSON(b []byte) error {
 
 // -----------------------------------------------------------------------------
 
-// Container is a generic struct that can be used to unmarshal polymorphic JSON
-// objects into a specific type based on a key. The key is used to determine the
-// type of the object and the value is used to unmarshal the object into the
-// correct type.
-type Container[K comparable, V any, H ContainerHelper[K, V]] struct {
-	Unmarshalled V
-}
-
-// ContainerHelper is an interface that must be implemented by the user to
-// provide the key and the mapping function for the Container struct. The key
-// is used to determine the type of the object and the mapping function is used
-// to create a new instance of the object based on the key.
-type ContainerHelper[K comparable, V any] interface {
-	Key() K
-	Mapping(K) V
-}
-
-func (c *Container[K, V, H]) UnmarshalJSON(b []byte) error {
-	var helper H
-	if err := json.Unmarshal(b, &helper); err != nil {
-		return err
-	}
-	v := helper.Mapping(helper.Key())
-
-	// Check if the value is a pointer of a value. If it's a pointer, we use it
-	// as is. If it's a value, we create a pointer to it for the unmarshalling
-	// to work and store the underlying value in the 'Unmarshalled' field.
-	val := reflect.ValueOf(v)
-	var ptrVal reflect.Value
-	if val.Kind() != reflect.Ptr {
-		// Create a new pointer type based on the type of 'v'.
-		ptrType := reflect.PointerTo(val.Type())
-		// Allocate a new object of this pointer type.
-		ptrVal = reflect.New(ptrType.Elem())
-		// Set the newly allocated object to the value of 'v'.
-		ptrVal.Elem().Set(val)
-		// Now 'ptrVal' is a reflect.Value of type '*V' which can be used as a pointer.
-		v = ptrVal.Interface().(V)
-	}
-
-	if err := json.Unmarshal(b, v); err != nil {
-		return err
-	}
-
-	if ptrVal.IsValid() {
-		// If we used a pointer, we need to get the underlying value.
-		c.Unmarshalled = ptrVal.Elem().Interface().(V)
-	} else {
-		// If we used the value directly, we store it in the 'Unmarshalled' field.
-		c.Unmarshalled = v
-	}
-
-	return nil
-}
-
 // DataTypeContainer is a Container struct that can be used to unmarshal JSON
 // objects into a DataType object based on the 'type' field in the JSON object.
 type DataTypeContainer struct {
-	Container[string, DataType, dataTypeContainerHelper]
+	jsonpoly.Container[DataType, *dataTypeContainerHelper]
 }
 
 // dataTypeContainerHelper is a struct that implements the ContainerHelper
@@ -412,13 +358,13 @@ type dataTypeContainerHelper struct {
 	Type string `json:"type"`
 }
 
-func (h dataTypeContainerHelper) Key() string {
-	return h.Type
-}
-
-func (dataTypeContainerHelper) Mapping(t string) DataType {
-	if dt, ok := KnownDataTypes[t]; ok {
+func (h *dataTypeContainerHelper) Get() DataType {
+	if dt, ok := KnownDataTypes[h.Type]; ok {
 		return dt
 	}
-	return DataTypeUnknown{TypeName: t}
+	return DataTypeUnknown{TypeName: h.Type}
+}
+
+func (h *dataTypeContainerHelper) Set(t DataType) {
+	h.Type = t.Type()
 }
