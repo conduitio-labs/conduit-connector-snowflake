@@ -15,13 +15,14 @@
 package destination
 
 import (
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 //go:generate paramgen -output=config_paramgen.go Config
 
+type TableFn func(sdk.Record) (string, error)
+
 type Config struct {
-	config.Config
 	// Username for the snowflake connection
 	Username string `json:"snowflake.username" validate:"required"`
 	// Password for the snowflake connection
@@ -34,15 +35,17 @@ type Config struct {
 	Database string `json:"snowflake.database" validate:"required"`
 	// Schema for the snowflake connection
 	Schema string `json:"snowflake.schema" validate:"required"`
+	// Destination snowflake table. Support Go Templates for multiple collections.
+	Table string `json:"table" default:"{{ index .Metadata \"opencdc.collection\" }}"`
 	// Warehouse for the snowflake connection
 	Warehouse string `json:"snowflake.warehouse" validate:"required"`
 	// Whether to keep the session alive even when the connection is idle.
 	KeepAlive bool `json:"snowflake.keepAlive" default:"true"`
 	// Snowflake Stage to use for uploading files before merging into destination table.
 	Stage string `json:"snowflake.stage" validate:"required"`
-	// Primary key of the source table
+	// Primary key of the destination table.
 	PrimaryKey string `json:"snowflake.primaryKey" validate:"required"`
-	// Prefix to append to update_at , deleted_at, create_at at destination table
+	// Prefix to append to updated_at , deleted_at, created_at at destination table
 	NamingPrefix string `json:"snowflake.namingPrefix" default:"meroxa" validate:"required"`
 	// Data type of file we upload and copy data from to snowflake
 	Format string `json:"snowflake.format" default:"csv" validate:"required,inclusion=csv"`
@@ -53,12 +56,3 @@ type Config struct {
 	// Compression to use when staging files in Snowflake
 	Compression string `json:"snowflake.compression" default:"zstd" validate:"required,inclusion=gzip|zstd|copy"`
 }
-
-const (
-	SnowflakeStage             = "snowflake.stage"
-	SnowflakePrimaryKey        = "snowflake.primaryKey"
-	SnowflakeNamingPrefix      = "snowflake.namingPrefix"
-	SnowflakeFormat            = "snowflake.format"
-	SnowflakeCSVGoRoutines     = "snowflake.processingWorkers"
-	SnowflakeFileUploadThreads = "snowflake.fileUploadThreads"
-)

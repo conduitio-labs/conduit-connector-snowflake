@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
@@ -295,12 +294,12 @@ func TestSource_Snapshot_Off(t *testing.T) {
 	// turn off snapshot
 	cfg[KeySnapshot] = "false"
 
-	err = prepareData(ctx, cfg[config.KeyConnection])
+	err = prepareData(ctx, cfg[KeyConnection])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer clearData(ctx, cfg[config.KeyConnection]) // nolint:errcheck,nolintlint
+	defer clearData(ctx, cfg[KeyConnection]) // nolint:errcheck,nolintlint
 
 	s := new(Source)
 
@@ -316,7 +315,7 @@ func TestSource_Snapshot_Off(t *testing.T) {
 	}
 
 	// load data for cdc.
-	err = prepareCDCData(ctx, cfg[config.KeyConnection])
+	err = prepareCDCData(ctx, cfg[KeyConnection])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,8 +564,8 @@ func prepareConfig() (map[string]string, error) {
 	}
 
 	return map[string]string{
-		config.KeyConnection: connection,
-		config.KeyTable:      testTable,
+		KeyConnection: connection,
+		KeyTable:      testTable,
 		KeyColumns:           "",
 		KeyPrimaryKeys:       "id",
 		KeyOrderingColumn:    "id",

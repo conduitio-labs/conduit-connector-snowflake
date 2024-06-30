@@ -19,83 +19,32 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema/snowflake"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
-	"golang.org/x/exp/maps"
 )
 
 // TODO: just create the table with the types on the left to make this simpler.
 
-// SnowflakeTypeMapping Map between snowflake retrieved types and connector defined types.
-var SnowflakeTypeMapping = map[string]string{
-	SnowflakeFixed:        SnowflakeInteger,
-	SnowflakeReal:         SnowflakeFloat,
-	SnowflakeText:         SnowflakeVarchar,
-	SnowflakeBinary:       SnowflakeBinary,
-	SnowflakeBoolean:      SnowflakeBoolean,
-	SnowflakeDate:         SnowflakeDate,
-	SnowflakeTimestampNTZ: SnowflakeTimestampNTZ,
-	SnowflakeTimestampLTZ: SnowflakeTimestampLTZ,
-	SnowflakeTimestampTZ:  SnowflakeTimestampTZ,
-	SnowflakeVariant:      SnowflakeVariant,
-	SnowflakeObject:       SnowflakeObject,
-	SnowflakeArray:        SnowflakeArray,
-	SnowflakeVector:       SnowflakeVector,
-}
-
-const (
-	// numeric types.
-	SnowflakeInteger = "INTEGER"
-	SnowflakeFloat   = "FLOAT"
-	SnowflakeFixed   = "FIXED"
-	SnowflakeReal    = "REAL"
-
-	// string & binary types.
-	SnowflakeText    = "TEXT"
-	SnowflakeBinary  = "BINARY"
-	SnowflakeVarchar = "VARCHAR"
-
-	// logical data types.
-	SnowflakeBoolean = "BOOLEAN"
-
-	// date & time types.
-	SnowflakeTimestampLTZ = "TIMESTAMP_LTZ"
-	SnowflakeTimestampNTZ = "TIMESTAMP_NTZ"
-	SnowflakeTimestampTZ  = "TIMESTAMP_TZ"
-	SnowflakeTime         = "TIME"
-	SnowflakeDate         = "DATE"
-
-	// semi-structured data types.
-	SnowflakeVariant = "VARIANT"
-	SnowflakeObject  = "OBJECT"
-	SnowflakeArray   = "ARRAY"
-
-	// geospatial data types.
-	SnowflakeGeography = "GEOGRAPHY"
-	SnowflakeGeometry  = "GEOMETRY"
-
-	// vector data types.
-	SnowflakeVector = "VECTOR"
-)
-
 // AvroToSnowflakeType Map from Avro Types to Snowflake Types.
-var AvroToSnowflakeType = map[avro.Type]string{
-	avro.Boolean: SnowflakeBoolean,
-	avro.Int:     SnowflakeInteger,
-	avro.Long:    SnowflakeInteger,
-	avro.Float:   SnowflakeFloat,
-	avro.Double:  SnowflakeFloat,
-	avro.Bytes:   SnowflakeVarchar,
-	avro.String:  SnowflakeVarchar,
-	avro.Record:  SnowflakeObject,
-	avro.Array:   SnowflakeArray,
-	avro.Map:     SnowflakeObject,
+var AvroToSnowflakeType = map[avro.Type]snowflake.DataType{
+	avro.Boolean: snowflake.DataTypeBoolean{IsNullable: true},
+	avro.Int:     snowflake.DataTypeFixed{IsNullable: true},
+	avro.Long:    snowflake.DataTypeFixed{IsNullable: true},
+	avro.Float:   snowflake.DataTypeReal{IsNullable: true},
+	avro.Double:  snowflake.DataTypeReal{IsNullable: true},
+	avro.Bytes:   snowflake.DataTypeText{IsNullable: true},
+	avro.String:  snowflake.DataTypeText{IsNullable: true},
+	avro.Record:  snowflake.DataTypeObject{IsNullable: true},
+	avro.Array:   snowflake.DataTypeArray{IsNullable: true},
+	avro.Map:     snowflake.DataTypeObject{IsNullable: true},
 }
 
 const (
@@ -122,7 +71,7 @@ type recordSummary struct {
 	updatedAt    time.Time
 	createdAt    time.Time
 	deletedAt    time.Time
-	latestRecord *sdk.Record
+	latestRecord sdk.Record
 }
 
 type ConnectorColumns struct {
@@ -143,131 +92,139 @@ type AvroRecordSchema struct {
 
 func GetDataSchema(
 	ctx context.Context,
-	records []sdk.Record,
-	schema map[string]string,
+	record sdk.Record,
 	prefix string,
-) ([]string, *ConnectorColumns, error) {
-	// we need to store the operation in a column, to detect updates & deletes
-	connectorColumns := ConnectorColumns{
-		operationColumn: fmt.Sprintf("%s_operation", prefix),
-		createdAtColumn: fmt.Sprintf("%s_created_at", prefix),
-		updatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
-		deletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
-	}
+) (snowflake.Table, error) {
+	var t snowflake.Table
 
-	schema[connectorColumns.operationColumn] = SnowflakeVarchar
-	schema[connectorColumns.createdAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.updatedAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.deletedAtColumn] = SnowflakeTimestampTZ
-
-	csvColumnOrder := []string{}
+	t.Operation = snowflake.Column{Name: prefix + "_operation", DataType: snowflake.DataTypeText{IsNullable: true}}
+	t.CreatedAt = snowflake.Column{Name: prefix + "_created_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}}
+	t.UpdatedAt = snowflake.Column{Name: prefix + "_updated_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}}
+	t.DeletedAt = snowflake.Column{Name: prefix + "_deleted_at", DataType: snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}}
 
 	// TODO: see whether we need to support a compound key here
 	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
-
-	// Grab the schema from the first record.
 	// TODO: support schema evolution.
-	if len(records) == 0 {
-		return nil, nil, errors.New("unexpected empty slice of records")
-	}
 
-	r := records[0]
-	data, err := extract(r.Operation, r.Payload, r.Key)
-	if err != nil {
-		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
-	}
-
-	avroStr, okAvro := r.Metadata["postgres.avro.schema"]
+	// TODO: after SDK v0.10.0 use the standard schema metadata fields for this
+	avroStr, okAvro := record.Metadata["postgres.avro.schema"]
 	// if we have an avro schema in the metadata, interpret the schema from it
 	if okAvro {
 		sdk.Logger(ctx).Debug().Msgf("avro schema string: %s", avroStr)
 		avroSchema, err := avro.Parse(avroStr)
 		if err != nil {
-			return nil, nil, errors.Errorf("could not parse avro schema: %w", err)
+			return snowflake.Table{}, fmt.Errorf("could not parse avro schema: %w", err)
 		}
 		avroRecordSchema, ok := avroSchema.(*avro.RecordSchema)
 		if !ok {
-			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
+			return snowflake.Table{}, errors.New("could not coerce avro schema into recordSchema")
 		}
+
+		t.Columns = make([]snowflake.Column, 0, len(avroRecordSchema.Fields()))
 		for _, field := range avroRecordSchema.Fields() {
-			csvColumnOrder = append(csvColumnOrder, field.Name())
-			schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
+			dt, err := mapAvroToSnowflake(ctx, field.Type())
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
+				return snowflake.Table{}, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
 			}
+			t.Columns = append(t.Columns, snowflake.Column{
+				Name:     field.Name(),
+				DataType: dt,
+			})
 		}
 	} else {
+		data, err := extractStructuredPayload(record)
+		if err != nil {
+			return snowflake.Table{}, fmt.Errorf("failed to extract payload data: %w", err)
+		}
+
 		// TODO (BEFORE MERGE): move to function
+		t.Columns = make([]snowflake.Column, 0, len(data))
 		for key, val := range data {
-			if schema[key] == "" {
-				csvColumnOrder = append(csvColumnOrder, key)
-				switch val.(type) {
-				case int, int8, int16, int32, int64:
-					schema[key] = SnowflakeInteger
-				case float32, float64:
-					schema[key] = SnowflakeFloat
-				case bool:
-					schema[key] = SnowflakeBoolean
-				case time.Time, *time.Time:
-					schema[key] = SnowflakeTimestampTZ
-				case nil:
-					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-					schema[key] = SnowflakeVariant
-				default:
-					schema[key] = SnowflakeVarchar
-				}
+			var dt snowflake.DataType
+			switch val.(type) {
+			case int, int8, int16, int32, int64:
+				dt = snowflake.DataTypeFixed{IsNullable: true, Precision: 38}
+			case float32, float64:
+				dt = snowflake.DataTypeReal{IsNullable: true}
+			case bool:
+				dt = snowflake.DataTypeBoolean{IsNullable: true}
+			case time.Time, *time.Time:
+				dt = snowflake.DataTypeTimestampTz{IsNullable: true, Scale: 9}
+			case nil:
+				// We should keep track of variants separately in case we run into concrete type later on
+				// if we ran into none null value of this variant col, we can execute an alter to dest table
+				dt = snowflake.DataTypeVariant{IsNullable: true}
+			default:
+				dt = snowflake.DataTypeText{IsNullable: true}
+			}
+			t.Columns = append(t.Columns, snowflake.Column{
+				Name:     key,
+				DataType: dt,
+			})
+		}
+	}
+
+	// detect primary keys by checking the key data
+	keyData, err := extractStructuredKey(record)
+	if err != nil {
+		return snowflake.Table{}, fmt.Errorf("failed to extract key data, can't detect primary keys: %w", err)
+	}
+	for key := range keyData {
+		for _, col := range t.Columns {
+			if strings.EqualFold(key, col.Name) {
+				t.PrimaryKeys = append(t.PrimaryKeys, col)
+				break
 			}
 		}
+	}
+	if len(t.PrimaryKeys) == 0 {
+		return snowflake.Table{}, errors.New("no primary keys detected")
 	}
 
 	// sort data column order alphabetically to make deterministic
 	// but keep conduit connector columns at the front for ease of use
-	sort.Strings(csvColumnOrder)
-	csvColumnOrder = append(
-		[]string{
-			connectorColumns.operationColumn,
-			connectorColumns.createdAtColumn,
-			connectorColumns.updatedAtColumn,
-			connectorColumns.deletedAtColumn,
+	sort.Slice(t.Columns, func(i, j int) bool {
+		return t.Columns[i].Name < t.Columns[j].Name
+	})
+
+	t.Columns = append(
+		[]snowflake.Column{
+			t.Operation,
+			t.CreatedAt,
+			t.UpdatedAt,
+			t.DeletedAt,
 		},
-		csvColumnOrder...,
+		t.Columns...,
 	)
 
-	sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", schema)
+	sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", t)
 
-	return csvColumnOrder, &connectorColumns, nil
+	return t, nil
 }
 
 // TODO: refactor this function, make it more modular and readable.
 func MakeCSVBytes(
 	ctx context.Context,
 	records []sdk.Record,
-	csvColumnOrder []string,
-	meroxaColumns ConnectorColumns,
-	schema map[string]string,
-	primaryKey string,
-	insertsBuf *bytes.Buffer,
-	updatesBuf *bytes.Buffer,
-	_ int,
+	table snowflake.Table,
+	buf *bytes.Buffer,
 ) (err error) {
-	insertsWriter := csv.NewWriter(insertsBuf)
-	updatesWriter := csv.NewWriter(updatesBuf)
+	writer := csv.NewWriter(buf)
 
 	// loop through records and de-dupe before converting to CSV
 	// this is done beforehand, so we can parallelize the CSV formatting
 	latestRecordMap := make(map[string]*recordSummary, len(records))
+	dedupedRecords := make([]*recordSummary, 0, len(records))
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch before deduping: %d", len(records))
 
 	for i, r := range records {
-		readAtMicro, err := strconv.ParseInt(r.Metadata["opencdc.readAt"], 10, 64)
+		readAt, err := r.Metadata.GetReadAt()
 		if err != nil {
 			return err
 		}
-		readAt := time.UnixMicro(readAtMicro)
 
-		s, err := extract(r.Operation, r.Payload, r.Key)
-		key := fmt.Sprint(s[primaryKey])
+		s, err := extractStructuredPayload(r)
+		key := fmt.Sprint(s[table.PrimaryKeys[0].Name]) // TODO support composite primary keys
 		if err != nil {
 			return err
 		}
@@ -275,266 +232,218 @@ func MakeCSVBytes(
 		l, ok := latestRecordMap[key]
 		if !ok {
 			l = &recordSummary{
-				latestRecord: &records[i],
+				latestRecord: r,
 			}
 			latestRecordMap[key] = l
+			dedupedRecords = append(dedupedRecords, l)
 		}
 
 		switch r.Operation {
 		case sdk.OperationUpdate:
 			if readAt.After(l.updatedAt) {
 				l.updatedAt = readAt
-				l.latestRecord = &records[i]
+				l.latestRecord = records[i]
 			}
 		case sdk.OperationDelete:
 			l.deletedAt = readAt
-			l.latestRecord = &records[i]
+			l.latestRecord = records[i]
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			l.createdAt = readAt
-			l.latestRecord = &records[i]
+			l.latestRecord = records[i]
 		}
 	}
+	clear(latestRecordMap) // not needed anymore
 
 	// Process CSV records
-
-	dedupedRecords := maps.Values(latestRecordMap)
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
 
-	insertsBuffer := new(bytes.Buffer)
-	updatesBuffer := new(bytes.Buffer)
-
-	insertW := csv.NewWriter(insertsBuffer)
-	updateW := csv.NewWriter(updatesBuffer)
-
-	inserts, updates, err := createCSVRecords(ctx,
-		dedupedRecords,
-		insertW,
-		updateW,
-		csvColumnOrder,
-		schema,
-		meroxaColumns)
+	header := make([]string, len(table.Columns))
+	for i, col := range table.Columns {
+		header[i] = col.Name
+	}
+	err = writer.Write(header)
 	if err != nil {
-		return errors.Errorf("failed to create CSV records")
+		return fmt.Errorf("failed to write headers: %w", err)
 	}
 
-	sdk.Logger(ctx).Debug().Msgf("num inserts in CSV buffer: %d", inserts)
-	sdk.Logger(ctx).Debug().Msgf("num updates/deletes in CSV buffer: %d", updates)
-
-	if inserts > 0 {
-		if err := insertsWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write insert headers: %w", err)
-		}
-
-		if err := joinBuffers(insertsBuf, insertsBuffer); err != nil {
-			return errors.Errorf("failed to join insert buffers: %w", err)
-		}
+	err = createCSVRecords(
+		ctx,
+		dedupedRecords,
+		writer,
+		table,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create CSV records")
 	}
 
-	if updates > 0 {
-		if err := updatesWriter.Write(csvColumnOrder); err != nil {
-			return errors.Errorf("failed to write update headers: %w", err)
-		}
-
-		if err := joinBuffers(updatesBuf, updatesBuffer); err != nil {
-			return errors.Errorf("failed to join update buffers: %w", err)
-		}
-	}
+	sdk.Logger(ctx).Debug().Msgf("num rows in CSV buffer: %d", len(dedupedRecords))
 
 	return nil
 }
 
 func getColumnValue(
-	c string, r *sdk.Record,
+	col snowflake.Column,
 	s *recordSummary,
-	data map[string]interface{},
-	cnCols ConnectorColumns,
-	schema map[string]string) (string, error) {
+	data sdk.StructuredData,
+	table snowflake.Table,
+) (string, error) {
+	r := s.latestRecord
 	switch {
-	case c == cnCols.operationColumn:
+	case col == table.Operation:
 		return r.Operation.String(), nil
-	case c == cnCols.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
-		return fmt.Sprint(s.createdAt.UnixMicro()), nil
-	case c == cnCols.updatedAtColumn && r.Operation == sdk.OperationUpdate:
-		return fmt.Sprint(s.updatedAt.UnixMicro()), nil
-	case c == cnCols.deletedAtColumn && r.Operation == sdk.OperationDelete:
-		return fmt.Sprint(s.deletedAt.UnixMicro()), nil
-	case data[c] == nil:
-		return "", nil
-	case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
-		t, ok := data[c].(time.Time)
-		if !ok {
-			return "", errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
+	case col == table.CreatedAt:
+		if r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot {
+			return strconv.FormatInt(s.createdAt.UnixMicro(), 10), nil
 		}
-		if schema[c] == SnowflakeDate {
+		return "", nil
+	case col == table.UpdatedAt:
+		if r.Operation == sdk.OperationUpdate {
+			return strconv.FormatInt(s.updatedAt.UnixMicro(), 10), nil
+		}
+		return "", nil
+	case col == table.DeletedAt:
+		if r.Operation == sdk.OperationDelete {
+			return strconv.FormatInt(s.deletedAt.UnixMicro(), 10), nil
+		}
+		return "", nil
+	case data[col.Name] == nil:
+		return "", nil
+	case isDateOrTimeType(col):
+		t, ok := data[col.Name].(time.Time)
+		if !ok {
+			return "", fmt.Errorf("invalid timestamp on column %s: %+v", col.Name, data[col.Name])
+		}
+		if _, ok := col.DataType.(snowflake.DataTypeDate); ok {
 			return t.UTC().Format(time.DateOnly), nil
 		} else {
 			return fmt.Sprint(t.UTC().UnixMicro()), nil
 		}
 	default:
-		return fmt.Sprint(data[c]), nil
+		return fmt.Sprint(data[col.Name]), nil
 	}
 }
 
 func createCSVRecords(
 	_ context.Context,
 	recordSummaries []*recordSummary,
-	insertsWriter, updatesWriter *csv.Writer,
-	csvColumnOrder []string,
-	schema map[string]string,
-	cnCols ConnectorColumns,
-) (numInserts int, numUpdates int, err error) {
-	var inserts, updates [][]string
+	writer *csv.Writer,
+	table snowflake.Table,
+) error {
+	rows := make([][]string, len(recordSummaries))
 
-	for _, s := range recordSummaries {
-		if s.latestRecord == nil {
-			continue
-		}
-		r := s.latestRecord
+	for i, s := range recordSummaries {
+		row := make([]string, len(table.Columns))
 
-		row := make([]string, len(csvColumnOrder))
-
-		data, err := extract(r.Operation, r.Payload, r.Key)
+		data, err := extractStructuredPayload(s.latestRecord)
 		if err != nil {
-			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
+			return fmt.Errorf("failed to extract payload data: %w", err)
 		}
 
-		for j, c := range csvColumnOrder {
-			value, err := getColumnValue(c, r, s, data, cnCols, schema)
+		for j, col := range table.Columns {
+			value, err := getColumnValue(col, s, data, table)
 			if err != nil {
-				return 0, 0, err
+				return err
 			}
 			row[j] = value
 		}
-
-		switch r.Operation {
-		case sdk.OperationCreate, sdk.OperationSnapshot:
-			inserts = append(inserts, row)
-		case sdk.OperationUpdate, sdk.OperationDelete:
-			updates = append(updates, row)
-		default:
-			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
-		}
+		rows[i] = row
 	}
 
-	if len(inserts) > 0 {
-		if err := insertsWriter.WriteAll(inserts); err != nil {
-			return 0, 0, errors.Errorf("failed to write insert records: %w", err)
-		}
-	}
-
-	if len(updates) > 0 {
-		if err := updatesWriter.WriteAll(updates); err != nil {
-			return 0, 0, errors.Errorf("failed to write update records: %w", err)
-		}
-	}
-
-	return len(inserts), len(updates), nil
+	return writer.WriteAll(rows)
 }
 
-func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.StructuredData, error) {
-	var sdkData sdk.Data
-	if op == sdk.OperationDelete {
-		sdkData = payload.Before
-	} else {
-		sdkData = payload.After
+func extractStructuredPayload(record sdk.Record) (sdk.StructuredData, error) {
+	sdkData := record.Payload.After
+	if record.Operation == sdk.OperationDelete {
+		sdkData = record.Payload.Before
 	}
+	return extractStructuredData(sdkData)
+}
 
-	dataStruct, okStruct := sdkData.(sdk.StructuredData)
-	dataRaw, okRaw := sdkData.(sdk.RawData)
+func extractStructuredKey(record sdk.Record) (sdk.StructuredData, error) {
+	return extractStructuredData(record.Key)
+}
 
-	if !okStruct && !okRaw {
-		dataStruct, okStruct = key.(sdk.StructuredData)
-		dataRaw, okRaw = key.(sdk.RawData)
-		if !okRaw && !okStruct {
-			return nil, errors.Errorf("cannot find data either in payload (%T) or key (%T)", sdkData, key)
-		}
-		sdkData = key
-	}
-
-	if okStruct {
-		return dataStruct, nil
-	} else if okRaw {
-		data := make(sdk.StructuredData)
-		if err := json.Unmarshal(dataRaw, &payload); err != nil {
-			return nil, errors.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
-		}
-
+func extractStructuredData(data sdk.Data) (sdk.StructuredData, error) {
+	switch data := data.(type) {
+	case sdk.StructuredData:
 		return data, nil
+	case sdk.RawData:
+		sd := make(sdk.StructuredData)
+		if err := json.Unmarshal(data, &sd); err != nil {
+			return nil, fmt.Errorf("cannot unmarshal raw data into structured: %w", err)
+		}
+		return sd, nil
+	default:
+		return nil, fmt.Errorf("data payload does not contain structured or raw data (%T)", data)
 	}
-
-	return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
 }
 
-// Writes the contents of buffer b to buffer a.
-func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
-	a.Grow(a.Len())
-
-	if _, err := b.WriteTo(a); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func isOperationTimestampColumn(col string, cnCols ConnectorColumns) bool {
-	switch col {
-	case cnCols.operationColumn, cnCols.createdAtColumn, cnCols.updatedAtColumn, cnCols.deletedAtColumn:
+func isDateOrTimeType(col snowflake.Column) bool {
+	switch col.DataType.(type) {
+	case snowflake.DataTypeDate,
+		snowflake.DataTypeTime,
+		snowflake.DataTypeTimestampTz,
+		snowflake.DataTypeTimestampLtz,
+		snowflake.DataTypeTimestampNtz:
 		return true
 	default:
 		return false
 	}
 }
 
-func isDateOrTimeType(in string) bool {
-	switch in {
-	case SnowflakeTimestampLTZ, SnowflakeTimestampNTZ, SnowflakeTimestampTZ, SnowflakeDate, SnowflakeTime:
-		return true
-	default:
-		return false
-	}
-}
-
-func mapAvroToSnowflake(ctx context.Context, field *avro.Field) (string, error) {
-	t := field.Type()
-
+func mapAvroToSnowflake(ctx context.Context, s avro.Schema) (snowflake.DataType, error) {
 	// primitive schema
-	p, ok := t.(*avro.PrimitiveSchema)
-	if ok {
+	switch s := s.(type) {
+	case *avro.PrimitiveSchema:
 		// check if there's a logical type
-		ls := p.Logical()
-		if ls != nil {
+		if ls := s.Logical(); ls != nil {
 			switch ls.Type() {
 			case avro.Decimal:
-				return SnowflakeFloat, nil
+				return snowflake.DataTypeReal{IsNullable: true}, nil
 			case avro.UUID:
-				return SnowflakeVarchar, nil
+				return snowflake.DataTypeText{
+					IsNullable: true,
+					Length:     36,
+					ByteLength: 36,
+					Fixed:      false,
+				}, nil
 			case avro.Date:
-				return SnowflakeDate, nil
-			case avro.TimeMillis:
-				return SnowflakeTimestampTZ, nil
-			case avro.TimeMicros:
-				return SnowflakeTimestampTZ, nil
-			case avro.TimestampMillis:
-				return SnowflakeTimestampTZ, nil
-			case avro.TimestampMicros:
-				return SnowflakeTimestampTZ, nil
+				return snowflake.DataTypeDate{IsNullable: true}, nil
+			case avro.TimeMillis, avro.TimestampMillis:
+				return snowflake.DataTypeTimestampTz{
+					IsNullable: true,
+					Precision:  0,
+					Scale:      3,
+				}, nil
+			case avro.TimeMicros, avro.TimestampMicros:
+				return snowflake.DataTypeTimestampTz{
+					IsNullable: true,
+					Precision:  0,
+					Scale:      6,
+				}, nil
+			case avro.Duration:
+				return snowflake.DataTypeText{
+					IsNullable: true,
+				}, nil
 			}
 		}
 
 		// Otherwise, fall back to primitives
-		sfType, ok := AvroToSnowflakeType[t.Type()]
+		sfType, ok := AvroToSnowflakeType[s.Type()]
 		if ok {
 			return sfType, nil
 		}
+
+	case *avro.FixedSchema:
+		if s.Logical().Type() == avro.Decimal {
+			sdk.Logger(ctx).Trace().Msg("decimal detected")
+
+			return snowflake.DataTypeFixed{IsNullable: true}, nil
+		}
+	case *avro.UnionSchema:
+		// TODO add support for union schema
 	}
 
-	// fixed types
-	f, ok := t.(*avro.FixedSchema)
-	if ok && f.Logical().Type() == avro.Decimal {
-		sdk.Logger(ctx).Trace().Msg("decimal detected")
-
-		return SnowflakeFloat, nil
-	}
-
-	return "", fmt.Errorf("could not find snowflake mapping for avro type %s", field.Name())
+	return nil, fmt.Errorf("could not find snowflake mapping for avro type %s", s.Type())
 }

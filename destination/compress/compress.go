@@ -25,6 +25,6 @@ const (
 )
 
 type Compressor interface {
-	Compress(in io.Reader, out io.Writer) error
+	Compress(io.Reader) io.Reader
 	Name() string
 }

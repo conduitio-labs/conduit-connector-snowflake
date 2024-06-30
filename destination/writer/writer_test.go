@@ -91,7 +91,7 @@ func TestWriter_Close(t *testing.T) {
 			ctx := context.Background()
 			db, mock := tc.dbmock()
 			s := SnowflakeCSV{
-				Stage: tc.stage,
+				stage: tc.stage,
 				db:    db,
 			}
 
@@ -301,12 +301,12 @@ func TestWriter_Write(t *testing.T) {
 			db, mock := tc.dbmock()
 			defer db.Close()
 			s := &SnowflakeCSV{
-				Prefix:            tc.Prefix,
-				PrimaryKey:        tc.PrimaryKey,
-				Stage:             tc.Stage,
+				prefix:            tc.Prefix,
+				primaryKey:        tc.PrimaryKey,
+				stage:             tc.Stage,
 				TableName:         tc.TableName,
-				FileThreads:       tc.FileThreads,
-				ProcessingWorkers: tc.ProcessingWorkers,
+				fileThreads:       tc.FileThreads,
+				processingWorkers: tc.ProcessingWorkers,
 				db:                db,
 				compressor:        tc.compressor,
 
