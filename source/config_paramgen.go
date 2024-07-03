@@ -10,7 +10,7 @@ import (
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
 		"snowflake.batchsize": {
-			Default:     "0",
+			Default:     "100",
 			Description: "snowflake.batchsize - size of batch.",
 			Type:        sdk.ParameterTypeInt,
 			Validations: []sdk.Validation{},

@@ -17,6 +17,10 @@ fmt: ## Format Go files using gofumpt and gci.
 	gofumpt -l -w .
 	gci write --skip-generated  .
 
+.PHONY: generate
+generate:
+	go generate ./...
+
 .PHONY: mockgen
 mockgen:
 	mockgen -package mock -source source/interface.go -destination source/mock/source.go

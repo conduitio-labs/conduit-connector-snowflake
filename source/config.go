@@ -30,7 +30,7 @@ type Config struct {
 	// OrderingColumn is a name of a column that the connector will use for ordering rows.
 	OrderingColumn string `json:"snowflake.orderingColumn"`
 	// BatchSize - size of batch.
-	BatchSize int `json:"snowflake.batchsize" default:"0"`
+	BatchSize int `json:"snowflake.batchsize" default:"100"`
 	// Snapshot
 	Snapshot bool `json:"snowflake.snapshot" default:"false"`
 }
