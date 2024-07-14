@@ -126,10 +126,10 @@ type recordSummary struct {
 }
 
 type ConnectorColumns struct {
-	operationColumn string
-	createdAtColumn string
-	updatedAtColumn string
-	deletedAtColumn string
+	OperationColumn string
+	CreatedAtColumn string
+	UpdatedAtColumn string
+	DeletedAtColumn string
 }
 
 type AvroRecordSchema struct {
@@ -149,16 +149,16 @@ func GetDataSchema(
 ) ([]string, *ConnectorColumns, error) {
 	// we need to store the operation in a column, to detect updates & deletes
 	connectorColumns := ConnectorColumns{
-		operationColumn: fmt.Sprintf("%s_operation", prefix),
-		createdAtColumn: fmt.Sprintf("%s_created_at", prefix),
-		updatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
-		deletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
+		OperationColumn: fmt.Sprintf("%s_operation", prefix),
+		CreatedAtColumn: fmt.Sprintf("%s_created_at", prefix),
+		UpdatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
+		DeletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
 	}
 
-	schema[connectorColumns.operationColumn] = SnowflakeVarchar
-	schema[connectorColumns.createdAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.updatedAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.deletedAtColumn] = SnowflakeTimestampTZ
+	schema[connectorColumns.OperationColumn] = SnowflakeVarchar
+	schema[connectorColumns.CreatedAtColumn] = SnowflakeTimestampTZ
+	schema[connectorColumns.UpdatedAtColumn] = SnowflakeTimestampTZ
+	schema[connectorColumns.DeletedAtColumn] = SnowflakeTimestampTZ
 
 	csvColumnOrder := []string{}
 
@@ -226,10 +226,10 @@ func GetDataSchema(
 	sort.Strings(csvColumnOrder)
 	csvColumnOrder = append(
 		[]string{
-			connectorColumns.operationColumn,
-			connectorColumns.createdAtColumn,
-			connectorColumns.updatedAtColumn,
-			connectorColumns.deletedAtColumn,
+			connectorColumns.OperationColumn,
+			connectorColumns.CreatedAtColumn,
+			connectorColumns.UpdatedAtColumn,
+			connectorColumns.DeletedAtColumn,
 		},
 		csvColumnOrder...,
 	)
@@ -348,15 +348,16 @@ func getColumnValue(
 	s *recordSummary,
 	data map[string]interface{},
 	cnCols ConnectorColumns,
-	schema map[string]string) (string, error) {
+	schema map[string]string,
+) (string, error) {
 	switch {
-	case c == cnCols.operationColumn:
+	case c == cnCols.OperationColumn:
 		return r.Operation.String(), nil
-	case c == cnCols.createdAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+	case c == cnCols.CreatedAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
 		return fmt.Sprint(s.createdAt.UnixMicro()), nil
-	case c == cnCols.updatedAtColumn && r.Operation == sdk.OperationUpdate:
+	case c == cnCols.UpdatedAtColumn && r.Operation == sdk.OperationUpdate:
 		return fmt.Sprint(s.updatedAt.UnixMicro()), nil
-	case c == cnCols.deletedAtColumn && r.Operation == sdk.OperationDelete:
+	case c == cnCols.DeletedAtColumn && r.Operation == sdk.OperationDelete:
 		return fmt.Sprint(s.deletedAt.UnixMicro()), nil
 	case data[c] == nil:
 		return "", nil
@@ -478,7 +479,7 @@ func joinBuffers(a *bytes.Buffer, b *bytes.Buffer) error {
 
 func isOperationTimestampColumn(col string, cnCols ConnectorColumns) bool {
 	switch col {
-	case cnCols.operationColumn, cnCols.createdAtColumn, cnCols.updatedAtColumn, cnCols.deletedAtColumn:
+	case cnCols.OperationColumn, cnCols.CreatedAtColumn, cnCols.UpdatedAtColumn, cnCols.DeletedAtColumn:
 		return true
 	default:
 		return false

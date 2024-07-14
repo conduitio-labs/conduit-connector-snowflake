@@ -245,7 +245,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		}
 	}
 
-	if err := s.Merge(ctx, insertsFilename, updatesFilename, csvColumnOrder); err != nil {
+	if err := s.Merge(ctx, insertsFilename, updatesFilename, csvColumnOrder, meroxaColumns); err != nil {
 		return 0, errors.Errorf(
 			"failed to merge uploaded stage files %q, %q: %w",
 			insertsFilename,
@@ -453,6 +453,7 @@ func (s *SnowflakeCSV) Merge(
 	insertsFilename,
 	updatesFilename string,
 	colOrder []string,
+	meroxaColumns *format.ConnectorColumns,
 ) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -468,9 +469,9 @@ func (s *SnowflakeCSV) Merge(
 	}()
 
 	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
-	insertSetCols := s.buildSetList("a", "b", colOrder, insertSetMode)
-	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode)
-	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode)
+	insertSetCols := s.buildSetList("a", "b", colOrder, insertSetMode, meroxaColumns)
+	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode, meroxaColumns)
+	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode, meroxaColumns)
 
 	colListA := buildFinalColumnList("a", ".", colOrder)
 	colListB := buildFinalColumnList("b", ".", colOrder)
@@ -586,20 +587,20 @@ func buildFinalColumnList(table, delimiter string, cols []string) string {
 	return strings.Join(ret, ", ")
 }
 
-func (s *SnowflakeCSV) buildSetList(table1, table2 string, cols []string, mode setListMode) string {
+func (s *SnowflakeCSV) buildSetList(t1, t2 string, cols []string, m setListMode, mCol *format.ConnectorColumns) string {
 	var ret []string
-	createdAtCol := fmt.Sprintf("%s_created_at", s.Prefix)
-	updatedAtCol := fmt.Sprintf("%s_updated_at", s.Prefix)
 	for _, colName := range cols {
-		// do not overwrite created_at on updates & deletes
-		if colName == createdAtCol && (mode == updateSetMode || mode == deleteSetMode) {
+		// for deletes, ONLY update deleted_at and operation
+		if m == deleteSetMode && (colName != mCol.DeletedAtColumn && colName != mCol.OperationColumn) {
 			continue
 		}
-		// do not overwrite updated_at on deletes
-		if colName == updatedAtCol && mode == deleteSetMode {
+
+		// do not overwrite created_at on updates
+		if m == updateSetMode && colName == mCol.CreatedAtColumn {
 			continue
 		}
-		ret = append(ret, fmt.Sprintf("%s.%s = %s.%s", table1, colName, table2, colName))
+
+		ret = append(ret, fmt.Sprintf("%s.%s = %s.%s", t1, colName, t2, colName))
 	}
 
 	return strings.Join(ret, ", ")

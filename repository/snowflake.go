@@ -265,7 +265,6 @@ func (s *Snowflake) GetMaxValue(ctx context.Context, table, orderingColumn strin
 func (s *Snowflake) GetPrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	var columns []string
 
-	//nolint:sqlclosecheck // false positive https://github.com/ryanrolds/sqlclosecheck/issues/35
 	rows, err := s.conn.QueryxContext(ctx, fmt.Sprintf(queryGetPrimaryKeys, table))
 	if err != nil {
 		return nil, errors.Errorf("query get max value: %w", err)
