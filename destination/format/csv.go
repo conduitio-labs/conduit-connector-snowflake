@@ -361,6 +361,10 @@ func getColumnValue(
 		return fmt.Sprint(s.updatedAt.UnixMicro()), nil
 	case c == cnCols.DeletedAtColumn && r.Operation == sdk.OperationDelete:
 		return fmt.Sprint(s.deletedAt.UnixMicro()), nil
+	case r.Operation == sdk.OperationDelete && c != cnCols.DeletedAtColumn && c != cnCols.OperationColumn:
+		// for deletes, pass empty string for everything that isn't primary key, operation, or meroxa_deleted_at.
+		// those are the only fields we use for deletes.
+		return "", nil
 	case data[c] == nil:
 		return "", nil
 	case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
