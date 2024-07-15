@@ -271,8 +271,7 @@ func TestWriter_Write(t *testing.T) {
 						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_updated_at = b.meroxa_updated_at, 
 						a.meroxa_deleted_at = b.meroxa_deleted_at, a.firstName = b.firstName, a.id = b.id, a.lastName = b.lastName
 					WHEN MATCHED AND b.meroxa_operation = 'delete' 
-						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_deleted_at = b.meroxa_deleted_at, 
-						a.firstName = b.firstName, a.id = b.id, a.lastName = b.lastName
+						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_deleted_at = b.meroxa_deleted_at
 					WHEN NOT MATCHED AND b.meroxa_operation = 'update' 
 						THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at, 
 							a.meroxa_deleted_at, a.firstName, a.id, a.lastName\) 
