@@ -342,6 +342,7 @@ func MakeCSVBytes(
 }
 
 func getColumnValue(
+	ctx context.Context,
 	c string, r *sdk.Record,
 	s *recordSummary,
 	key string,
@@ -366,7 +367,10 @@ func getColumnValue(
 	case (!isOperationTimestampColumn(c, cnCols)) && isDateOrTimeType(schema[c]):
 		t, ok := data[c].(time.Time)
 		if !ok {
-			return "", errors.Errorf("invalid timestamp on column %s: %+v", c, data[c])
+			sdk.Logger(ctx).Debug().Msgf("full record from invalid timestamp: %+v\n", r)
+			sdk.Logger(ctx).Debug().Msgf("payload from invalid timestamp: %+v\n", r.Payload)
+			sdk.Logger(ctx).Debug().Msgf("key from invalid timestamp: %+v\n", r.Key)
+			return "", errors.Errorf("invalid timestamp on column %s: type=%T, value=%+v", c, data[c], data[c])
 		}
 		if schema[c] == SnowflakeDate {
 			return t.UTC().Format(time.DateOnly), nil
@@ -379,7 +383,7 @@ func getColumnValue(
 }
 
 func createCSVRecords(
-	_ context.Context,
+	ctx context.Context,
 	recordSummaries map[string]*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
@@ -403,7 +407,7 @@ func createCSVRecords(
 		}
 
 		for j, c := range csvColumnOrder {
-			value, err := getColumnValue(c, r, s, key, primaryKey, data, cnCols, schema)
+			value, err := getColumnValue(ctx, c, r, s, key, primaryKey, data, cnCols, schema)
 			if err != nil {
 				return 0, 0, err
 			}
