@@ -180,7 +180,9 @@ func Test_MakeCSVBytes(t *testing.T) {
 
 				err = updateWriter.Write([]string{"update", "", fmt.Sprint(testTimestamp), "", "3", "squidward", "tentacles"})
 				require.NoError(t, err)
-				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "eugene", "krabs"})
+
+				// expect empty strings for everything but operation, meroxa_deleted_at, and primary key.
+				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "", ""})
 				require.NoError(t, err)
 				updateWriter.Flush()
 
