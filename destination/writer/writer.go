@@ -471,7 +471,6 @@ func (s *SnowflakeCSV) Merge(
 	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
 	insertSetCols := s.buildSetList("a", "b", colOrder, insertSetMode, meroxaColumns)
 	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode, meroxaColumns)
-	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode, meroxaColumns)
 
 	colListA := buildFinalColumnList("a", ".", colOrder)
 	colListB := buildFinalColumnList("b", ".", colOrder)
@@ -529,9 +528,7 @@ func (s *SnowflakeCSV) Merge(
 		queryMergeInto := fmt.Sprintf(
 			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND b.%s_operation = 'update' THEN UPDATE SET %s
-			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
-			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
-			WHEN NOT MATCHED AND b.%s_operation = 'delete' THEN INSERT  (%s) VALUES (%s) ; `,
+			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s); `,
 			s.TableName,
 			setSelectMerge,
 			s.Stage,
@@ -542,13 +539,6 @@ func (s *SnowflakeCSV) Merge(
 			s.Prefix,
 			updateSetCols,
 			// third line
-			s.Prefix,
-			deleteSetCols,
-			// fourth line
-			s.Prefix,
-			colListA,
-			colListB,
-			// fifth line
 			s.Prefix,
 			colListA,
 			colListB,

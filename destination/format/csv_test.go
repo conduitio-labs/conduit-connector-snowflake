@@ -180,8 +180,6 @@ func Test_MakeCSVBytes(t *testing.T) {
 
 				err = updateWriter.Write([]string{"update", "", fmt.Sprint(testTimestamp), "", "3", "squidward", "tentacles"})
 				require.NoError(t, err)
-				err = updateWriter.Write([]string{"delete", "", "", fmt.Sprint(testTimestamp), "4", "eugene", "krabs"})
-				require.NoError(t, err)
 				updateWriter.Flush()
 
 				return insertBuf, updateBuf

@@ -260,6 +260,10 @@ func MakeCSVBytes(
 	sdk.Logger(ctx).Debug().Msgf("num of records in batch before deduping: %d", len(records))
 
 	for i, r := range records {
+		// skip deletes
+		if r.Operation == sdk.OperationDelete {
+			continue
+		}
 		readAtMicro, err := strconv.ParseInt(r.Metadata["opencdc.readAt"], 10, 64)
 		if err != nil {
 			return err
@@ -286,9 +290,6 @@ func MakeCSVBytes(
 				l.updatedAt = readAt
 				l.latestRecord = &records[i]
 			}
-		case sdk.OperationDelete:
-			l.deletedAt = readAt
-			l.latestRecord = &records[i]
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			l.createdAt = readAt
 			l.latestRecord = &records[i]
@@ -410,7 +411,10 @@ func createCSVRecords(
 		switch r.Operation {
 		case sdk.OperationCreate, sdk.OperationSnapshot:
 			inserts = append(inserts, row)
-		case sdk.OperationUpdate, sdk.OperationDelete:
+		case sdk.OperationUpdate:
+			updates = append(updates, row)
+		case sdk.OperationDelete:
+			// skip record
 			updates = append(updates, row)
 		default:
 			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
