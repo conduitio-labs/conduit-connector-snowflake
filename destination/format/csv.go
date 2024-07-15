@@ -27,7 +27,6 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
-	"golang.org/x/exp/maps"
 )
 
 // TODO: just create the table with the types on the left to make this simpler.
@@ -172,7 +171,7 @@ func GetDataSchema(
 	}
 
 	r := records[0]
-	data, err := extract(r.Operation, r.Payload, r.Key)
+	data, err := extractPayload(r.Operation, r.Payload)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
 	}
@@ -266,8 +265,8 @@ func MakeCSVBytes(
 		}
 		readAt := time.UnixMicro(readAtMicro)
 
-		s, err := extract(r.Operation, r.Payload, r.Key)
-		key := fmt.Sprint(s[primaryKey])
+		k, err := extractKey(r.Key)
+		key := fmt.Sprint(k[primaryKey])
 		if err != nil {
 			return err
 		}
@@ -296,9 +295,7 @@ func MakeCSVBytes(
 	}
 
 	// Process CSV records
-
-	dedupedRecords := maps.Values(latestRecordMap)
-	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(dedupedRecords))
+	sdk.Logger(ctx).Debug().Msgf("num of records in batch after deduping: %d", len(latestRecordMap))
 
 	insertsBuffer := new(bytes.Buffer)
 	updatesBuffer := new(bytes.Buffer)
@@ -307,10 +304,11 @@ func MakeCSVBytes(
 	updateW := csv.NewWriter(updatesBuffer)
 
 	inserts, updates, err := createCSVRecords(ctx,
-		dedupedRecords,
+		latestRecordMap,
 		insertW,
 		updateW,
 		csvColumnOrder,
+		primaryKey,
 		schema,
 		meroxaColumns)
 	if err != nil {
@@ -346,11 +344,15 @@ func MakeCSVBytes(
 func getColumnValue(
 	c string, r *sdk.Record,
 	s *recordSummary,
+	key string,
+	primaryKey string,
 	data map[string]interface{},
 	cnCols ConnectorColumns,
 	schema map[string]string,
 ) (string, error) {
 	switch {
+	case c == primaryKey:
+		return key, nil
 	case c == cnCols.OperationColumn:
 		return r.Operation.String(), nil
 	case c == cnCols.CreatedAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
@@ -378,15 +380,16 @@ func getColumnValue(
 
 func createCSVRecords(
 	_ context.Context,
-	recordSummaries []*recordSummary,
+	recordSummaries map[string]*recordSummary,
 	insertsWriter, updatesWriter *csv.Writer,
 	csvColumnOrder []string,
+	primaryKey string,
 	schema map[string]string,
 	cnCols ConnectorColumns,
 ) (numInserts int, numUpdates int, err error) {
 	var inserts, updates [][]string
 
-	for _, s := range recordSummaries {
+	for key, s := range recordSummaries {
 		if s.latestRecord == nil {
 			continue
 		}
@@ -394,13 +397,13 @@ func createCSVRecords(
 
 		row := make([]string, len(csvColumnOrder))
 
-		data, err := extract(r.Operation, r.Payload, r.Key)
+		data, err := extractPayload(r.Operation, r.Payload)
 		if err != nil {
 			return 0, 0, errors.Errorf("failed to extract payload data: %w", err)
 		}
 
 		for j, c := range csvColumnOrder {
-			value, err := getColumnValue(c, r, s, data, cnCols, schema)
+			value, err := getColumnValue(c, r, s, key, primaryKey, data, cnCols, schema)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -432,7 +435,7 @@ func createCSVRecords(
 	return len(inserts), len(updates), nil
 }
 
-func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.StructuredData, error) {
+func extractPayload(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
 	var sdkData sdk.Data
 	if op == sdk.OperationDelete {
 		sdkData = payload.Before
@@ -443,27 +446,39 @@ func extract(op sdk.Operation, payload sdk.Change, key sdk.Data) (sdk.Structured
 	dataStruct, okStruct := sdkData.(sdk.StructuredData)
 	dataRaw, okRaw := sdkData.(sdk.RawData)
 
-	if !okStruct && !okRaw {
-		dataStruct, okStruct = key.(sdk.StructuredData)
-		dataRaw, okRaw = key.(sdk.RawData)
-		if !okRaw && !okStruct {
-			return nil, errors.Errorf("cannot find data either in payload (%T) or key (%T)", sdkData, key)
-		}
-		sdkData = key
-	}
-
 	if okStruct {
 		return dataStruct, nil
 	} else if okRaw {
 		data := make(sdk.StructuredData)
 		if err := json.Unmarshal(dataRaw, &payload); err != nil {
-			return nil, errors.Errorf("cannot unmarshal raw data into structured (%T)", sdkData)
+			return nil, errors.Errorf("cannot unmarshal raw data payload into structured (%T): %w", sdkData, err)
 		}
 
 		return data, nil
 	}
 
-	return nil, errors.Errorf("data payload does not contain structured or raw data (%T)", sdkData)
+	return nil, errors.Errorf("cannot find data in payload (%T)", sdkData)
+}
+
+func extractKey(key sdk.Data) (sdk.StructuredData, error) {
+	keyStruct, okStruct := key.(sdk.StructuredData)
+	keyRaw, okRaw := key.(sdk.RawData)
+	if !okRaw && !okStruct {
+		return nil, errors.Errorf("cannot find data either in key (%T)", key)
+	}
+
+	if okStruct {
+		return keyStruct, nil
+	} else if okRaw {
+		data := make(sdk.StructuredData)
+		if err := json.Unmarshal(keyRaw, &key); err != nil {
+			return nil, errors.Errorf("cannot unmarshal raw data key into structured (%T): %w", key, err)
+		}
+
+		return data, nil
+	}
+
+	return nil, errors.Errorf("cannot find data in key (%T)", key)
 }
 
 // Writes the contents of buffer b to buffer a.
