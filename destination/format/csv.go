@@ -17,6 +17,7 @@ package format
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
+	"golang.org/x/exp/maps"
 )
 
 // TODO: just create the table with the types on the left to make this simpler.
@@ -131,6 +133,13 @@ type ConnectorColumns struct {
 	DeletedAtColumn string
 }
 
+type SchemaRecords struct {
+	Schema         map[string]string
+	Records        []*sdk.Record
+	ConnColumns    ConnectorColumns
+	CsvColumnOrder []string
+}
+
 type AvroRecordSchema struct {
 	Name   string `json:"name"`
 	Type   string `json:"type"`
@@ -140,102 +149,117 @@ type AvroRecordSchema struct {
 	} `json:"fields"`
 }
 
-func GetDataSchema(
+func GetDataSchemas(
 	ctx context.Context,
 	records []sdk.Record,
-	schema map[string]string,
 	prefix string,
-) ([]string, *ConnectorColumns, error) {
-	// we need to store the operation in a column, to detect updates & deletes
-	connectorColumns := ConnectorColumns{
-		OperationColumn: fmt.Sprintf("%s_operation", prefix),
-		CreatedAtColumn: fmt.Sprintf("%s_created_at", prefix),
-		UpdatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
-		DeletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
-	}
-
-	schema[connectorColumns.OperationColumn] = SnowflakeVarchar
-	schema[connectorColumns.CreatedAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.UpdatedAtColumn] = SnowflakeTimestampTZ
-	schema[connectorColumns.DeletedAtColumn] = SnowflakeTimestampTZ
-
-	csvColumnOrder := []string{}
-
-	// TODO: see whether we need to support a compound key here
-	// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
-
-	// Grab the schema from the first record.
-	// TODO: support schema evolution.
+) ([]SchemaRecords, error) {
 	if len(records) == 0 {
-		return nil, nil, errors.New("unexpected empty slice of records")
+		return nil, errors.New("unexpected empty slice of records")
 	}
 
-	r := records[0]
-	data, err := extractPayload(r.Operation, r.Payload)
-	if err != nil {
-		return nil, nil, errors.Errorf("failed to extract payload data: %w", err)
-	}
+	schemaCache := map[string]SchemaRecords{}
 
-	avroStr, okAvro := r.Metadata["postgres.avro.schema"]
-	// if we have an avro schema in the metadata, interpret the schema from it
-	if okAvro {
-		sdk.Logger(ctx).Debug().Msgf("avro schema string: %s", avroStr)
-		avroSchema, err := avro.Parse(avroStr)
+	for _, r := range records {
+		// we need to store the operation in a column, to detect updates & deletes
+		connectorColumns := ConnectorColumns{
+			OperationColumn: fmt.Sprintf("%s_operation", prefix),
+			CreatedAtColumn: fmt.Sprintf("%s_created_at", prefix),
+			UpdatedAtColumn: fmt.Sprintf("%s_updated_at", prefix),
+			DeletedAtColumn: fmt.Sprintf("%s_deleted_at", prefix),
+		}
+
+		schema := map[string]string{}
+
+		schema[connectorColumns.OperationColumn] = SnowflakeVarchar
+		schema[connectorColumns.CreatedAtColumn] = SnowflakeTimestampTZ
+		schema[connectorColumns.UpdatedAtColumn] = SnowflakeTimestampTZ
+		schema[connectorColumns.DeletedAtColumn] = SnowflakeTimestampTZ
+
+		csvColumnOrder := []string{}
+
+		// TODO: see whether we need to support a compound key here
+		// TODO: what if the key field changes? e.g. from `id` to `name`? we need to think about this
+
+		data, err := extractPayload(r.Operation, r.Payload)
 		if err != nil {
-			return nil, nil, errors.Errorf("could not parse avro schema: %w", err)
+			return nil, errors.Errorf("failed to extract payload data: %w", err)
 		}
-		avroRecordSchema, ok := avroSchema.(*avro.RecordSchema)
-		if !ok {
-			return nil, nil, errors.New("could not coerce avro schema into recordSchema")
-		}
-		for _, field := range avroRecordSchema.Fields() {
-			csvColumnOrder = append(csvColumnOrder, field.Name())
-			schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
+
+		avroStr, okAvro := r.Metadata["postgres.avro.schema"]
+		// if we have an avro schema in the metadata, interpret the schema from it
+		if okAvro {
+			sdk.Logger(ctx).Debug().Msgf("avro schema string: %s", avroStr)
+			avroSchema, err := avro.Parse(avroStr)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
+				return nil, errors.Errorf("could not parse avro schema: %w", err)
 			}
-		}
-	} else {
-		// TODO (BEFORE MERGE): move to function
-		for key, val := range data {
-			if schema[key] == "" {
-				csvColumnOrder = append(csvColumnOrder, key)
-				switch val.(type) {
-				case int, int8, int16, int32, int64:
-					schema[key] = SnowflakeInteger
-				case float32, float64:
-					schema[key] = SnowflakeFloat
-				case bool:
-					schema[key] = SnowflakeBoolean
-				case time.Time, *time.Time:
-					schema[key] = SnowflakeTimestampTZ
-				case nil:
-					// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
-					// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
-					schema[key] = SnowflakeVariant
-				default:
-					schema[key] = SnowflakeVarchar
+			avroRecordSchema, ok := avroSchema.(*avro.RecordSchema)
+			if !ok {
+				return nil, errors.New("could not coerce avro schema into recordSchema")
+			}
+			for _, field := range avroRecordSchema.Fields() {
+				csvColumnOrder = append(csvColumnOrder, field.Name())
+				schema[field.Name()], err = mapAvroToSnowflake(ctx, field)
+				if err != nil {
+					return nil, fmt.Errorf("failed to map avro field %s: %w", field.Name(), err)
+				}
+			}
+		} else {
+			// TODO (BEFORE MERGE): move to function
+			for key, val := range data {
+				if schema[key] == "" {
+					csvColumnOrder = append(csvColumnOrder, key)
+					switch val.(type) {
+					case int, int8, int16, int32, int64:
+						schema[key] = SnowflakeInteger
+					case float32, float64:
+						schema[key] = SnowflakeFloat
+					case bool:
+						schema[key] = SnowflakeBoolean
+					case time.Time, *time.Time:
+						schema[key] = SnowflakeTimestampTZ
+					case nil:
+						// WE SHOULD KEEP TRACK OF VARIANTS SEPERATELY IN CASE WE RUN INTO CONCRETE TYPE LATER ON
+						// IF WE RAN INTO NONE NULL VALUE OF THIS VARIANT COL, WE CAN EXECUTE AN ALTER TO DEST TABLE
+						schema[key] = SnowflakeVariant
+					default:
+						schema[key] = SnowflakeVarchar
+					}
 				}
 			}
 		}
+
+		// sort data column order alphabetically to make deterministic
+		// but keep conduit connector columns at the front for ease of use
+		sort.Strings(csvColumnOrder)
+		csvColumnOrder = append(
+			[]string{
+				connectorColumns.OperationColumn,
+				connectorColumns.CreatedAtColumn,
+				connectorColumns.UpdatedAtColumn,
+				connectorColumns.DeletedAtColumn,
+			},
+			csvColumnOrder...,
+		)
+
+		// if we have detected this schema before, simply add it to the set
+		hash := schemaHash(schema)
+		if sr, ok := schemaCache[hash]; ok {
+			sr.Records = append(sr.Records, &r)
+		} else {
+			schemaCache[hash] = SchemaRecords{
+				Schema:         schema,
+				Records:        []*sdk.Record{&r},
+				CsvColumnOrder: csvColumnOrder,
+				ConnColumns:    connectorColumns,
+			}
+		}
+
+		sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", schema)
 	}
 
-	// sort data column order alphabetically to make deterministic
-	// but keep conduit connector columns at the front for ease of use
-	sort.Strings(csvColumnOrder)
-	csvColumnOrder = append(
-		[]string{
-			connectorColumns.OperationColumn,
-			connectorColumns.CreatedAtColumn,
-			connectorColumns.UpdatedAtColumn,
-			connectorColumns.DeletedAtColumn,
-		},
-		csvColumnOrder...,
-	)
-
-	sdk.Logger(ctx).Debug().Msgf("schema detected: %+v", schema)
-
-	return csvColumnOrder, &connectorColumns, nil
+	return maps.Values(schemaCache), nil
 }
 
 // TODO: refactor this function, make it more modular and readable.
@@ -557,4 +581,14 @@ func mapAvroToSnowflake(ctx context.Context, field *avro.Field) (string, error) 
 	}
 
 	return "", fmt.Errorf("could not find snowflake mapping for avro type %s", field.Name())
+}
+
+func schemaHash(s map[string]string) string {
+	hasher := sha256.New()
+
+	for key, value := range s {
+		fmt.Fprintf(hasher, "%s:%s,", k, v)
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
