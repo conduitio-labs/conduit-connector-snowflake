@@ -163,10 +163,18 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	// assign request id to the write cycle
 	ctx = withRequestID(ctx)
 
-	// if s.schema == nil {
-	// 	if err := s.initSchema(ctx, records); err != nil {
-	// 		return 0, errors.Errorf("failed to initialize schema from records: %w", err)
-	// 	}
+	// extract schemas from record
+	schemaRecords, err := format.GetDataSchemas(ctx, records, s.Prefix)
+	if err != nil {
+		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
+	}
+
+	// Samir Ketema:
+	// now that we have grouped schemas, we could make the calls out to the evolver.Migrate() below,
+	// but we need to be careful about _when_ we do this.
+	// in hindsight, I could have also detected some ordering in these records, to help with getting the initial batch in before the change.
+	// however, we need to be careful about making sure this is all transactional as far as snowflake is concerned..
+	// and I'm not too sure about whether that's possible in Snowflake / the implications.
 
 	// 	// N.B. Disable until table is created by the migrator
 	// 	//
@@ -174,23 +182,6 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	// 	// if err != nil {
 	// 	//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
 	// 	// }
-
-	// 	sdk.Logger(ctx).Debug().
-	// 		// Bool("success", migrated).
-	// 		Msg("schema initialized and migration completed")
-	// }
-
-	// log first record temporarily for debugging
-	sdk.Logger(ctx).Debug().Msgf("payload=%+v", records[0].Payload)
-	sdk.Logger(ctx).Debug().Msgf("payload.before=%+v", records[0].Payload.Before)
-	sdk.Logger(ctx).Debug().Msgf("payload.after=%+v", records[0].Payload.After)
-	sdk.Logger(ctx).Debug().Msgf("key=%+v", records[0].Key)
-	// extract schema from payload
-	schema := make(map[string]string)
-	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
-	if err != nil {
-		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
-	}
 
 	// check if table already exists on snowflake, if yes, compare schema
 	err = s.CheckTable(ctx, records[0].Operation, s.PrimaryKey, schema)
