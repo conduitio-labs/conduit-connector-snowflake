@@ -230,13 +230,13 @@ func TestWriter_Write(t *testing.T) {
 				mock.ExpectCommit()
 
 				mock.ExpectExec(`
-				PUT file://.*_inserts.csv.gz @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
+				PUT file://.*_inserts.csv.copy @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
 				`).
 					WillReturnResult(sqlmock.NewResult(2, 2)).
 					WillReturnError(nil)
 
 				mock.ExpectExec(`
-				PUT file://.*_updates.csv.gz @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
+				PUT file://.*_updates.csv.copy @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
 				`).
 					WillReturnResult(sqlmock.NewResult(4, 2)).
 					WillReturnError(nil)
@@ -248,7 +248,7 @@ func TestWriter_Write(t *testing.T) {
 				MERGE INTO test as a USING \(
 					select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at,
 						\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName
-					from @test-stage/.*_inserts.csv.gz \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
+					from @test-stage/.*_inserts.csv.copy \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
 				\) AS b ON a.id = b.id
 				WHEN MATCHED AND \( b.meroxa_operation = 'create' OR b.meroxa_operation = 'snapshot' \)
 					THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_created_at = b.meroxa_created_at,
@@ -267,7 +267,7 @@ func TestWriter_Write(t *testing.T) {
 					MERGE INTO test as a USING \(
 						select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at,
 							\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName
-						from @test-stage/.*_updates.csv.gz \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
+						from @test-stage/.*_updates.csv.copy \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
 					\) AS b ON a.id = b.id
 					WHEN MATCHED AND b.meroxa_operation = 'update'
 						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_updated_at = b.meroxa_updated_at,
