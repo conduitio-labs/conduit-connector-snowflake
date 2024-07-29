@@ -9,6 +9,12 @@ import (
 
 func (Config) Parameters() map[string]sdk.Parameter {
 	return map[string]sdk.Parameter{
+		"snowflake.autoCleanupStage": {
+			Default:     "true",
+			Description: "Automatically clean uploaded files to stage after processing, except when they fail.",
+			Type:        sdk.ParameterTypeBool,
+			Validations: []sdk.Validation{},
+		},
 		"snowflake.compression": {
 			Default:     "zstd",
 			Description: "snowflake.compression to use when staging files in Snowflake",

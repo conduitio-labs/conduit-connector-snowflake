@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -45,12 +46,7 @@ type Writer interface {
 
 // SnowflakeCSV writer stores batch bytes into an SnowflakeCSV bucket as a file.
 type SnowflakeCSV struct {
-	Prefix            string
-	PrimaryKey        string
-	Stage             string
-	TableName         string
-	FileThreads       int
-	ProcessingWorkers int
+	config SnowflakeConfig
 
 	db *sql.DB
 
@@ -79,15 +75,16 @@ type SnowflakeConfig struct {
 	Prefix            string
 	PrimaryKey        string
 	Stage             string
-	TableName         string
+	Table             string
 	Connection        string
 	ProcessingWorkers int
 	FileThreads       int
 	Compression       string
+	CleanStageFiles   bool
 }
 
 // NewCSV takes an SnowflakeConfig reference and produces an SnowflakeCSV Writer.
-func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
+func NewCSV(ctx context.Context, cfg SnowflakeConfig) (*SnowflakeCSV, error) {
 	db, err := sql.Open("snowflake", cfg.Connection)
 	if err != nil {
 		return nil, errors.Errorf("failed to connect to snowflake db")
@@ -130,25 +127,20 @@ func NewCSV(ctx context.Context, cfg *SnowflakeConfig) (*SnowflakeCSV, error) {
 	}
 
 	return &SnowflakeCSV{
-		Prefix:            cfg.Prefix,
-		PrimaryKey:        cfg.PrimaryKey,
-		Stage:             cfg.Stage,
-		TableName:         cfg.TableName,
-		ProcessingWorkers: cfg.ProcessingWorkers,
-		FileThreads:       cfg.FileThreads,
-		db:                db,
-		evolver:           schema.NewEvolver(db),
-		compressor:        cmper,
-		insertsBuf:        &bytes.Buffer{},
-		updatesBuf:        &bytes.Buffer{},
-		compressedBuf:     &bytes.Buffer{},
+		config:        cfg,
+		db:            db,
+		evolver:       schema.NewEvolver(db),
+		compressor:    cmper,
+		insertsBuf:    &bytes.Buffer{},
+		updatesBuf:    &bytes.Buffer{},
+		compressedBuf: &bytes.Buffer{},
 	}, nil
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.Stage)
+	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.config.Stage)
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.Stage)); err != nil {
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.config.Stage)); err != nil {
 		return errors.Errorf("failed to drop stage: %w", err)
 	}
 	if err := s.db.Close(); err != nil {
@@ -170,7 +162,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 
 	// 	// N.B. Disable until table is created by the migrator
 	// 	//
-	// 	// migrated, err := s.evolver.Migrate(ctx, s.TableName, s.schema)
+	// 	// migrated, err := s.evolver.Migrate(ctx, s.config.Table, s.schema)
 	// 	// if err != nil {
 	// 	//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
 	// 	// }
@@ -187,15 +179,15 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	sdk.Logger(ctx).Debug().Msgf("key=%+v", records[0].Key)
 	// extract schema from payload
 	schema := make(map[string]string)
-	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.Prefix)
+	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.config.Prefix)
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
 	}
 
 	// check if table already exists on snowflake, if yes, compare schema
-	err = s.CheckTable(ctx, records[0].Operation, s.PrimaryKey, schema)
+	err = s.CheckTable(ctx, records[0].Operation, s.config.PrimaryKey, schema)
 	if err != nil {
-		return 0, errors.Errorf("failed to checking table %q on snowflake: %w", s.TableName, err)
+		return 0, errors.Errorf("failed to checking table %q on snowflake: %w", s.config.Table, err)
 	}
 
 	err = format.MakeCSVBytes(
@@ -204,10 +196,10 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		csvColumnOrder,
 		*meroxaColumns,
 		schema,
-		s.PrimaryKey,
+		s.config.PrimaryKey,
 		s.insertsBuf,
 		s.updatesBuf,
-		s.ProcessingWorkers,
+		s.config.ProcessingWorkers,
 	)
 	if err != nil {
 		return 0, errors.Errorf("failed to convert records to CSV: %w", err)
@@ -221,7 +213,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 
 	err = s.SetupTables(ctx, schema, csvColumnOrder)
 	if err != nil {
-		return 0, errors.Errorf("failed to set up snowflake table %q: %w", s.TableName, err)
+		return 0, errors.Errorf("failed to set up snowflake table %q: %w", s.config.Table, err)
 	}
 
 	sdk.Logger(ctx).Debug().
@@ -232,16 +224,16 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	var insertsFilename, updatesFilename string
 
 	if s.insertsBuf.Len() > 0 {
-		insertsFilename = fmt.Sprintf("%s_inserts.csv.gz", requestID(ctx))
+		insertsFilename = fmt.Sprintf("%s_inserts.csv.%s", requestID(ctx), s.compressor.Name())
 		if err = s.upload(ctx, insertsFilename, s.insertsBuf); err != nil {
-			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", insertsFilename, s.Stage, err)
+			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", insertsFilename, s.config.Stage, err)
 		}
 	}
 
 	if s.updatesBuf.Len() > 0 {
-		updatesFilename = fmt.Sprintf("%s_updates.csv.gz", requestID(ctx))
+		updatesFilename = fmt.Sprintf("%s_updates.csv.%s", requestID(ctx), s.compressor.Name())
 		if err := s.upload(ctx, updatesFilename, s.updatesBuf); err != nil {
-			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", updatesFilename, s.Stage, err)
+			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", updatesFilename, s.config.Stage, err)
 		}
 	}
 
@@ -254,13 +246,22 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		)
 	}
 
+	if s.config.CleanStageFiles {
+		if err := s.cleanupFiles(ctx, insertsFilename, updatesFilename); err != nil {
+			sdk.Logger(ctx).Error().Err(err).
+				Str("inserts_file", insertsFilename).
+				Str("updates_file", updatesFilename).
+				Msgf("failed to delete files from stage %q", s.config.Stage)
+		}
+	}
+
 	return len(records), nil
 }
 
 func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
-	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.TableName)
+	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.config.Table)
 	res, err := s.db.Query(showTablesQuery)
 	if err != nil {
 		return errors.Errorf("failed to check if table exists: %w", err)
@@ -270,7 +271,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 
 	// table not found
 	if !res.Next() {
-		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.TableName)
+		sdk.Logger(ctx).Info().Msgf("table %s does not exist yet", s.config.Table)
 
 		return nil
 	}
@@ -279,7 +280,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 		return errors.Errorf("error occurred while checking table rows: %w", err)
 	}
 
-	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.TableName)
+	showColumnsQuery := fmt.Sprintf(`SHOW COLUMNS IN TABLE %s;`, s.config.Table)
 
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", showColumnsQuery)
 
@@ -400,7 +401,7 @@ func (s *SnowflakeCSV) SetupTables(ctx context.Context, schema map[string]string
 		`CREATE TABLE IF NOT EXISTS %s (
 		%s,
 		PRIMARY KEY (%s)
-	)`, s.TableName, columnsSQL, s.PrimaryKey)
+	)`, s.config.Table, columnsSQL, s.config.PrimaryKey)
 
 	sdk.Logger(ctx).Debug().Msgf("executing: %s", queryCreateTable)
 
@@ -434,11 +435,11 @@ func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.B
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(
 		"PUT file://%s @%s SOURCE_COMPRESSION=%s PARALLEL=%d",
 		filename,
-		s.Stage,
+		s.config.Stage,
 		s.compressor.Name(),
-		s.FileThreads,
+		s.config.FileThreads,
 	)); err != nil {
-		return errors.Errorf("failed to upload %q to stage %q: %w", filename, s.Stage, err)
+		return errors.Errorf("failed to upload %q to stage %q: %w", filename, s.config.Stage, err)
 	}
 
 	sdk.Logger(ctx).Debug().
@@ -446,6 +447,29 @@ func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.B
 		Msgf("finished uploading file %s", filename)
 
 	return nil
+}
+
+// cleanupFiles will attempt remove the specified files from the stage.
+func (s *SnowflakeCSV) cleanupFiles(ctx context.Context, files ...string) error {
+	var errs error
+
+	for _, file := range files {
+		if file == "" {
+			continue
+		}
+
+		sdk.Logger(ctx).Debug().Str("file", file).
+			Msgf("cleaning file from stage %q", s.config.Stage)
+
+		if _, err := s.db.ExecContext(
+			ctx,
+			fmt.Sprintf("REMOVE @%s", path.Join(s.config.Stage, file)),
+		); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+
+	return errs
 }
 
 func (s *SnowflakeCSV) Merge(
@@ -468,7 +492,7 @@ func (s *SnowflakeCSV) Merge(
 		}
 	}()
 
-	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.PrimaryKey, s.PrimaryKey)
+	orderingColumnList := fmt.Sprintf("a.%s = b.%s", s.config.PrimaryKey, s.config.PrimaryKey)
 	insertSetCols := s.buildSetList("a", "b", colOrder, insertSetMode, meroxaColumns)
 	updateSetCols := s.buildSetList("a", "b", colOrder, updateSetMode, meroxaColumns)
 	deleteSetCols := s.buildSetList("a", "b", colOrder, deleteSetMode, meroxaColumns)
@@ -488,19 +512,19 @@ func (s *SnowflakeCSV) Merge(
 			`MERGE INTO %s as a USING ( select %s from @%s/%s (FILE_FORMAT =>  %s ) ) AS b ON %s
 			WHEN MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN UPDATE SET %s
 			WHEN NOT MATCHED AND ( b.%s_operation = 'create' OR b.%s_operation = 'snapshot' ) THEN INSERT  (%s) VALUES (%s) ; `,
-			s.TableName,
+			s.config.Table,
 			setSelectMerge,
-			s.Stage,
+			s.config.Stage,
 			insertsFilename,
 			csvFileFormatName,
 			orderingColumnList,
 			// second line
-			s.Prefix,
-			s.Prefix,
+			s.config.Prefix,
+			s.config.Prefix,
 			insertSetCols,
 			// third line
-			s.Prefix,
-			s.Prefix,
+			s.config.Prefix,
+			s.config.Prefix,
 			colListA,
 			colListB,
 		)
@@ -509,14 +533,14 @@ func (s *SnowflakeCSV) Merge(
 
 		res, err := tx.ExecContext(ctx, queryMergeInto)
 		if err != nil {
-			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, insertsFilename, err)
+			return errors.Errorf("failed to merge into table %s from %s: %w", s.config.Table, insertsFilename, err)
 		}
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
 			sdk.Logger(ctx).
 				Err(err).
-				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, insertsFilename)
+				Msgf("could not determine rows affected on merge into table %s from %s", s.config.Table, insertsFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for inserts. rows affected: %d", rowsAffected)
@@ -532,24 +556,24 @@ func (s *SnowflakeCSV) Merge(
 			WHEN MATCHED AND b.%s_operation = 'delete' THEN UPDATE SET %s
 			WHEN NOT MATCHED AND b.%s_operation = 'update' THEN INSERT  (%s) VALUES (%s)
 			WHEN NOT MATCHED AND b.%s_operation = 'delete' THEN INSERT  (%s) VALUES (%s) ; `,
-			s.TableName,
+			s.config.Table,
 			setSelectMerge,
-			s.Stage,
+			s.config.Stage,
 			updatesFilename,
 			csvFileFormatName,
 			orderingColumnList,
 			// second line
-			s.Prefix,
+			s.config.Prefix,
 			updateSetCols,
 			// third line
-			s.Prefix,
+			s.config.Prefix,
 			deleteSetCols,
 			// fourth line
-			s.Prefix,
+			s.config.Prefix,
 			colListA,
 			colListB,
 			// fifth line
-			s.Prefix,
+			s.config.Prefix,
 			colListA,
 			colListB,
 		)
@@ -558,14 +582,14 @@ func (s *SnowflakeCSV) Merge(
 
 		res, err := tx.ExecContext(ctx, queryMergeInto)
 		if err != nil {
-			return errors.Errorf("failed to merge into table %s from %s: %w", s.TableName, updatesFilename, err)
+			return errors.Errorf("failed to merge into table %s from %s: %w", s.config.Table, updatesFilename, err)
 		}
 
 		rowsAffected, err := res.RowsAffected()
 		if err != nil {
 			sdk.Logger(ctx).
 				Err(err).
-				Msgf("could not determine rows affected on merge into table %s from %s", s.TableName, updatesFilename)
+				Msgf("could not determine rows affected on merge into table %s from %s", s.config.Table, updatesFilename)
 		}
 
 		sdk.Logger(ctx).Info().Msgf("ran MERGE for updates/deletes. rows affected: %d", rowsAffected)
