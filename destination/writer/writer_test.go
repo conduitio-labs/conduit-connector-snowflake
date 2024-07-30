@@ -91,8 +91,10 @@ func TestWriter_Close(t *testing.T) {
 			ctx := context.Background()
 			db, mock := tc.dbmock()
 			s := SnowflakeCSV{
-				Stage: tc.stage,
-				db:    db,
+				config: SnowflakeConfig{
+					Stage: tc.stage,
+				},
+				db: db,
 			}
 
 			err := s.Close(ctx)
@@ -115,7 +117,7 @@ func TestWriter_Write(t *testing.T) {
 		Prefix            string
 		PrimaryKey        string
 		Stage             string
-		TableName         string
+		Table             string
 		FileThreads       int
 		ProcessingWorkers int
 		compressor        compress.Compressor
@@ -125,7 +127,7 @@ func TestWriter_Write(t *testing.T) {
 	}{
 		{
 			desc:              "successful batch",
-			TableName:         "test",
+			Table:             "test",
 			PrimaryKey:        "id",
 			Stage:             "test-stage",
 			Prefix:            "meroxa",
@@ -228,13 +230,13 @@ func TestWriter_Write(t *testing.T) {
 				mock.ExpectCommit()
 
 				mock.ExpectExec(`
-				PUT file://.*_inserts.csv.gz @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
+				PUT file://.*_inserts.csv.copy @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
 				`).
 					WillReturnResult(sqlmock.NewResult(2, 2)).
 					WillReturnError(nil)
 
 				mock.ExpectExec(`
-				PUT file://.*_updates.csv.gz @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
+				PUT file://.*_updates.csv.copy @test-stage SOURCE_COMPRESSION=copy PARALLEL=1
 				`).
 					WillReturnResult(sqlmock.NewResult(4, 2)).
 					WillReturnError(nil)
@@ -243,44 +245,44 @@ func TestWriter_Write(t *testing.T) {
 
 				// TODO: assert matches on subqueries separately. this is cumbersome.
 				mock.ExpectExec(`
-				MERGE INTO test as a USING \( 
-					select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at, 
-						\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName 
-					from @test-stage/.*_inserts.csv.gz \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \) 
+				MERGE INTO test as a USING \(
+					select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at,
+						\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName
+					from @test-stage/.*_inserts.csv.copy \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
 				\) AS b ON a.id = b.id
-				WHEN MATCHED AND \( b.meroxa_operation = 'create' OR b.meroxa_operation = 'snapshot' \) 
-					THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_created_at = b.meroxa_created_at, 
-					a.meroxa_updated_at = b.meroxa_updated_at, a.meroxa_deleted_at = b.meroxa_deleted_at, a.firstName = b.firstName, 
+				WHEN MATCHED AND \( b.meroxa_operation = 'create' OR b.meroxa_operation = 'snapshot' \)
+					THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_created_at = b.meroxa_created_at,
+					a.meroxa_updated_at = b.meroxa_updated_at, a.meroxa_deleted_at = b.meroxa_deleted_at, a.firstName = b.firstName,
 					a.id = b.id, a.lastName = b.lastName
-				WHEN NOT MATCHED AND \( b.meroxa_operation = 'create' OR b.meroxa_operation = 'snapshot' \) 
-					THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at, 
-						a.meroxa_deleted_at, a.firstName, a.id, a.lastName\) 
-					VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at, 
+				WHEN NOT MATCHED AND \( b.meroxa_operation = 'create' OR b.meroxa_operation = 'snapshot' \)
+					THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at,
+						a.meroxa_deleted_at, a.firstName, a.id, a.lastName\)
+					VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at,
 						b.meroxa_deleted_at, b.firstName, b.id, b.lastName\) ;
 				`).
 					WillReturnResult(sqlmock.NewResult(2, 2)).
 					WillReturnError(nil)
 
 				mock.ExpectExec(`
-					MERGE INTO test as a USING \( 
-						select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at, 
-							\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName 
-						from @test-stage/.*_updates.csv.gz \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \) 
+					MERGE INTO test as a USING \(
+						select \$1 meroxa_operation, \$2 meroxa_created_at, \$3 meroxa_updated_at,
+							\$4 meroxa_deleted_at, \$5 firstName, \$6 id, \$7 lastName
+						from @test-stage/.*_updates.csv.copy \(FILE_FORMAT =>  CSV_CONDUIT_SNOWFLAKE \)
 					\) AS b ON a.id = b.id
-					WHEN MATCHED AND b.meroxa_operation = 'update' 
-						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_updated_at = b.meroxa_updated_at, 
+					WHEN MATCHED AND b.meroxa_operation = 'update'
+						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_updated_at = b.meroxa_updated_at,
 						a.meroxa_deleted_at = b.meroxa_deleted_at, a.firstName = b.firstName, a.id = b.id, a.lastName = b.lastName
-					WHEN MATCHED AND b.meroxa_operation = 'delete' 
+					WHEN MATCHED AND b.meroxa_operation = 'delete'
 						THEN UPDATE SET a.meroxa_operation = b.meroxa_operation, a.meroxa_deleted_at = b.meroxa_deleted_at
-					WHEN NOT MATCHED AND b.meroxa_operation = 'update' 
-						THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at, 
-							a.meroxa_deleted_at, a.firstName, a.id, a.lastName\) 
-						VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at, 
-							b.meroxa_deleted_at, b.firstName, b.id, b.lastName\)
-					WHEN NOT MATCHED AND b.meroxa_operation = 'delete' 
+					WHEN NOT MATCHED AND b.meroxa_operation = 'update'
 						THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at,
-							 a.meroxa_deleted_at, a.firstName, a.id, a.lastName\) 
-						VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at, 
+							a.meroxa_deleted_at, a.firstName, a.id, a.lastName\)
+						VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at,
+							b.meroxa_deleted_at, b.firstName, b.id, b.lastName\)
+					WHEN NOT MATCHED AND b.meroxa_operation = 'delete'
+						THEN INSERT  \(a.meroxa_operation, a.meroxa_created_at, a.meroxa_updated_at,
+							 a.meroxa_deleted_at, a.firstName, a.id, a.lastName\)
+						VALUES \(b.meroxa_operation, b.meroxa_created_at, b.meroxa_updated_at,
 							b.meroxa_deleted_at, b.firstName, b.id, b.lastName\) ;
 					`).
 					WillReturnResult(sqlmock.NewResult(4, 2)).
@@ -300,14 +302,16 @@ func TestWriter_Write(t *testing.T) {
 			db, mock := tc.dbmock()
 			defer db.Close()
 			s := &SnowflakeCSV{
-				Prefix:            tc.Prefix,
-				PrimaryKey:        tc.PrimaryKey,
-				Stage:             tc.Stage,
-				TableName:         tc.TableName,
-				FileThreads:       tc.FileThreads,
-				ProcessingWorkers: tc.ProcessingWorkers,
-				db:                db,
-				compressor:        tc.compressor,
+				config: SnowflakeConfig{
+					Prefix:            tc.Prefix,
+					PrimaryKey:        tc.PrimaryKey,
+					Stage:             tc.Stage,
+					Table:             tc.Table,
+					FileThreads:       tc.FileThreads,
+					ProcessingWorkers: tc.ProcessingWorkers,
+				},
+				db:         db,
+				compressor: tc.compressor,
 
 				insertsBuf:    &bytes.Buffer{},
 				updatesBuf:    &bytes.Buffer{},
