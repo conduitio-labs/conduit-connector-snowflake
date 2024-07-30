@@ -16,8 +16,6 @@ package destination
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,12 +23,12 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 const (
 	defaultBatchDelay = time.Second * 5
 	defaultBatchSize  = 1000
-	keepAliveParam    = "CLIENT_SESSION_KEEP_ALIVE"
 )
 
 type Destination struct {
@@ -38,6 +36,8 @@ type Destination struct {
 
 	Config Config
 	Writer writer.Writer
+
+	connDSN string
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
@@ -64,9 +64,12 @@ func (d *Destination) Parameters() map[string]sdk.Parameter {
 func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
 
-	err := sdk.Util.ParseConfig(cfg, &d.Config)
-	if err != nil {
+	if err := sdk.Util.ParseConfig(cfg, &d.Config); err != nil {
 		return errors.Errorf("failed to parse destination config: %w", err)
+	}
+
+	if err := d.snowflakeDSN(); err != nil {
+		return errors.Errorf("failed to validate connection DSN: %w", err)
 	}
 
 	return nil
@@ -77,13 +80,12 @@ func (d *Destination) Configure(ctx context.Context, cfg map[string]string) erro
 func (d *Destination) Open(ctx context.Context) error {
 	switch strings.ToUpper(d.Config.Format) {
 	case format.TypeCSV.String():
-		connectionString := d.configureURL()
 		w, err := writer.NewCSV(ctx, writer.SnowflakeConfig{
 			Prefix:            d.Config.NamingPrefix,
 			PrimaryKey:        d.Config.PrimaryKey,
 			Stage:             d.Config.Stage,
 			Table:             d.Config.Table,
-			Connection:        connectionString,
+			DSN:               d.connDSN,
 			ProcessingWorkers: d.Config.ProcessingWorkers,
 			FileThreads:       d.Config.FileUploadThreads,
 			Compression:       d.Config.Compression,
@@ -135,28 +137,36 @@ func (d *Destination) Teardown(ctx context.Context) error {
 	return nil
 }
 
-func (d *Destination) configureURL() string {
-	paramMap := map[string]string{
-		"warehouse":    d.Config.Warehouse,
-		keepAliveParam: strconv.FormatBool(d.Config.KeepAlive),
+func (d *Destination) snowflakeDSN() error {
+	utcTZ := "UTC"
+
+	// The DSN requires an account, unfortunately this connector
+	// does not have an explicit account config, thus it needs to be extracted from the host.
+	parts := strings.Split(d.Config.Host, ".")
+	if parts[0] == "" {
+		return errors.Errorf("unable to determine account from host %q", d.Config.Host)
 	}
 
-	paramStrings := make([]string, len(paramMap))
-	i := 0
-	for k, v := range paramMap {
-		paramStrings[i] = fmt.Sprintf("%s=%s", k, v)
-		i++
+	config := &gosnowflake.Config{
+		Account:          parts[0],
+		User:             d.Config.Username,
+		Password:         d.Config.Password,
+		Host:             d.Config.Host,
+		Port:             d.Config.Port,
+		Database:         d.Config.Database,
+		Schema:           d.Config.Schema,
+		Warehouse:        d.Config.Warehouse,
+		KeepSessionAlive: true,
+		Params: map[string]*string{
+			"TIMEZONE": &utcTZ,
+		},
 	}
 
-	paramStr := strings.Join(paramStrings, "&")
+	dsn, err := gosnowflake.DSN(config)
+	if err != nil {
+		return err
+	}
+	d.connDSN = dsn
 
-	return fmt.Sprintf("%s:%s@%s:%d/%s/%s?%s",
-		d.Config.Username,
-		d.Config.Password,
-		d.Config.Host,
-		d.Config.Port,
-		d.Config.Database,
-		d.Config.Schema,
-		paramStr,
-	)
+	return nil
 }

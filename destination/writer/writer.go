@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/conduitio-labs/conduit-connector-snowflake/common"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/compress"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
-	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	sf "github.com/snowflakedb/gosnowflake"
@@ -50,14 +50,11 @@ type SnowflakeCSV struct {
 
 	db *sql.DB
 
-	evolver *schema.Evolver
-
 	insertsBuf    *bytes.Buffer
 	updatesBuf    *bytes.Buffer
 	compressedBuf *bytes.Buffer
 
 	compressor compress.Compressor
-	// schema     schema.Schema
 }
 
 type setListMode string
@@ -72,11 +69,11 @@ var _ Writer = (*SnowflakeCSV)(nil)
 
 // SnowflakeConfig is a type used to initialize an Snowflake Writer.
 type SnowflakeConfig struct {
+	DSN               string
 	Prefix            string
 	PrimaryKey        string
 	Stage             string
 	Table             string
-	Connection        string
 	ProcessingWorkers int
 	FileThreads       int
 	Compression       string
@@ -85,64 +82,44 @@ type SnowflakeConfig struct {
 
 // NewCSV takes an SnowflakeConfig reference and produces an SnowflakeCSV Writer.
 func NewCSV(ctx context.Context, cfg SnowflakeConfig) (*SnowflakeCSV, error) {
-	db, err := sql.Open("snowflake", cfg.Connection)
+	db, err := sql.Open("snowflake", cfg.DSN)
 	if err != nil {
 		return nil, errors.Errorf("failed to connect to snowflake db")
 	}
 
-	if _, err := db.ExecContext(
-		ctx,
-		fmt.Sprintf("CREATE OR REPLACE STAGE %s", cfg.Stage),
-	); err != nil {
-		return nil, errors.Errorf("failed to create stage %q: %w", cfg.Stage, err)
+	cmper, err := compress.New(cfg.Compression)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, err := db.ExecContext(
-		ctx,
-		fmt.Sprintf(`
-			CREATE OR REPLACE FILE FORMAT %s
-				TYPE = 'csv'
-				FIELD_DELIMITER = ','
-				FIELD_OPTIONALLY_ENCLOSED_BY='"'
-		`, csvFileFormatName),
-	); err != nil {
-		return nil, errors.Errorf("failed to create custom csv file format: %w", err)
-	}
-
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIMEZONE = 'UTC'"); err != nil {
-		return nil, errors.Errorf("failed to set session timezone to UTC: %w", err)
-	}
-
-	var cmper compress.Compressor
-
-	switch cfg.Compression {
-	case compress.TypeGzip:
-		cmper = compress.Gzip{}
-	case compress.TypeZstd:
-		cmper = compress.Zstd{}
-	case compress.TypeCopy:
-		cmper = compress.Copy{}
-	default:
-		return nil, errors.Errorf("unrecognized compression type %q", cfg.Compression)
-	}
-
-	return &SnowflakeCSV{
+	s := &SnowflakeCSV{
 		config:        cfg,
 		db:            db,
-		evolver:       schema.NewEvolver(db),
 		compressor:    cmper,
 		insertsBuf:    &bytes.Buffer{},
 		updatesBuf:    &bytes.Buffer{},
 		compressedBuf: &bytes.Buffer{},
-	}, nil
+	}
+
+	if err := s.initStage(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := s.initFormats(ctx); err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 func (s *SnowflakeCSV) Close(ctx context.Context) error {
-	dropStageQuery := fmt.Sprintf("DROP STAGE %s", s.config.Stage)
-	sdk.Logger(ctx).Debug().Msgf("executing: %s", dropStageQuery)
-	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP STAGE %s", s.config.Stage)); err != nil {
-		return errors.Errorf("failed to drop stage: %w", err)
+	if _, err := s.db.ExecContext(
+		ctx,
+		"DROP STAGE "+s.config.Stage,
+	); err != nil {
+		return errors.Errorf("failed to drop stage %q: %w", s.config.Stage, err)
 	}
+
 	if err := s.db.Close(); err != nil {
 		return errors.Errorf("failed to gracefully close the connection: %w", err)
 	}
@@ -152,31 +129,8 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 
 func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
 	var err error
-	// assign request id to the write cycle
-	ctx = withRequestID(ctx)
+	ctx = common.WithRequestID(ctx)
 
-	// if s.schema == nil {
-	// 	if err := s.initSchema(ctx, records); err != nil {
-	// 		return 0, errors.Errorf("failed to initialize schema from records: %w", err)
-	// 	}
-
-	// 	// N.B. Disable until table is created by the migrator
-	// 	//
-	// 	// migrated, err := s.evolver.Migrate(ctx, s.config.Table, s.schema)
-	// 	// if err != nil {
-	// 	//	return 0, errors.Errorf("failed to evolve schema during boot: %w", err)
-	// 	// }
-
-	// 	sdk.Logger(ctx).Debug().
-	// 		// Bool("success", migrated).
-	// 		Msg("schema initialized and migration completed")
-	// }
-
-	// log first record temporarily for debugging
-	sdk.Logger(ctx).Debug().Msgf("payload=%+v", records[0].Payload)
-	sdk.Logger(ctx).Debug().Msgf("payload.before=%+v", records[0].Payload.Before)
-	sdk.Logger(ctx).Debug().Msgf("payload.after=%+v", records[0].Payload.After)
-	sdk.Logger(ctx).Debug().Msgf("key=%+v", records[0].Key)
 	// extract schema from payload
 	schema := make(map[string]string)
 	csvColumnOrder, meroxaColumns, err := format.GetDataSchema(ctx, records, schema, s.config.Prefix)
@@ -224,14 +178,14 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	var insertsFilename, updatesFilename string
 
 	if s.insertsBuf.Len() > 0 {
-		insertsFilename = fmt.Sprintf("%s_inserts.csv.%s", requestID(ctx), s.compressor.Name())
+		insertsFilename = fmt.Sprintf("%s_inserts.csv.%s", common.CtxRequestID(ctx), s.compressor.Name())
 		if err = s.upload(ctx, insertsFilename, s.insertsBuf); err != nil {
 			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", insertsFilename, s.config.Stage, err)
 		}
 	}
 
 	if s.updatesBuf.Len() > 0 {
-		updatesFilename = fmt.Sprintf("%s_updates.csv.%s", requestID(ctx), s.compressor.Name())
+		updatesFilename = fmt.Sprintf("%s_updates.csv.%s", common.CtxRequestID(ctx), s.compressor.Name())
 		if err := s.upload(ctx, updatesFilename, s.updatesBuf); err != nil {
 			return 0, errors.Errorf("failed to upload file %q to stage %q: %w", updatesFilename, s.config.Stage, err)
 		}
@@ -246,13 +200,11 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 		)
 	}
 
-	if s.config.CleanStageFiles {
-		if err := s.cleanupFiles(ctx, insertsFilename, updatesFilename); err != nil {
-			sdk.Logger(ctx).Error().Err(err).
-				Str("inserts_file", insertsFilename).
-				Str("updates_file", updatesFilename).
-				Msgf("failed to delete files from stage %q", s.config.Stage)
-		}
+	if err := s.cleanupFiles(ctx, insertsFilename, updatesFilename); err != nil {
+		sdk.Logger(ctx).Error().Err(err).
+			Str("inserts_file", insertsFilename).
+			Str("updates_file", updatesFilename).
+			Msgf("failed to delete files from stage %q", s.config.Stage)
 	}
 
 	return len(records), nil
@@ -449,8 +401,12 @@ func (s *SnowflakeCSV) upload(ctx context.Context, filename string, buf *bytes.B
 	return nil
 }
 
-// cleanupFiles will attempt remove the specified files from the stage.
+// cleanupFiles will attempt remove the specified files from the stage, noop when config is disabled.
 func (s *SnowflakeCSV) cleanupFiles(ctx context.Context, files ...string) error {
+	if !s.config.CleanStageFiles {
+		return nil
+	}
+
 	var errs error
 
 	for _, file := range files {
@@ -630,42 +586,6 @@ func (s *SnowflakeCSV) buildSetList(t1, t2 string, cols []string, m setListMode,
 	return strings.Join(ret, ", ")
 }
 
-// initSchema creates a schema definition from the first record which has the value schema.
-// func (s *SnowflakeCSV) initSchema(ctx context.Context, records []sdk.Record) error {
-// 	start := time.Now()
-
-// 	i := slices.IndexFunc(records, func(r sdk.Record) bool {
-// 		return r.Metadata != nil && r.Metadata[valueSchema] != ""
-// 	})
-
-// 	if i < 0 {
-// 		return errors.Errorf("failed to find record with schema")
-// 	}
-
-// 	if ks, ok := records[i].Metadata[keySchema]; ok {
-// 		_ = ks // do something with it
-// 	}
-
-// 	ksch, err := schema.ParseKafkaConnect(records[i].Metadata[valueSchema])
-// 	if err != nil {
-// 		return errors.Errorf("failed to parse kafka schema: %w", err)
-// 	}
-
-// 	sch, err := schema.New(ksch)
-// 	if err != nil {
-// 		return errors.Errorf("failed to construct avro schema: %w", err)
-// 	}
-
-// 	sdk.Logger(ctx).Debug().
-// 		Str("schema", fmt.Sprint(sch)).
-// 		Dur("duration", time.Since(start)).
-// 		Msg("schema created")
-
-// 	s.schema = sch
-
-// 	return nil
-// }
-
 func buildSelectMerge(cols []string) string {
 	ret := make([]string, len(cols))
 	for i, colName := range cols {
@@ -685,4 +605,29 @@ func buildSchema(schema map[string]string, columnOrder []string) string {
 	}
 
 	return strings.Join(cols, ", ")
+}
+
+func (s *SnowflakeCSV) initStage(ctx context.Context) error {
+	if _, err := s.db.ExecContext(
+		ctx,
+		fmt.Sprintf("CREATE OR REPLACE STAGE %s", s.config.Stage),
+	); err != nil {
+		return errors.Errorf("failed to create stage %q: %w", s.config.Stage, err)
+	}
+
+	return nil
+}
+
+func (s *SnowflakeCSV) initFormats(ctx context.Context) error {
+	if _, err := s.db.ExecContext(
+		ctx,
+		fmt.Sprintf(
+			`CREATE OR REPLACE FILE FORMAT %s TYPE = 'csv' FIELD_DELIMITER = ',' FIELD_OPTIONALLY_ENCLOSED_BY='"'`,
+			csvFileFormatName,
+		),
+	); err != nil {
+		return errors.Errorf("failed to create custom csv file format: %w", err)
+	}
+
+	return nil
 }

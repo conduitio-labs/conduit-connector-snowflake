@@ -12,31 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+package common
 
 import (
-	_ "embed"
-	"testing"
+	"context"
+	"strings"
 
-	"github.com/matryer/is"
+	"github.com/google/uuid"
 )
 
-//go:embed testdata/kafka-connect-schema.json
-var testKafaConnectSchema string
+type reqIDctxKey struct{}
 
-func Test_ParseKafkaConnect(t *testing.T) {
-	is := is.New(t)
+func WithRequestID(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reqIDctxKey{}, strings.ReplaceAll(uuid.NewString(), "-", ""))
+}
 
-	ksc, err := ParseKafkaConnect(testKafaConnectSchema)
-	is.NoErr(err)
-	is.Equal(ksc, KafkaConnectSchema{
-		"category":         "STRING",
-		"customer_email":   "STRING",
-		"id":               "INT64",
-		"product_id":       "INT64",
-		"product_name":     "STRING",
-		"product_type":     "STRING",
-		"shipping_address": "STRING",
-		"stock":            "BOOLEAN",
-	})
+func CtxRequestID(ctx context.Context) string {
+	return (ctx.Value(reqIDctxKey{}).(string))
 }
