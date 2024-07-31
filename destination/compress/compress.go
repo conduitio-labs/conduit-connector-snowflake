@@ -14,9 +14,11 @@
 
 package compress
 
-import "io"
+import (
+	"io"
 
-type Type string
+	"github.com/go-errors/errors"
+)
 
 const (
 	TypeGzip = "gzip"
@@ -27,4 +29,17 @@ const (
 type Compressor interface {
 	Compress(in io.Reader, out io.Writer) error
 	Name() string
+}
+
+func New(t string) (Compressor, error) {
+	switch t {
+	case TypeGzip:
+		return Gzip{}, nil
+	case TypeZstd:
+		return Zstd{}, nil
+	case TypeCopy:
+		return Copy{}, nil
+	default:
+		return nil, errors.Errorf("unrecognized compression type %q", t)
+	}
 }

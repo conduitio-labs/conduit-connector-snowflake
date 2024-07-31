@@ -64,7 +64,7 @@ func TestWriter_Close(t *testing.T) {
 
 				return db, mock
 			},
-			expectedErr: errors.New("failed to drop stage: test error"),
+			expectedErr: errors.New(`failed to drop stage "testStage": test error`),
 		},
 		{
 			desc:  "failed to close db",
