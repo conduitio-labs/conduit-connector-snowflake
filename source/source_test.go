@@ -21,8 +21,8 @@ import (
 	"testing"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/mock"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/golang/mock/gomock"
+	"github.com/conduitio/conduit-commons/opencdc"
+	"go.uber.org/mock/gomock"
 )
 
 func TestSource_Read(t *testing.T) {
@@ -30,14 +30,14 @@ func TestSource_Read(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		ctx := context.Background()
 
-		st := make(sdk.StructuredData)
+		st := make(opencdc.StructuredData)
 		st["key"] = "value"
 
-		record := sdk.Record{
-			Position: sdk.Position("1.0"),
+		record := opencdc.Record{
+			Position: opencdc.Position("1.0"),
 			Metadata: nil,
 			Key:      st,
-			Payload:  sdk.Change{After: st},
+			Payload:  opencdc.Change{After: st},
 		}
 
 		it := mock.NewMockIterator(ctrl)
@@ -81,7 +81,7 @@ func TestSource_Read(t *testing.T) {
 
 		it := mock.NewMockIterator(ctrl)
 		it.EXPECT().HasNext(ctx).Return(true, nil)
-		it.EXPECT().Next(ctx).Return(sdk.Record{}, errors.New("key is not exist"))
+		it.EXPECT().Next(ctx).Return(opencdc.Record{}, errors.New("key is not exist"))
 
 		s := Source{
 			iterator: it,

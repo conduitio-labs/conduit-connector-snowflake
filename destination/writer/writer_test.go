@@ -25,7 +25,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/compress"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,7 +121,7 @@ func TestWriter_Write(t *testing.T) {
 		FileThreads       int
 		ProcessingWorkers int
 		compressor        compress.Compressor
-		records           []sdk.Record
+		records           []opencdc.Record
 		dbmock            func() (*sql.DB, sqlmock.Sqlmock)
 		expectedErr       error
 	}{
@@ -134,18 +134,18 @@ func TestWriter_Write(t *testing.T) {
 			ProcessingWorkers: 1,
 			FileThreads:       1,
 			compressor:        compress.Copy{},
-			records: []sdk.Record{
+			records: []opencdc.Record{
 				{
-					Position:  sdk.Position("1"),
-					Operation: sdk.OperationCreate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("1"),
+					Operation: opencdc.OperationCreate,
+					Metadata: opencdc.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "1",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "1",
 							"firstName": "spongebob",
 							"lastName":  "squarepants",
@@ -153,16 +153,16 @@ func TestWriter_Write(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("2"),
-					Operation: sdk.OperationCreate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("2"),
+					Operation: opencdc.OperationCreate,
+					Metadata: opencdc.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "2",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "2",
 							"firstName": "patrick",
 							"lastName":  "star",
@@ -170,16 +170,16 @@ func TestWriter_Write(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("3"),
-					Operation: sdk.OperationUpdate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("3"),
+					Operation: opencdc.OperationUpdate,
+					Metadata: opencdc.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "3",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "3",
 							"firstName": "squidward",
 							"lastName":  "tentacles",
@@ -187,16 +187,16 @@ func TestWriter_Write(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("4"),
-					Operation: sdk.OperationDelete,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("4"),
+					Operation: opencdc.OperationDelete,
+					Metadata: opencdc.Metadata{
 						"opencdc.readAt": fmt.Sprint(testTimestamp),
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "4",
 					},
-					Payload: sdk.Change{
-						Before: sdk.StructuredData{
+					Payload: opencdc.Change{
+						Before: opencdc.StructuredData{
 							"id":        "4",
 							"firstName": "eugene",
 							"lastName":  "krabs",

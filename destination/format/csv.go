@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	"github.com/hamba/avro/v2"
@@ -121,7 +122,7 @@ type recordSummary struct {
 	updatedAt    time.Time
 	createdAt    time.Time
 	deletedAt    time.Time
-	latestRecord *sdk.Record
+	latestRecord *opencdc.Record
 }
 
 type ConnectorColumns struct {
@@ -142,7 +143,7 @@ type AvroRecordSchema struct {
 
 func GetDataSchema(
 	ctx context.Context,
-	records []sdk.Record,
+	records []opencdc.Record,
 	schema map[string]string,
 	prefix string,
 ) ([]string, *ConnectorColumns, error) {
@@ -241,7 +242,7 @@ func GetDataSchema(
 // TODO: refactor this function, make it more modular and readable.
 func MakeCSVBytes(
 	ctx context.Context,
-	records []sdk.Record,
+	records []opencdc.Record,
 	csvColumnOrder []string,
 	meroxaColumns ConnectorColumns,
 	schema map[string]string,
@@ -280,15 +281,15 @@ func MakeCSVBytes(
 		}
 
 		switch r.Operation {
-		case sdk.OperationUpdate:
+		case opencdc.OperationUpdate:
 			if readAt.After(l.updatedAt) {
 				l.updatedAt = readAt
 				l.latestRecord = &records[i]
 			}
-		case sdk.OperationDelete:
+		case opencdc.OperationDelete:
 			l.deletedAt = readAt
 			l.latestRecord = &records[i]
-		case sdk.OperationCreate, sdk.OperationSnapshot:
+		case opencdc.OperationCreate, opencdc.OperationSnapshot:
 			l.createdAt = readAt
 			l.latestRecord = &records[i]
 		}
@@ -342,7 +343,7 @@ func MakeCSVBytes(
 }
 
 func getColumnValue(
-	c string, r *sdk.Record,
+	c string, r *opencdc.Record,
 	s *recordSummary,
 	key string,
 	primaryKey string,
@@ -355,13 +356,13 @@ func getColumnValue(
 		return key, nil
 	case c == cnCols.OperationColumn:
 		return r.Operation.String(), nil
-	case c == cnCols.CreatedAtColumn && (r.Operation == sdk.OperationCreate || r.Operation == sdk.OperationSnapshot):
+	case c == cnCols.CreatedAtColumn && (r.Operation == opencdc.OperationCreate || r.Operation == opencdc.OperationSnapshot): //nolint:lll //refactor
 		return fmt.Sprint(s.createdAt.UnixMicro()), nil
-	case c == cnCols.UpdatedAtColumn && r.Operation == sdk.OperationUpdate:
+	case c == cnCols.UpdatedAtColumn && r.Operation == opencdc.OperationUpdate:
 		return fmt.Sprint(s.updatedAt.UnixMicro()), nil
-	case c == cnCols.DeletedAtColumn && r.Operation == sdk.OperationDelete:
+	case c == cnCols.DeletedAtColumn && r.Operation == opencdc.OperationDelete:
 		return fmt.Sprint(s.deletedAt.UnixMicro()), nil
-	case r.Operation == sdk.OperationDelete && c != cnCols.DeletedAtColumn && c != cnCols.OperationColumn:
+	case r.Operation == opencdc.OperationDelete && c != cnCols.DeletedAtColumn && c != cnCols.OperationColumn:
 		// for deletes, pass empty string for everything that isn't primary key, operation, or meroxa_deleted_at.
 		// those are the only fields we use for deletes.
 		return "", nil
@@ -415,12 +416,12 @@ func createCSVRecords(
 		}
 
 		switch r.Operation {
-		case sdk.OperationCreate, sdk.OperationSnapshot:
+		case opencdc.OperationCreate, opencdc.OperationSnapshot:
 			inserts = append(inserts, row)
-		case sdk.OperationUpdate, sdk.OperationDelete:
+		case opencdc.OperationUpdate, opencdc.OperationDelete:
 			updates = append(updates, row)
 		default:
-			return 0, 0, errors.Errorf("unexpected sdk.Operation: %s", r.Operation.String())
+			return 0, 0, errors.Errorf("unexpected opencdc.Operation: %s", r.Operation.String())
 		}
 	}
 
@@ -439,21 +440,21 @@ func createCSVRecords(
 	return len(inserts), len(updates), nil
 }
 
-func extractPayload(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, error) {
-	var sdkData sdk.Data
-	if op == sdk.OperationDelete {
+func extractPayload(op opencdc.Operation, payload opencdc.Change) (opencdc.StructuredData, error) {
+	var sdkData opencdc.Data
+	if op == opencdc.OperationDelete {
 		sdkData = payload.Before
 	} else {
 		sdkData = payload.After
 	}
 
-	dataStruct, okStruct := sdkData.(sdk.StructuredData)
-	dataRaw, okRaw := sdkData.(sdk.RawData)
+	dataStruct, okStruct := sdkData.(opencdc.StructuredData)
+	dataRaw, okRaw := sdkData.(opencdc.RawData)
 
 	if okStruct {
 		return dataStruct, nil
 	} else if okRaw {
-		data := make(sdk.StructuredData)
+		data := make(opencdc.StructuredData)
 		if err := json.Unmarshal(dataRaw, &payload); err != nil {
 			return nil, errors.Errorf("cannot unmarshal raw data payload into structured (%T): %w", sdkData, err)
 		}
@@ -464,9 +465,9 @@ func extractPayload(op sdk.Operation, payload sdk.Change) (sdk.StructuredData, e
 	return nil, errors.Errorf("cannot find data in payload (%T)", sdkData)
 }
 
-func extractKey(key sdk.Data) (sdk.StructuredData, error) {
-	keyStruct, okStruct := key.(sdk.StructuredData)
-	keyRaw, okRaw := key.(sdk.RawData)
+func extractKey(key opencdc.Data) (opencdc.StructuredData, error) {
+	keyStruct, okStruct := key.(opencdc.StructuredData)
+	keyRaw, okRaw := key.(opencdc.RawData)
 	if !okRaw && !okStruct {
 		return nil, errors.Errorf("cannot find data either in key (%T)", key)
 	}
@@ -474,7 +475,7 @@ func extractKey(key sdk.Data) (sdk.StructuredData, error) {
 	if okStruct {
 		return keyStruct, nil
 	} else if okRaw {
-		data := make(sdk.StructuredData)
+		data := make(opencdc.StructuredData)
 		if err := json.Unmarshal(keyRaw, &key); err != nil {
 			return nil, errors.Errorf("cannot unmarshal raw data key into structured (%T): %w", key, err)
 		}

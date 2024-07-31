@@ -19,6 +19,8 @@ import (
 	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
+	"github.com/conduitio/conduit-commons/config"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
@@ -35,14 +37,14 @@ func New() sdk.Source {
 	return &Source{}
 }
 
-func (s *Source) Parameters() map[string]sdk.Parameter {
+func (s *Source) Parameters() config.Parameters {
 	return Config{}.Parameters()
 }
 
-func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
+func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Source Connector.")
 
-	err := sdk.Util.ParseConfig(cfg, &s.config)
+	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, New().Parameters())
 	if err != nil {
 		return fmt.Errorf("failed to parse source config : %w", err)
 	}
@@ -51,7 +53,7 @@ func (s *Source) Configure(ctx context.Context, cfg map[string]string) error {
 }
 
 // Open prepare the plugin to start sending records from the given position.
-func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
+func (s *Source) Open(ctx context.Context, rp opencdc.Position) error {
 	it, err := iterator.New(ctx, s.config.Connection, s.config.Table, s.config.OrderingColumn, s.config.Keys,
 		s.config.Columns, s.config.BatchSize, s.config.Snapshot, rp)
 	if err != nil {
@@ -64,19 +66,19 @@ func (s *Source) Open(ctx context.Context, rp sdk.Position) error {
 }
 
 // Read gets the next object from the snowflake.
-func (s *Source) Read(ctx context.Context) (sdk.Record, error) {
+func (s *Source) Read(ctx context.Context) (opencdc.Record, error) {
 	hasNext, err := s.iterator.HasNext(ctx)
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("has next: %w", err)
+		return opencdc.Record{}, fmt.Errorf("has next: %w", err)
 	}
 
 	if !hasNext {
-		return sdk.Record{}, sdk.ErrBackoffRetry
+		return opencdc.Record{}, sdk.ErrBackoffRetry
 	}
 
 	r, err := s.iterator.Next(ctx)
 	if err != nil {
-		return sdk.Record{}, fmt.Errorf("next: %w", err)
+		return opencdc.Record{}, fmt.Errorf("next: %w", err)
 	}
 
 	return r, nil
@@ -95,6 +97,6 @@ func (s *Source) Teardown(_ context.Context) error {
 }
 
 // Ack check if record with position was recorded.
-func (s *Source) Ack(ctx context.Context, p sdk.Position) error {
+func (s *Source) Ack(ctx context.Context, p opencdc.Position) error {
 	return s.iterator.Ack(ctx, p)
 }

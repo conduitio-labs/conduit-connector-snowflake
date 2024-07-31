@@ -20,7 +20,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/go-errors/errors"
 )
 
@@ -29,7 +29,7 @@ type Iterator struct {
 	snapshotIterator *snapshotIterator
 	cdcIterator      *CDCIterator
 
-	pos sdk.Position
+	pos opencdc.Position
 
 	table   string
 	columns []string
@@ -44,7 +44,7 @@ func New(
 	keys, columns []string,
 	batchSize int,
 	snapshot bool,
-	pos sdk.Position,
+	pos opencdc.Position,
 ) (*Iterator, error) {
 	it := &Iterator{
 		table:   table,
@@ -195,7 +195,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
+func (i *Iterator) Next(ctx context.Context) (opencdc.Record, error) {
 	if i.snapshotIterator != nil {
 		return i.snapshotIterator.Next(ctx)
 	}
@@ -204,11 +204,11 @@ func (i *Iterator) Next(ctx context.Context) (sdk.Record, error) {
 		return i.cdcIterator.Next(ctx)
 	}
 
-	return sdk.Record{}, ErrInvalidSetup
+	return opencdc.Record{}, ErrInvalidSetup
 }
 
 // Ack check if record with position was recorded.
-func (i *Iterator) Ack(ctx context.Context, rp sdk.Position) error {
+func (i *Iterator) Ack(ctx context.Context, rp opencdc.Position) error {
 	if i.snapshotIterator != nil {
 		return i.snapshotIterator.Ack(ctx, rp)
 	}

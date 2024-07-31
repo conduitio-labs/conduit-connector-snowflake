@@ -27,6 +27,7 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/common"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/compress"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	sf "github.com/snowflakedb/gosnowflake"
@@ -40,7 +41,7 @@ const (
 // has accumulated in its buffers. The default writer the Destination would use is
 // SnowflakeWriter, others exists to test local behavior.
 type Writer interface {
-	Write(context.Context, []sdk.Record) (int, error)
+	Write(context.Context, []opencdc.Record) (int, error)
 	Close(context.Context) error
 }
 
@@ -127,7 +128,7 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 	return nil
 }
 
-func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, error) {
+func (s *SnowflakeCSV) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	var err error
 	ctx = common.WithRequestID(ctx)
 
@@ -210,7 +211,7 @@ func (s *SnowflakeCSV) Write(ctx context.Context, records []sdk.Record) (int, er
 	return len(records), nil
 }
 
-func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
+func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation opencdc.Operation,
 	primaryKey string, schema map[string]string,
 ) error {
 	showTablesQuery := fmt.Sprintf(`SHOW TABLES LIKE '%s';`, s.config.Table)
@@ -292,7 +293,7 @@ func (s *SnowflakeCSV) CheckTable(ctx context.Context, operation sdk.Operation,
 	sdk.Logger(ctx).Debug().Msgf("Connector Generated Schema (%+v)", schema)
 
 	// if operation is delete, we want to ensure that primary key is on dest table as well as meroxa columns
-	if operation == sdk.OperationDelete {
+	if operation == opencdc.OperationDelete {
 		_, ok := snowflakeSchema[primaryKey]
 		if ok {
 			return nil

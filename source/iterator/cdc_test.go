@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator/mock"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/golang/mock/gomock"
+	"github.com/conduitio/conduit-commons/opencdc"
+	"go.uber.org/mock/gomock"
 )
 
 func TestCDCIterator_HasNext(t *testing.T) {
@@ -100,8 +100,8 @@ func TestCDCIterator_HasNext(t *testing.T) {
 func TestCDCIterator_Next(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var (
-			rawData sdk.RawData
-			key     sdk.StructuredData
+			rawData opencdc.RawData
+			key     opencdc.StructuredData
 		)
 
 		ctrl := gomock.NewController(t)
@@ -114,7 +114,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
-		change := sdk.Change{
+		change := opencdc.Change{
 			Before: nil,
 			After:  rawData,
 		}
@@ -138,8 +138,8 @@ func TestCDCIterator_Next(t *testing.T) {
 	})
 	t.Run("success next record", func(t *testing.T) {
 		var (
-			rawData sdk.RawData
-			key     sdk.StructuredData
+			rawData opencdc.RawData
+			key     opencdc.StructuredData
 		)
 
 		ctrl := gomock.NewController(t)
@@ -152,7 +152,7 @@ func TestCDCIterator_Next(t *testing.T) {
 
 		rawData, _ = json.Marshal(map[string]interface{}{"ID": "2", "NAME": "foo"})
 		key = map[string]interface{}{"ID": "2"}
-		change := sdk.Change{
+		change := opencdc.Change{
 			Before: nil,
 			After:  rawData,
 		}

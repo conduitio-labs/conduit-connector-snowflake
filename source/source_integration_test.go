@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
@@ -74,7 +75,7 @@ func TestSource_Snapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var wantedKey sdk.StructuredData
+	var wantedKey opencdc.StructuredData
 	wantedKey = map[string]interface{}{"ID": "1"}
 
 	if !reflect.DeepEqual(r.Key, wantedKey) {
@@ -161,7 +162,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r.Operation != sdk.OperationUpdate {
+	if r.Operation != opencdc.OperationUpdate {
 		t.Fatal(errors.New("wrong action"))
 	}
 
@@ -171,7 +172,7 @@ func TestSource_CDC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r.Operation != sdk.OperationDelete {
+	if r.Operation != opencdc.OperationDelete {
 		t.Fatal(errors.New("wrong action"))
 	}
 }
@@ -327,7 +328,7 @@ func TestSource_Snapshot_Off(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(r.Operation, sdk.OperationUpdate) {
+	if !reflect.DeepEqual(r.Operation, opencdc.OperationUpdate) {
 		t.Fatal(errors.New("not wanted type"))
 	}
 
@@ -373,7 +374,7 @@ func TestSource_keysFromConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var wantedKey sdk.StructuredData
+	var wantedKey opencdc.StructuredData
 	wantedKey = map[string]interface{}{"NAME": "Petro"}
 
 	if !reflect.DeepEqual(r.Key, wantedKey) {
@@ -446,7 +447,7 @@ func TestSource_keyColumnsFromTableMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var wantedKey sdk.StructuredData
+	var wantedKey opencdc.StructuredData
 	wantedKey = map[string]interface{}{"ID": "1", "NAME": "Petro"}
 
 	if !reflect.DeepEqual(r.Key, wantedKey) {
@@ -520,7 +521,7 @@ func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var wantedKey sdk.StructuredData
+	var wantedKey opencdc.StructuredData
 	wantedKey = map[string]interface{}{"NAME": "Olena"}
 
 	if !reflect.DeepEqual(r.Key, wantedKey) {
