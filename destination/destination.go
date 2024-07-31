@@ -21,6 +21,8 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
+	"github.com/conduitio/conduit-commons/config"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 	"github.com/snowflakedb/gosnowflake"
@@ -42,29 +44,22 @@ type Destination struct {
 
 // NewDestination creates the Destination and wraps it in the default middleware.
 func NewDestination() sdk.Destination {
-	// This is needed to override the default batch size and delay defaults for this destination connector.
-	middlewares := sdk.DefaultDestinationMiddleware()
-	for i, m := range middlewares {
-		switch dest := m.(type) {
-		case sdk.DestinationWithBatch:
-			dest.DefaultBatchDelay = defaultBatchDelay
-			dest.DefaultBatchSize = defaultBatchSize
-			middlewares[i] = dest
-		default:
-		}
-	}
+	middlewares := sdk.DefaultDestinationMiddleware(sdk.DestinationWithBatchConfig{
+		BatchSize:  defaultBatchSize,
+		BatchDelay: defaultBatchDelay,
+	}.Apply)
 
 	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
 }
 
-func (d *Destination) Parameters() map[string]sdk.Parameter {
+func (d *Destination) Parameters() config.Parameters {
 	return Config{}.Parameters()
 }
 
-func (d *Destination) Configure(ctx context.Context, cfg map[string]string) error {
+func (d *Destination) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
 
-	if err := sdk.Util.ParseConfig(cfg, &d.Config); err != nil {
+	if err := sdk.Util.ParseConfig(ctx, cfg, &d.Config, NewDestination().Parameters()); err != nil {
 		return errors.Errorf("failed to parse destination config: %w", err)
 	}
 
@@ -102,7 +97,7 @@ func (d *Destination) Open(ctx context.Context) error {
 	return nil
 }
 
-func (d *Destination) Write(ctx context.Context, records []sdk.Record) (int, error) {
+func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	// TODO: change to debug, using info for now to test with mdpx
 	start := time.Now()
 

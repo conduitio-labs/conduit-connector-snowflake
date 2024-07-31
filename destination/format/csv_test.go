@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/conduitio/conduit-connector-sdk"
+	"github.com/conduitio/conduit-commons/opencdc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,7 +51,7 @@ func Test_MakeCSVBytes(t *testing.T) {
 	testTimestamp := time.Now().UnixMicro()
 	testCases := []struct {
 		desc            string
-		records         []sdk.Record
+		records         []opencdc.Record
 		colOrder        []string
 		meroxaColumns   ConnectorColumns
 		prefix          string
@@ -63,22 +63,22 @@ func Test_MakeCSVBytes(t *testing.T) {
 	}{
 		{
 			desc: "no duplicates",
-			records: []sdk.Record{
+			records: []opencdc.Record{
 				{
-					Position:  sdk.Position("1"),
-					Operation: sdk.OperationCreate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("1"),
+					Operation: opencdc.OperationCreate,
+					Metadata: opencdc.Metadata{
 						"conduit.source.connector.id": "pg-to-file:pg.in",
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
 						"postgres.avro.schema":        avroSchema,
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "1",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "1",
 							"firstName": "spongebob",
 							"lastName":  "squarepants",
@@ -86,20 +86,20 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("2"),
-					Operation: sdk.OperationCreate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("2"),
+					Operation: opencdc.OperationCreate,
+					Metadata: opencdc.Metadata{
 						"conduit.source.connector.id": "pg-to-file:pg.in",
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
 						"postgres.avro.schema":        avroSchema,
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "2",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "2",
 							"firstName": "patrick",
 							"lastName":  "star",
@@ -107,20 +107,20 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("3"),
-					Operation: sdk.OperationUpdate,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("3"),
+					Operation: opencdc.OperationUpdate,
+					Metadata: opencdc.Metadata{
 						"conduit.source.connector.id": "pg-to-file:pg.in",
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
 						"postgres.avro.schema":        avroSchema,
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "3",
 					},
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"id":        "3",
 							"firstName": "squidward",
 							"lastName":  "tentacles",
@@ -128,20 +128,20 @@ func Test_MakeCSVBytes(t *testing.T) {
 					},
 				},
 				{
-					Position:  sdk.Position("4"),
-					Operation: sdk.OperationDelete,
-					Metadata: sdk.Metadata{
+					Position:  opencdc.Position("4"),
+					Operation: opencdc.OperationDelete,
+					Metadata: opencdc.Metadata{
 						"conduit.source.connector.id": "pg-to-file:pg.in",
 						"opencdc.collection":          "users_small",
 						"opencdc.readAt":              fmt.Sprint(testTimestamp),
 						"opencdc.version":             "v1",
 						"postgres.avro.schema":        avroSchema,
 					},
-					Key: sdk.StructuredData{
+					Key: opencdc.StructuredData{
 						"id": "4",
 					},
-					Payload: sdk.Change{
-						Before: sdk.StructuredData{
+					Payload: opencdc.Change{
+						Before: opencdc.StructuredData{
 							"id":        "4",
 							"firstName": "eugene",
 							"lastName":  "krabs",
@@ -191,18 +191,18 @@ func Test_MakeCSVBytes(t *testing.T) {
 		},
 		// {
 		// 	desc: "multiple goroutines",
-		// 	records: []sdk.Record{
+		// 	records: []opencdc.Record{
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationCreate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationCreate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
@@ -210,16 +210,16 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("2"),
-		// 			Operation: sdk.OperationCreate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("2"),
+		// 			Operation: opencdc.OperationCreate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "2",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "2",
 		// 					"firstName": "patrick",
 		// 					"lastName":  "star",
@@ -227,16 +227,16 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("3"),
-		// 			Operation: sdk.OperationUpdate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("3"),
+		// 			Operation: opencdc.OperationUpdate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "3",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "3",
 		// 					"firstName": "squidward",
 		// 					"lastName":  "tentacles",
@@ -244,16 +244,16 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("4"),
-		// 			Operation: sdk.OperationDelete,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("4"),
+		// 			Operation: opencdc.OperationDelete,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "4",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				Before: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				Before: opencdc.StructuredData{
 		// 					"id":        "4",
 		// 					"firstName": "eugene",
 		// 					"lastName":  "krabs",
@@ -296,18 +296,18 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// },
 		// {
 		// 	desc: "create, update, and delete for same ID",
-		// 	records: []sdk.Record{
+		// 	records: []opencdc.Record{
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationCreate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationCreate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
@@ -315,21 +315,21 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationUpdate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationUpdate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp + 1),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				Before: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				Before: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
 		// 				},
-		// 				After: sdk.StructuredData{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob1",
 		// 					"lastName":  "squarepants1",
@@ -337,16 +337,16 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationDelete,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationDelete,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp + 2),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				Before: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				Before: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob1",
 		// 					"lastName":  "squarepants1",
@@ -386,18 +386,18 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// },
 		// {
 		// 	desc: "duplicate creates for same ID",
-		// 	records: []sdk.Record{
+		// 	records: []opencdc.Record{
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationCreate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationCreate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
@@ -405,16 +405,16 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationCreate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationCreate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				After: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
@@ -450,23 +450,23 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// },
 		// {
 		// 	desc: "duplicate updates for same ID",
-		// 	records: []sdk.Record{
+		// 	records: []opencdc.Record{
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationUpdate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationUpdate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				Before: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				Before: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob",
 		// 					"lastName":  "squarepants",
 		// 				},
-		// 				After: sdk.StructuredData{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob1",
 		// 					"lastName":  "squarepants1",
@@ -474,21 +474,21 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// 			},
 		// 		},
 		// 		{
-		// 			Position:  sdk.Position("1"),
-		// 			Operation: sdk.OperationUpdate,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("1"),
+		// 			Operation: opencdc.OperationUpdate,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp + 1),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "1",
 		// 			},
-		// 			Payload: sdk.Change{
-		// 				Before: sdk.StructuredData{
+		// 			Payload: opencdc.Change{
+		// 				Before: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob1",
 		// 					"lastName":  "squarepants1",
 		// 				},
-		// 				After: sdk.StructuredData{
+		// 				After: opencdc.StructuredData{
 		// 					"id":        "1",
 		// 					"firstName": "spongebob2",
 		// 					"lastName":  "squarepants2",
@@ -524,17 +524,17 @@ func Test_MakeCSVBytes(t *testing.T) {
 		// },
 		// {
 		// 	desc: "delete without payload.Before",
-		// 	records: []sdk.Record{
+		// 	records: []opencdc.Record{
 		// 		{
-		// 			Position:  sdk.Position("4"),
-		// 			Operation: sdk.OperationDelete,
-		// 			Metadata: sdk.Metadata{
+		// 			Position:  opencdc.Position("4"),
+		// 			Operation: opencdc.OperationDelete,
+		// 			Metadata: opencdc.Metadata{
 		// 				"opencdc.readAt": fmt.Sprint(testTimestamp),
 		// 			},
-		// 			Key: sdk.StructuredData{
+		// 			Key: opencdc.StructuredData{
 		// 				"id": "4",
 		// 			},
-		// 			Payload: sdk.Change{
+		// 			Payload: opencdc.Change{
 		// 				Before: nil,
 		// 			},
 		// 		},
