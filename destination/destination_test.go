@@ -22,11 +22,13 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer/mock"
+	sdkconfig "github.com/conduitio/conduit-commons/config"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/matryer/is"
+	"go.uber.org/mock/gomock"
 )
 
 func TestDestination_Teardown(t *testing.T) {
@@ -94,24 +96,24 @@ func TestDestination_Write(t *testing.T) {
 
 	testCases := []struct {
 		desc           string
-		records        []sdk.Record
-		mockWriter     func(ctrl *gomock.Controller, rr []sdk.Record) *mock.MockWriter
+		records        []opencdc.Record
+		mockWriter     func(ctrl *gomock.Controller, rr []opencdc.Record) *mock.MockWriter
 		wantNumRecords int
 		wantErr        error
 	}{
 		{
 			desc: "success",
-			records: []sdk.Record{
+			records: []opencdc.Record{
 				{
-					Operation: sdk.OperationCreate,
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Operation: opencdc.OperationCreate,
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"yeee": "haw",
 						},
 					},
 				},
 			},
-			mockWriter: func(ctrl *gomock.Controller, rr []sdk.Record) *mock.MockWriter {
+			mockWriter: func(ctrl *gomock.Controller, rr []opencdc.Record) *mock.MockWriter {
 				w := mock.NewMockWriter(ctrl)
 				w.EXPECT().
 					Write(gomock.Any(), rr).
@@ -124,17 +126,17 @@ func TestDestination_Write(t *testing.T) {
 		},
 		{
 			desc: "write error",
-			records: []sdk.Record{
+			records: []opencdc.Record{
 				{
-					Operation: sdk.OperationCreate,
-					Payload: sdk.Change{
-						After: sdk.StructuredData{
+					Operation: opencdc.OperationCreate,
+					Payload: opencdc.Change{
+						After: opencdc.StructuredData{
 							"yeee": "haw",
 						},
 					},
 				},
 			},
-			mockWriter: func(ctrl *gomock.Controller, rr []sdk.Record) *mock.MockWriter {
+			mockWriter: func(ctrl *gomock.Controller, rr []opencdc.Record) *mock.MockWriter {
 				w := mock.NewMockWriter(ctrl)
 				w.EXPECT().
 					Write(gomock.Any(), rr).
@@ -174,7 +176,7 @@ func TestDestination_Write(t *testing.T) {
 }
 
 func Test_ParseConfig(t *testing.T) {
-	exampleConfig := map[string]string{
+	exampleConfig := sdkconfig.Config{
 		"snowflake.stage":        "orders_stage",
 		"snowflake.primaryKey":   "id",
 		"snowflake.username":     "u",
@@ -188,7 +190,6 @@ func Test_ParseConfig(t *testing.T) {
 		"snowflake.format":       "csv",
 		"sdk.batch.size":         "10",
 		"sdk.batch.delay":        "1s",
-		"snowflake.url":          "u:p@localhost:1818/db/schema",
 		"snowflake.table":        "orders",
 	}
 
@@ -196,22 +197,27 @@ func Test_ParseConfig(t *testing.T) {
 		Config: config.Config{
 			Table: "orders",
 		},
-		Username:     "u",
-		Password:     "p",
-		Host:         "localhost",
-		Port:         1818,
-		Database:     "db",
-		Schema:       "schema",
-		Warehouse:    "testWarehouse",
-		NamingPrefix: "meroxa",
-		PrimaryKey:   "id",
-		Stage:        "orders_stage",
-		Format:       "csv",
+		Username:          "u",
+		Password:          "p",
+		Host:              "localhost",
+		Port:              1818,
+		Database:          "db",
+		Schema:            "schema",
+		Warehouse:         "testWarehouse",
+		NamingPrefix:      "meroxa",
+		PrimaryKey:        "id",
+		Stage:             "orders_stage",
+		Format:            "csv",
+		Compression:       "zstd",
+		AutoCleanupStage:  true,
+		KeepAlive:         true,
+		ProcessingWorkers: 1,
+		FileUploadThreads: 30,
 	}
 
 	is := is.New(t)
 	var got Config
-	err := sdk.Util.ParseConfig(exampleConfig, &got)
+	err := sdk.Util.ParseConfig(context.Background(), exampleConfig, &got, NewDestination().Parameters())
 
 	is.NoErr(err)
 	is.Equal(cmp.Diff(want, got), "")

@@ -28,6 +28,7 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	source "github.com/conduitio-labs/conduit-connector-snowflake/source"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/google/uuid"
 	"github.com/huandu/go-sqlbuilder"
@@ -43,7 +44,7 @@ type driver struct {
 }
 
 // WriteToSource - write data to table.
-func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record {
+func (d *driver) WriteToSource(t *testing.T, records []opencdc.Record) []opencdc.Record {
 	connectionURL := os.Getenv("SNOWFLAKE_CONNECTION")
 
 	db, err := sql.Open("snowflake", connectionURL)
@@ -76,7 +77,7 @@ func (d *driver) WriteToSource(t *testing.T, records []sdk.Record) []sdk.Record 
 }
 
 // GenerateRecord generate record for snowflake account.
-func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Record {
+func (d *driver) GenerateRecord(t *testing.T, operation opencdc.Operation) opencdc.Record {
 	atomic.AddInt32(&d.idCounter, 1)
 
 	m := map[string]any{"ID": fmt.Sprintf("%d", d.idCounter)}
@@ -86,15 +87,15 @@ func (d *driver) GenerateRecord(t *testing.T, operation sdk.Operation) sdk.Recor
 		t.Error(err)
 	}
 
-	return sdk.Record{
-		Position:  sdk.Position(uuid.New().String()),
+	return opencdc.Record{
+		Position:  opencdc.Position(uuid.New().String()),
 		Operation: operation,
-		Key: sdk.StructuredData{
+		Key: opencdc.StructuredData{
 			"ID": fmt.Sprintf("%d", d.idCounter),
 		},
-		Payload: sdk.Change{
+		Payload: opencdc.Change{
 			Before: nil,
-			After:  sdk.RawData(b),
+			After:  opencdc.RawData(b),
 		},
 	}
 }
@@ -188,7 +189,7 @@ func randomIdentifier(t *testing.T) string {
 		time.Now().UnixMicro()%1000))
 }
 
-func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
+func writeRecord(conn *sql.Conn, r opencdc.Record, table string) error {
 	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
 		return errors.Errorf("structurize data")
@@ -207,7 +208,7 @@ func writeRecord(conn *sql.Conn, r sdk.Record, table string) error {
 	return err
 }
 
-func extractColumnsAndValues(payload sdk.StructuredData) ([]string, []any) {
+func extractColumnsAndValues(payload opencdc.StructuredData) ([]string, []any) {
 	var (
 		colArgs []string
 		valArgs []any
@@ -221,18 +222,18 @@ func extractColumnsAndValues(payload sdk.StructuredData) ([]string, []any) {
 	return colArgs, valArgs
 }
 
-func structurizeData(data sdk.Data) (sdk.StructuredData, error) {
+func structurizeData(data opencdc.Data) (opencdc.StructuredData, error) {
 	if data == nil || len(data.Bytes()) == 0 {
 		return nil, nil
 	}
 
-	structuredData := make(sdk.StructuredData)
+	structuredData := make(opencdc.StructuredData)
 	err := json.Unmarshal(data.Bytes(), &structuredData)
 	if err != nil {
 		return nil, errors.Errorf("failed to unmarshal data into structured data: %q", err)
 	}
 
-	structuredDataUpper := make(sdk.StructuredData)
+	structuredDataUpper := make(opencdc.StructuredData)
 	for key, value := range structuredData {
 		if parsedValue, ok := value.(map[string]any); ok {
 			valueJSON, err := json.Marshal(parsedValue)

@@ -23,6 +23,7 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
+	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
 )
@@ -114,11 +115,11 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 }
 
 // Next get new record.
-func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
+func (c *CDCIterator) Next(_ context.Context) (opencdc.Record, error) {
 	var (
-		payload sdk.RawData
+		payload opencdc.RawData
 		err     error
-		record  sdk.Record
+		record  opencdc.Record
 	)
 
 	pos := position.Position{
@@ -145,11 +146,11 @@ func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 		return record, errors.Errorf("marshal error : %w", err)
 	}
 
-	key := make(sdk.StructuredData)
+	key := make(opencdc.StructuredData)
 	for i := range c.keys {
 		val, ok := c.currentBatch[c.index][c.keys[i]]
 		if !ok {
-			return sdk.Record{}, errors.Errorf("key column %q not found", c.keys[i])
+			return opencdc.Record{}, errors.Errorf("key column %q not found", c.keys[i])
 		}
 
 		key[c.keys[i]] = val
@@ -157,12 +158,12 @@ func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 
 	c.index++
 
-	metadata := sdk.Metadata(map[string]string{metadataTable: c.table})
+	metadata := opencdc.Metadata(map[string]string{metadataTable: c.table})
 	metadata.SetCreatedAt(time.Now())
 
 	p, err := pos.ConvertToSDKPosition()
 	if err != nil {
-		return sdk.Record{}, errors.Errorf("convert to sdk position:%w", err)
+		return opencdc.Record{}, errors.Errorf("convert to opencdc position: %w", err)
 	}
 
 	switch action {
@@ -171,7 +172,7 @@ func (c *CDCIterator) Next(_ context.Context) (sdk.Record, error) {
 	case actionUpdate:
 		return sdk.Util.Source.NewRecordUpdate(p, metadata, key, nil, payload), nil
 	case actionDelete:
-		return sdk.Util.Source.NewRecordDelete(p, metadata, key), nil
+		return sdk.Util.Source.NewRecordDelete(p, metadata, key, nil), nil
 	default:
 		return record, ErrCantFindActionType
 	}
@@ -183,7 +184,7 @@ func (c *CDCIterator) Stop() error {
 }
 
 // Ack check if record with position was recorded.
-func (c *CDCIterator) Ack(ctx context.Context, rp sdk.Position) error {
+func (c *CDCIterator) Ack(ctx context.Context, rp opencdc.Position) error {
 	sdk.Logger(ctx).Debug().Str("position", string(rp)).Msg("got ack")
 
 	return nil
