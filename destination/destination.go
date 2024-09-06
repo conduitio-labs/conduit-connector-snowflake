@@ -47,7 +47,7 @@ func NewDestination() sdk.Destination {
 	middlewares := sdk.DefaultDestinationMiddleware(sdk.DestinationWithBatchConfig{
 		BatchSize:  defaultBatchSize,
 		BatchDelay: defaultBatchDelay,
-	}.Apply)
+	})
 
 	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
 }
@@ -98,6 +98,8 @@ func (d *Destination) Open(ctx context.Context) error {
 }
 
 func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
+
+
 	// TODO: change to debug, using info for now to test with mdpx
 	start := time.Now()
 

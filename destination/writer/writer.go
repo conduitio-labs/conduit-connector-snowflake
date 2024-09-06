@@ -27,6 +27,8 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/common"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/compress"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
+	"github.com/conduitio-labs/conduit-connector-snowflake/destination/schema"
+
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -131,6 +133,20 @@ func (s *SnowflakeCSV) Close(ctx context.Context) error {
 func (s *SnowflakeCSV) Write(ctx context.Context, records []opencdc.Record) (int, error) {
 	var err error
 	ctx = common.WithRequestID(ctx)
+
+	var end bool
+
+	for _, r := range records {
+		if err := schema.ExtractSchema(ctx, r); err != nil {
+			return 0, err
+		}
+
+		end = true
+	}
+
+	if end {
+		return 0, errors.Errorf("stop")
+	}
 
 	// extract schema from payload
 	schema := make(map[string]string)
