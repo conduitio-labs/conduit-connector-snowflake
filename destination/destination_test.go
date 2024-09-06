@@ -188,9 +188,8 @@ func Test_ParseConfig(t *testing.T) {
 		"snowflake.warehouse":    "testWarehouse",
 		"snowflake.namingPrefix": "meroxa",
 		"snowflake.format":       "csv",
-		"opencdc.batch.size":     "10",
-		"opencdc.batch.delay":    "1s",
-		"snowflake.url":          "u:p@localhost:1818/db/schema",
+		"sdk.batch.size":         "10",
+		"sdk.batch.delay":        "1s",
 		"snowflake.table":        "orders",
 	}
 
@@ -198,21 +197,26 @@ func Test_ParseConfig(t *testing.T) {
 		Config: config.Config{
 			Table: "orders",
 		},
-		Username:     "u",
-		Password:     "p",
-		Host:         "localhost",
-		Port:         1818,
-		Database:     "db",
-		Schema:       "schema",
-		Warehouse:    "testWarehouse",
-		NamingPrefix: "meroxa",
-		PrimaryKey:   "id",
-		Stage:        "orders_stage",
-		Format:       "csv",
+		Username:          "u",
+		Password:          "p",
+		Host:              "localhost",
+		Port:              1818,
+		Database:          "db",
+		Schema:            "schema",
+		Warehouse:         "testWarehouse",
+		NamingPrefix:      "meroxa",
+		PrimaryKey:        "id",
+		Stage:             "orders_stage",
+		Format:            "csv",
+		Compression:       "zstd",
+		AutoCleanupStage:  true,
+		KeepAlive:         true,
+		ProcessingWorkers: 1,
+		FileUploadThreads: 30,
 	}
 
 	is := is.New(t)
-	var got config.Config
+	var got Config
 	err := sdk.Util.ParseConfig(context.Background(), exampleConfig, &got, NewDestination().Parameters())
 
 	is.NoErr(err)
