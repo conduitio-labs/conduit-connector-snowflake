@@ -47,7 +47,7 @@ func NewDestination() sdk.Destination {
 	middlewares := sdk.DefaultDestinationMiddleware(sdk.DestinationWithBatchConfig{
 		BatchSize:  defaultBatchSize,
 		BatchDelay: defaultBatchDelay,
-	}.Apply)
+	})
 
 	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
 }
