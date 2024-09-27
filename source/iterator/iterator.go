@@ -16,12 +16,12 @@ package iterator
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/repository"
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	"github.com/conduitio/conduit-commons/opencdc"
-	"github.com/go-errors/errors"
 )
 
 // Iterator combined iterator.
@@ -53,38 +53,38 @@ func New(
 		pos:     pos,
 	}
 
-	snowflake, err := repository.Create(ctx, conn)
+	snowflake, err := repository.Connect(ctx, conn)
 	if err != nil {
-		return nil, errors.Errorf("create snowflake repository: %w", err)
+		return nil, fmt.Errorf("create snowflake repository: %w", err)
 	}
 
-	// First start.
+	// prepare CDC for the first connector run.
 	if pos == nil {
 		err = prepareCDC(ctx, snowflake, table)
 		if err != nil {
-			return nil, errors.Errorf("prepare cdc: %w", err)
+			return nil, fmt.Errorf("prepare cdc: %w", err)
 		}
 	}
 
 	p, err := position.ParseSDKPosition(pos)
 	if err != nil {
-		return nil, errors.Errorf("parse sdk position: %w", err)
+		return nil, fmt.Errorf("parse sdk position: %w", err)
 	}
 
 	err = it.populateKeyColumns(ctx, snowflake, orderingColumn)
 	if err != nil {
-		return nil, errors.Errorf("populate keys: %w", err)
+		return nil, fmt.Errorf("populate keys: %w", err)
 	}
 
 	if snapshot && (p == nil || p.IteratorType == position.TypeSnapshot) {
 		it.snapshotIterator, err = newSnapshotIterator(ctx, snowflake, table, orderingColumn, it.keys, columns, batchSize, p)
 		if err != nil {
-			return nil, errors.Errorf("setup snapshot iterator: %w", err)
+			return nil, fmt.Errorf("setup snapshot iterator: %w", err)
 		}
 	} else {
 		it.cdcIterator, err = setupCDCIterator(ctx, snowflake, table, it.keys, columns, p, batchSize)
 		if err != nil {
-			return nil, errors.Errorf("setup cdc iterator: %w", err)
+			return nil, fmt.Errorf("setup cdc iterator: %w", err)
 		}
 	}
 
@@ -92,24 +92,24 @@ func New(
 }
 
 func prepareCDC(ctx context.Context, snowflake *repository.Snowflake, table string) error {
-	// Check if table tracking table exist.
-	isTableExist, err := snowflake.TableExists(ctx, getTrackingTable(table))
+	// Check if the tracking table exists.
+	isTableExist, err := snowflake.TableExists(ctx, getTrackingTableName(table))
 	if err != nil {
-		return errors.Errorf("check if table exist: %w", err)
+		return fmt.Errorf("check if table exist: %w", err)
 	}
 
 	if !isTableExist {
 		// Prepare tracking table for consume stream.
-		err = snowflake.CreateTrackingTable(ctx, getTrackingTable(table), table)
+		err = snowflake.CreateTrackingTable(ctx, getTrackingTableName(table), table)
 		if err != nil {
-			return errors.Errorf("create tracking table: %w", err)
+			return fmt.Errorf("create tracking table: %w", err)
 		}
 	}
 
 	// Prepare stream for cdc iterator.
 	err = snowflake.CreateStream(ctx, getStreamName(table), table)
 	if err != nil {
-		return errors.Errorf("create stream: %w", err)
+		return fmt.Errorf("create stream: %w", err)
 	}
 
 	return nil
@@ -132,7 +132,7 @@ func setupCDCIterator(
 		index = p.IndexInBatch + 1
 	}
 
-	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTable(table), columns,
+	data, err := snowflake.GetTrackingData(ctx, getStreamName(table), getTrackingTableName(table), columns,
 		offset, batchSize)
 	if err != nil {
 		// Snowflake library sends request to abort query with query and to server when get context cancel.
@@ -146,7 +146,7 @@ func setupCDCIterator(
 			return nil, ctx.Err()
 		}
 
-		return nil, errors.Errorf("get stream currentBatch: %w", err)
+		return nil, fmt.Errorf("get stream currentBatch: %w", err)
 	}
 
 	return NewCDCIterator(snowflake, table, keys, columns, index, offset, batchSize, data), nil
@@ -157,7 +157,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.snapshotIterator != nil {
 		hasNext, err := i.snapshotIterator.HasNext(ctx)
 		if err != nil {
-			return false, errors.Errorf("snapshot iterator has next: %w", err)
+			return false, fmt.Errorf("snapshot iterator has next: %w", err)
 		}
 
 		if hasNext {
@@ -168,7 +168,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 		cdcIterator, err := setupCDCIterator(ctx, i.snapshotIterator.snowflake,
 			i.table, i.keys, i.columns, nil, i.snapshotIterator.batchSize)
 		if err != nil {
-			return false, errors.Errorf("setup cdc iterator: %w", err)
+			return false, fmt.Errorf("setup cdc iterator: %w", err)
 		}
 
 		i.cdcIterator = cdcIterator
@@ -176,7 +176,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 
 		hasNext, err = i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, errors.Errorf("cdc iterator has next: %w", err)
+			return false, fmt.Errorf("cdc iterator has next: %w", err)
 		}
 
 		return hasNext, nil
@@ -185,7 +185,7 @@ func (i *Iterator) HasNext(ctx context.Context) (bool, error) {
 	if i.cdcIterator != nil {
 		hasNext, err := i.cdcIterator.HasNext(ctx)
 		if err != nil {
-			return false, errors.Errorf("cdc iterator has next: %w", err)
+			return false, fmt.Errorf("cdc iterator has next: %w", err)
 		}
 
 		return hasNext, nil
@@ -248,13 +248,14 @@ func (i *Iterator) populateKeyColumns(
 
 	i.keys, err = snowflake.GetPrimaryKeys(ctx, i.table)
 	if err != nil {
-		return errors.Errorf("get primary keys: %w", err)
+		return fmt.Errorf("get primary keys: %w", err)
 	}
 
 	if len(i.keys) != 0 {
 		return nil
 	}
 
+	// use orderingColumn in case primary keys don't exist
 	i.keys = []string{orderingColumn}
 
 	return nil

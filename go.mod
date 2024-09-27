@@ -16,7 +16,6 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/klauspost/compress v1.17.9
 	github.com/matryer/is v1.4.1
-	github.com/pkg/errors v0.9.1
 	github.com/snowflakedb/gosnowflake v1.10.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/goleak v1.3.0
