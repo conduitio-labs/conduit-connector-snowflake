@@ -32,8 +32,8 @@ type Source struct {
 	iterator Iterator
 }
 
-// New initialises a new source.
-func New() sdk.Source {
+// NewSource initialises a new source.
+func NewSource() sdk.Source {
 	return &Source{}
 }
 
@@ -44,7 +44,7 @@ func (s *Source) Parameters() config.Parameters {
 func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Source Connector.")
 
-	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, New().Parameters())
+	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, NewSource().Parameters())
 	if err != nil {
 		return fmt.Errorf("failed to parse source config : %w", err)
 	}

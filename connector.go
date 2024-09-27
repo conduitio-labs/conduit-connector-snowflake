@@ -22,6 +22,6 @@ import (
 
 var Connector = sdk.Connector{
 	NewSpecification: Specification,
-	NewSource:        source.New,
+	NewSource:        source.NewSource,
 	NewDestination:   destination.NewDestination,
 }
