@@ -17,13 +17,13 @@ package iterator
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -74,7 +74,7 @@ func newSnapshotIterator(
 	if position == nil {
 		iterator.maxValue, err = iterator.snowflake.GetMaxValue(ctx, table, orderingColumn)
 		if err != nil {
-			return nil, errors.Errorf("get max value: %w", err)
+			return nil, fmt.Errorf("get max value: %w", err)
 		}
 	} else {
 		iterator.maxValue = position.SnapshotMaxValue
@@ -101,7 +101,7 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 			return false, ctx.Err()
 		}
 
-		return false, errors.Errorf("get rows: %w", err)
+		return false, fmt.Errorf("get rows: %w", err)
 	}
 
 	// check new batch.
@@ -116,7 +116,7 @@ func (i *snapshotIterator) HasNext(ctx context.Context) (bool, error) {
 func (i *snapshotIterator) Next(_ context.Context) (opencdc.Record, error) {
 	row := make(map[string]any)
 	if err := i.rows.MapScan(row); err != nil {
-		return opencdc.Record{}, errors.Errorf("scan rows: %w", err)
+		return opencdc.Record{}, fmt.Errorf("scan rows: %w", err)
 	}
 
 	if _, ok := row[i.orderingColumn]; !ok {
@@ -132,14 +132,14 @@ func (i *snapshotIterator) Next(_ context.Context) (opencdc.Record, error) {
 
 	sdkPos, err := pos.ConvertToSDKPosition()
 	if err != nil {
-		return opencdc.Record{}, errors.Errorf("convert position %w", err)
+		return opencdc.Record{}, fmt.Errorf("convert position %w", err)
 	}
 
 	key := make(opencdc.StructuredData)
 	for n := range i.keys {
 		val, ok := row[i.keys[n]]
 		if !ok {
-			return opencdc.Record{}, errors.Errorf("key column %q not found", i.keys[n])
+			return opencdc.Record{}, fmt.Errorf("key column %q not found", i.keys[n])
 		}
 
 		key[i.keys[n]] = val
@@ -147,7 +147,7 @@ func (i *snapshotIterator) Next(_ context.Context) (opencdc.Record, error) {
 
 	transformedRowBytes, err := json.Marshal(row)
 	if err != nil {
-		return opencdc.Record{}, errors.Errorf("marshal row: %w", err)
+		return opencdc.Record{}, fmt.Errorf("marshal row: %w", err)
 	}
 
 	i.position = &pos
@@ -163,7 +163,7 @@ func (i *snapshotIterator) Stop() error {
 	if i.rows != nil {
 		err := i.rows.Close()
 		if err != nil {
-			return errors.Errorf("close rows: %w", err)
+			return fmt.Errorf("close rows: %w", err)
 		}
 	}
 

@@ -16,10 +16,10 @@ package position
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/conduitio/conduit-commons/opencdc"
-	"github.com/go-errors/errors"
 )
 
 // IteratorType describe position type.
@@ -38,7 +38,7 @@ type Position struct {
 	// Snapshot information.
 	// SnapshotLastProcessedVal - last processed value from ordering column.
 	SnapshotLastProcessedVal any
-	// SnapshotMaxValue max value by  ordering column, when snapshot starts work.
+	// SnapshotMaxValue max value by ordering column, when snapshot starts work.
 	SnapshotMaxValue any
 
 	// CDC information
@@ -65,12 +65,10 @@ func ParseSDKPosition(p opencdc.Position) (*Position, error) {
 	}
 
 	switch pos.IteratorType {
-	case TypeSnapshot:
-		return &pos, nil
-	case TypeCDC:
+	case TypeSnapshot, TypeCDC:
 		return &pos, nil
 	default:
-		return &pos, errors.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
+		return &pos, fmt.Errorf("%w : %s", ErrUnknownIteratorType, pos.IteratorType)
 	}
 }
 
