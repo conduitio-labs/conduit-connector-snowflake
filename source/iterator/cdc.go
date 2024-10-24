@@ -25,7 +25,6 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/position"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
-	"github.com/go-errors/errors"
 )
 
 // CDCIterator to iterate snowflake objects.
@@ -76,7 +75,7 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 
 	// Stream save two rows about update info:
 	// 1) where metadata actionType = delete and metadata update = true, this is deleting.
-	// 2) where metadata actionType = insertValue and update = true, this is exactly updating.
+	// 2) where metadata actionType = insertValue and update = true, this is updating.
 	// Skip first part and work only with second to avoid duplicate info.
 	if c.index < len(c.currentBatch) && c.currentBatch[c.index][repository.MetadataColumnAction] == deleteValue &&
 		c.currentBatch[c.index][repository.MetadataColumnUpdate] == true {
@@ -95,7 +94,7 @@ func (c *CDCIterator) HasNext(ctx context.Context) (bool, error) {
 	}
 
 	c.currentBatch, err = c.snowflake.GetTrackingData(ctx, getStreamName(c.table),
-		getTrackingTable(c.table), c.columns, c.offset, c.batchSize)
+		getTrackingTableName(c.table), c.columns, c.offset, c.batchSize)
 	if err != nil {
 		// Snowflake library can return specific error for context cancel
 		// Connector can't return this error and connector replace to
@@ -132,7 +131,7 @@ func (c *CDCIterator) Next(_ context.Context) (opencdc.Record, error) {
 
 	action, err := getAction(c.currentBatch[c.index])
 	if err != nil {
-		return record, errors.Errorf("get action: %w", err)
+		return record, fmt.Errorf("get action: %w", err)
 	}
 
 	// remove metadata columns.
@@ -143,14 +142,14 @@ func (c *CDCIterator) Next(_ context.Context) (opencdc.Record, error) {
 
 	payload, err = json.Marshal(c.currentBatch[c.index])
 	if err != nil {
-		return record, errors.Errorf("marshal error : %w", err)
+		return record, fmt.Errorf("marshal error : %w", err)
 	}
 
 	key := make(opencdc.StructuredData)
 	for i := range c.keys {
 		val, ok := c.currentBatch[c.index][c.keys[i]]
 		if !ok {
-			return opencdc.Record{}, errors.Errorf("key column %q not found", c.keys[i])
+			return opencdc.Record{}, fmt.Errorf("key column %q not found", c.keys[i])
 		}
 
 		key[c.keys[i]] = val
@@ -163,7 +162,7 @@ func (c *CDCIterator) Next(_ context.Context) (opencdc.Record, error) {
 
 	p, err := pos.ConvertToSDKPosition()
 	if err != nil {
-		return opencdc.Record{}, errors.Errorf("convert to opencdc position: %w", err)
+		return opencdc.Record{}, fmt.Errorf("convert to opencdc position: %w", err)
 	}
 
 	switch action {
@@ -194,7 +193,7 @@ func getStreamName(table string) string {
 	return fmt.Sprintf(nameFormat, Conduit, "stream", table)
 }
 
-func getTrackingTable(table string) string {
+func getTrackingTableName(table string) string {
 	return fmt.Sprintf(nameFormat, Conduit, "tracking", table)
 }
 

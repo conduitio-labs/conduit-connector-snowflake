@@ -32,7 +32,6 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/google/uuid"
 	"github.com/huandu/go-sqlbuilder"
-	"github.com/pkg/errors"
 	"go.uber.org/goleak"
 )
 
@@ -192,7 +191,7 @@ func randomIdentifier(t *testing.T) string {
 func writeRecord(conn *sql.Conn, r opencdc.Record, table string) error {
 	payload, err := structurizeData(r.Payload.After)
 	if err != nil {
-		return errors.Errorf("structurize data")
+		return fmt.Errorf("structurize data")
 	}
 
 	cols, vals := extractColumnsAndValues(payload)
@@ -230,7 +229,7 @@ func structurizeData(data opencdc.Data) (opencdc.StructuredData, error) {
 	structuredData := make(opencdc.StructuredData)
 	err := json.Unmarshal(data.Bytes(), &structuredData)
 	if err != nil {
-		return nil, errors.Errorf("failed to unmarshal data into structured data: %q", err)
+		return nil, fmt.Errorf("failed to unmarshal data into structured data: %q", err)
 	}
 
 	structuredDataUpper := make(opencdc.StructuredData)
@@ -238,7 +237,7 @@ func structurizeData(data opencdc.Data) (opencdc.StructuredData, error) {
 		if parsedValue, ok := value.(map[string]any); ok {
 			valueJSON, err := json.Marshal(parsedValue)
 			if err != nil {
-				return nil, errors.Errorf("failed to marshal map into json: %q", err)
+				return nil, fmt.Errorf("failed to marshal map into json: %q", err)
 			}
 
 			structuredDataUpper[strings.ToUpper(key)] = string(valueJSON)

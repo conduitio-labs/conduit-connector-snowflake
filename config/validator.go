@@ -15,6 +15,7 @@
 package config
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -48,7 +49,7 @@ func Validate(data any) error {
 	validationErr := validate.Struct(data)
 	if validationErr != nil {
 		if errors.Is(validationErr, (*validator.InvalidValidationError)(nil)) {
-			return errors.Errorf("validate struct: %w", validationErr)
+			return fmt.Errorf("validate struct: %w", validationErr)
 		}
 
 		for _, e := range validationErr.(validator.ValidationErrors) {
@@ -74,17 +75,17 @@ func Validate(data any) error {
 
 // requiredErr returns the formatted required error.
 func requiredErr(name string) error {
-	return errors.Errorf("%s value must be set", name)
+	return fmt.Errorf("%s value must be set", name)
 }
 
 // maxErr returns the formatted max error.
-func maxErr(name, max string) error {
-	return errors.Errorf("%q value must be less than or equal to %s", name, max)
+func maxErr(name, mx string) error {
+	return fmt.Errorf("%q value must be less than or equal to %s", name, mx)
 }
 
 // containsOrDefaultErr returns the formated contains_or_default error.
 func containsOrDefaultErr(name, contains string) error {
-	return errors.Errorf("%q value must contains values of these fields: %q", name, contains)
+	return fmt.Errorf("%q value must contains values of these fields: %q", name, contains)
 }
 
 // getFieldKey returns a key ("key" tag) for the provided fieldName. If the "key" tag is not present,
@@ -152,10 +153,10 @@ func containsOrDefault(fl validator.FieldLevel) bool {
 
 // gteErr returns the formatted gte error.
 func gteErr(name, gte string) error {
-	return errors.Errorf("%q value must be greater than or equal to %s", name, gte)
+	return fmt.Errorf("%q value must be greater than or equal to %s", name, gte)
 }
 
 // lteErr returns the formatted lte error.
 func lteErr(name, lte string) error {
-	return errors.Errorf("%q value must be less than or equal to %s", name, lte)
+	return fmt.Errorf("%q value must be less than or equal to %s", name, lte)
 }

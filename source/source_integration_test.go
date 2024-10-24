@@ -56,7 +56,7 @@ func TestSource_Snapshot(t *testing.T) {
 
 	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
 
-	s := New()
+	s := NewSource()
 
 	err = s.Configure(ctx, cfg)
 	if err != nil {
