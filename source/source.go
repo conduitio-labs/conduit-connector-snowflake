@@ -32,15 +32,21 @@ type Source struct {
 	iterator Iterator
 }
 
+func (s *Source) Config() sdk.SourceConfig {
+	return &s.config
+}
+
+func (s *Source) Config() sdk.SourceConfig {
+	return &s.config
+}
+
 // NewSource initialises a new source.
 func NewSource() sdk.Source {
 	return &Source{}
 }
 
-func (s *Source) Parameters() config.Parameters {
-	return Config{}.Parameters()
-}
-
+// TODO: This method needs to be removed. If there's any custom logic in Configure(),
+// it needs to be moved to the configuration struct in the Validate() method.
 func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Source Connector.")
 

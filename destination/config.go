@@ -18,7 +18,6 @@ import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 )
 
-//go:generate paramgen -output=config_paramgen.go Config
 
 type Config struct {
 	config.Config

@@ -1,0 +1,9 @@
+version: "1.0"
+specification:
+  name: snowflake
+  summary: An Snowflake source plugin for Conduit, written in Go.
+  description: |-
+    The Snowflake connector is one of Conduit plugins.
+    It provides the source snowflake connector.
+  version: v0.3.0
+  author: Meroxa, Inc.

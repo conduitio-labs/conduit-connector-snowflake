@@ -42,6 +42,10 @@ type Destination struct {
 	connDSN string
 }
 
+func (d *Destination) Config() sdk.DestinationConfig {
+	return &d.config
+}
+
 // NewDestination creates the Destination and wraps it in the default middleware.
 func NewDestination() sdk.Destination {
 	middlewares := sdk.DefaultDestinationMiddleware(sdk.DestinationWithBatchConfig{
@@ -52,10 +56,8 @@ func NewDestination() sdk.Destination {
 	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
 }
 
-func (d *Destination) Parameters() config.Parameters {
-	return Config{}.Parameters()
-}
-
+// TODO: This method needs to be removed. If there's any custom logic in Configure(),
+// it needs to be moved to the configuration struct in the Validate() method.
 func (d *Destination) Configure(ctx context.Context, cfg config.Config) error {
 	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
 
