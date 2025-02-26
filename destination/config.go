@@ -16,10 +16,12 @@ package destination
 
 import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
+type DestinationConfig struct {
+	sdk.DefaultDestinationMiddleware
 
-type Config struct {
 	config.Config
 	// Username for the snowflake connection
 	Username string `json:"snowflake.username" validate:"required"`

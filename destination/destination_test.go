@@ -76,7 +76,7 @@ func TestDestination_Teardown(t *testing.T) {
 			}
 
 			d := Destination{
-				Config: Config{},
+				config: DestinationConfig{},
 				Writer: mockWriter,
 			}
 
@@ -159,7 +159,7 @@ func TestDestination_Write(t *testing.T) {
 			}
 
 			d := Destination{
-				Config: Config{},
+				config: DestinationConfig{},
 				Writer: mockWriter,
 			}
 
@@ -193,7 +193,7 @@ func Test_ParseConfig(t *testing.T) {
 		"snowflake.table":        "orders",
 	}
 
-	want := Config{
+	want := DestinationConfig{
 		Config: config.Config{
 			Table: "orders",
 		},
@@ -216,7 +216,7 @@ func Test_ParseConfig(t *testing.T) {
 	}
 
 	is := is.New(t)
-	var got Config
+	var got DestinationConfig
 	err := sdk.Util.ParseConfig(context.Background(), exampleConfig, &got, NewDestination().Parameters())
 
 	is.NoErr(err)
