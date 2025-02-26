@@ -58,11 +58,6 @@ func TestSource_Snapshot(t *testing.T) {
 
 	s := NewSource()
 
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)
 	if err != nil {
@@ -129,11 +124,6 @@ func TestSource_CDC(t *testing.T) {
 
 	s := new(Source)
 
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = s.Open(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -194,11 +184,6 @@ func TestSource_Snapshot_Empty_Table(t *testing.T) {
 
 	s := new(Source)
 
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)
 	if err != nil {
@@ -233,11 +218,6 @@ func TestSource_CDC_Empty_Stream(t *testing.T) {
 	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
 
 	s := new(Source)
-
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	err = s.Open(ctx, nil)
 	if err != nil {
@@ -305,11 +285,6 @@ func TestSource_Snapshot_Off(t *testing.T) {
 
 	s := new(Source)
 
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)
 	if err != nil {
@@ -356,11 +331,6 @@ func TestSource_keysFromConfig(t *testing.T) {
 	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
 
 	s := new(Source)
-
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)
@@ -430,11 +400,6 @@ func TestSource_keyColumnsFromTableMetadata(t *testing.T) {
 
 	s := new(Source)
 
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)
 	if err != nil {
@@ -503,11 +468,6 @@ func TestSource_keyColumnsFromOrderingColumn(t *testing.T) {
 	defer clearData(ctx, cfg["connection"]) // nolint:errcheck,nolintlint
 
 	s := new(Source)
-
-	err = s.Configure(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Start first time with nil position.
 	err = s.Open(ctx, nil)

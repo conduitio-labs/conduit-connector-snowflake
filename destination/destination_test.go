@@ -19,14 +19,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/conduitio-labs/conduit-connector-snowflake/config"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer/mock"
-	sdkconfig "github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
-	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
-	"github.com/google/go-cmp/cmp"
 	"github.com/matryer/is"
 	"go.uber.org/mock/gomock"
 )
@@ -173,54 +169,6 @@ func TestDestination_Write(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_ParseConfig(t *testing.T) {
-	exampleConfig := sdkconfig.Config{
-		"snowflake.stage":        "orders_stage",
-		"snowflake.primaryKey":   "id",
-		"snowflake.username":     "u",
-		"snowflake.password":     "p",
-		"snowflake.host":         "localhost",
-		"snowflake.port":         "1818",
-		"snowflake.database":     "db",
-		"snowflake.schema":       "schema",
-		"snowflake.warehouse":    "testWarehouse",
-		"snowflake.namingPrefix": "meroxa",
-		"snowflake.format":       "csv",
-		"sdk.batch.size":         "10",
-		"sdk.batch.delay":        "1s",
-		"snowflake.table":        "orders",
-	}
-
-	want := DestinationConfig{
-		Config: config.Config{
-			Table: "orders",
-		},
-		Username:          "u",
-		Password:          "p",
-		Host:              "localhost",
-		Port:              1818,
-		Database:          "db",
-		Schema:            "schema",
-		Warehouse:         "testWarehouse",
-		NamingPrefix:      "meroxa",
-		PrimaryKey:        "id",
-		Stage:             "orders_stage",
-		Format:            "csv",
-		Compression:       "zstd",
-		AutoCleanupStage:  true,
-		KeepAlive:         true,
-		ProcessingWorkers: 1,
-		FileUploadThreads: 30,
-	}
-
-	is := is.New(t)
-	var got DestinationConfig
-	err := sdk.Util.ParseConfig(context.Background(), exampleConfig, &got, NewDestination().Parameters())
-
-	is.NoErr(err)
-	is.Equal(cmp.Diff(want, got), "")
 }
 
 func TestDestination_Teardown_NoOpen(t *testing.T) {
