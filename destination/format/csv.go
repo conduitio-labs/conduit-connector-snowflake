@@ -375,9 +375,8 @@ func getColumnValue(
 		}
 		if schema[c] == SnowflakeDate {
 			return t.UTC().Format(time.DateOnly), nil
-		} else {
-			return fmt.Sprint(t.UTC().UnixMicro()), nil
 		}
+		return fmt.Sprint(t.UTC().UnixMicro()), nil
 	default:
 		return fmt.Sprint(data[c]), nil
 	}

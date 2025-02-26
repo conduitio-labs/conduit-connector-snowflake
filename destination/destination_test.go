@@ -72,7 +72,7 @@ func TestDestination_Teardown(t *testing.T) {
 			}
 
 			d := Destination{
-				config: DestinationConfig{},
+				config: Config{},
 				Writer: mockWriter,
 			}
 
@@ -155,7 +155,7 @@ func TestDestination_Write(t *testing.T) {
 			}
 
 			d := Destination{
-				config: DestinationConfig{},
+				config: Config{},
 				Writer: mockWriter,
 			}
 

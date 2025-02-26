@@ -19,7 +19,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-type DestinationConfig struct {
+type Config struct {
 	sdk.DefaultDestinationMiddleware
 
 	config.Config

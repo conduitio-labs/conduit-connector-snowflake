@@ -35,7 +35,7 @@ const (
 type Destination struct {
 	sdk.UnimplementedDestination
 
-	config DestinationConfig
+	config Config
 	Writer writer.Writer
 
 	sdk.DestinationWithBatch

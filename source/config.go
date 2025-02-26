@@ -19,7 +19,7 @@ import (
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-type SourceConfig struct {
+type Config struct {
 	sdk.DefaultSourceMiddleware
 
 	config.Config

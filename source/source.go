@@ -27,7 +27,7 @@ import (
 type Source struct {
 	sdk.UnimplementedSource
 
-	config   SourceConfig
+	config   Config
 	iterator Iterator
 }
 

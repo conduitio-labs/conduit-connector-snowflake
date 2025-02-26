@@ -2,7 +2,112 @@ version: "1.0"
 specification:
   name: snowflake
   summary: An Snowflake source plugin for Conduit, written in Go.
-  description: "The Snowflake connector is one of Conduit plugins.\nIt provides the source snowflake connector.\n\n## Source\nThe source connector gets data from the given table in Snowflake, it first starts with taking a\n[snapshot](#snapshot-iterator) of the table, then starts capturing [CDC](#cdc-iterator) actions happening on that table.\n\n### Snapshot Iterator\nWhen the connector first starts, snapshot mode is enabled.\n\nA \"snapshot\" is the state of a table data at a particular point in time when connector starts work. All changes after this\n(delete, update, insert operations) will be captured by the Change Data Capture (CDC) iterator.\n\nFirst time when the snapshot iterator starts work, it would get the max value from `orderingColumn` and save it to the position.\nThe snapshot iterator reads all rows, where `orderingColumn` values are less or equal to `maxValue`, in batches,\nvia `SELECT` with fetching and ordering by `orderingColumn`.\n\n`OrderingColumn` value must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.\nThe iterator saves the last processed value from `orderingColumn` to the field `SnapshotLastProcessedVal`.\nIf the snapshot stops, it will parse the position from the last record and will try and get the row \nwhere `{{orderingColumn}} > {{position.SnapshotLastProcessedVal}}`.\n\nWhen all records are returned, the connector switches to the CDC iterator.\n\nThis behavior is enabled by default, but can be turned off by adding `\"snapshot\":\"false\"` to the Source configuration, \nwhich will result in the connector skipping the snapshot, and immediately starting with CDC instead.\n\n### CDC Iterator\n\nThe CDC iterator starts working if snapshot iterator method `HasNext` return false \n(which means that the snapshot is done, or was skipped).\nThe CDC iterator uses snowflake 'stream' (more information about streams\nhttps://docs.snowflake.com/en/user-guide/streams-intro.html).\n\nThe change tracking system utilized by the `stream` then records information about the\nCDC changes after this snapshot was taken. \"Change records\" provide the state\nof a row before and after the change. Change information mirrors the column structure\nof the tracked source object and includes additional metadata columns that describe each change event.\n`Stream` itself does not contain any table data. When we add new rows to the table after the stream creation or consuming,\nthis row will be added to the stream table. If the row is removed, then it will be removed from the stream table.\nIf row was added to the table before the stream creation or consuming, then the row will not exist in the stream table.\nIf this row will be removed, we will get record about it in stream table.\n\n`Stream` has the columns:\n\n* `METADATA$ACTION`: Indicates the CDC operation (INSERT, DELETE) recorded.\n* `METADATA$ISUPDATE`: Indicates whether the operation was part of an UPDATE statement.\nUpdates to rows in the source object are represented as a pair of DELETE and\nINSERT records in the stream with a metadata column `METADATA$ISUPDATE` value set to TRUE.\n* `METADATA$ROW_ID`: Specifies the unique and immutable ID for the row, which can be used to track changes\nto specific rows over time.\n\n\nWhen the source starts working for the first time, the iterator creates:\n* A stream with the name `conduit_stream_{table}` for the `table` from configurations.  \n* A tracking table with the name `conduit_tracking_{table}`, used for consuming the stream, and insuring the\nability to resume the CDC iterator progress after interrupting.\n\nThe tracking table has the same schema as `table`  with additional metadata columns:\n`METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID` (columns from the stream) and `METADATA$TS`.\n`METADATA$TS` for the timestamp column, which is a special column created by the iterator to insure the ordering from the tracking table.\nWhen the CDC iterator consumes data from the stream, and inserts it into the tracking table. `METADATA$TS` will have the current timestamp value.\nSo after consuming the stream, the tracking table will have a copy of the stream data with the inserted time. \n\nIterator run select query for getting data from consuming table using limit and offset and ordering by `METADATA$TS`.\nBatch size is configurable, offset value is zero for first time.\nIterator save information from table to `currentBatch` slice variable. Iterator `HasNext` method check if next element\nexist in `currentBatch` using variable `index` and if it is needed change offset and run select query to get new data\nwith new offset. Method `Next` gets next element converts it to `Record` checks action(can be `insert`, `delete`, `update`)\nusing metadata columns `METADATA$ACTION`, `METADATA$ISUPDATE`. Iterator increases `index` and tries to find next record.\n\n\nFor example, we have the table `CLIENTS` with fields `ID`, `NAME`. The connector creates\nstream with name `CONDUIT_STREAM_CLIENTS` and creates a tracking table with name `CONDUIT_TRACKING_CLIENTS` with fields:\n`ID`,`NAME`, `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID`, `METADATA$TS`. We remove row with id = 2, which\nwas inserted before stream creation we get row in `CONDUIT_STREAM_CLIENTS`.\n\n| ID | NAME | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                          |\n|----|------|-----------------|-------------------|------------------------------------------|\n| 2  | Test | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e |\n\nThen we add new client. Stream table will look like:\n\n| ID   | NAME     | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                           |\n|------|----------|-----------------|-------------------|-------------------------------------------|\n| 5    | Foo      | INSERT          | FALSE             | ef465fb7a243abcb3ef019b6c5ce89d490218b11  |\n| 2    | Test     | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e  |\n\nConnector consumes stream running query `INSERT INTO CONDUIT_TRACKING_CLIENTS SELECT *,\ncurrent_timestamp() FROM CONDUIT_STREAM_CLIENTS`. The stream will be empty after this, and we will have the data on \nthe tracking table. After that, The connector will run select query:\n\n```sql\nSELECT * FROM CONDUIT_TRACKING_CLIENTS ORDER BY METADATA$TS LIMIT {batchSize} OFFSET 0;\n```\n\nConnectors will transform this data to records.\n\n**NOTE:** DO NOT delete the stream and the tracking table created by the connector.\n\n## Destination\n\nThe Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release."
+  description: |
+    The Snowflake connector is one of [Conduit](https://github.com/ConduitIO/conduit) plugins.
+    It provides the source snowflake connector.
+
+    ## Source
+
+    The source connector gets data from the given table in Snowflake, it first starts with taking a
+    [snapshot](#snapshot-iterator) of the table, then starts capturing [CDC](#cdc-iterator) actions happening on that table.
+
+    ### Snapshot Iterator
+
+    When the connector first starts, snapshot mode is enabled.
+
+    A "snapshot" is the state of a table data at a particular point in time when connector starts work. All changes after this
+    (delete, update, insert operations) will be captured by the Change Data Capture (CDC) iterator.
+
+    First time when the snapshot iterator starts work, it would get the max value from `orderingColumn` and save it to the position.
+    The snapshot iterator reads all rows, where `orderingColumn` values are less or equal to `maxValue`, in batches,
+    via `SELECT` with fetching and ordering by `orderingColumn`.
+
+    `OrderingColumn` value must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.
+    The iterator saves the last processed value from `orderingColumn` to the field `SnapshotLastProcessedVal`.
+    If the snapshot stops, it will parse the position from the last record and will try and get the row
+    where `{{orderingColumn}} > {{position.SnapshotLastProcessedVal}}`.
+
+    When all records are returned, the connector switches to the CDC iterator.
+
+    This behavior is enabled by default, but can be turned off by adding `"snapshot":"false"` to the Source configuration,
+    which will result in the connector skipping the snapshot, and immediately starting with CDC instead.
+
+    ### CDC Iterator
+
+    The CDC iterator starts working if snapshot iterator method `HasNext` return false
+    (which means that the snapshot is done, or was skipped).
+    The CDC iterator uses snowflake 'stream' (more information about streams
+    https://docs.snowflake.com/en/user-guide/streams-intro.html).
+
+    The change tracking system utilized by the `stream` then records information about the
+    CDC changes after this snapshot was taken. "Change records" provide the state
+    of a row before and after the change. Change information mirrors the column structure
+    of the tracked source object and includes additional metadata columns that describe each change event.
+    `Stream` itself does not contain any table data. When we add new rows to the table after the stream creation or consuming,
+    this row will be added to the stream table. If the row is removed, then it will be removed from the stream table.
+    If row was added to the table before the stream creation or consuming, then the row will not exist in the stream table.
+    If this row will be removed, we will get record about it in stream table.
+
+    `Stream` has the columns:
+
+    * `METADATA$ACTION`: Indicates the CDC operation (INSERT, DELETE) recorded.
+    * `METADATA$ISUPDATE`: Indicates whether the operation was part of an UPDATE statement.
+      Updates to rows in the source object are represented as a pair of DELETE and
+      INSERT records in the stream with a metadata column `METADATA$ISUPDATE` value set to TRUE.
+    * `METADATA$ROW_ID`: Specifies the unique and immutable ID for the row, which can be used to track changes
+      to specific rows over time.
+
+
+    When the source starts working for the first time, the iterator creates:
+    * A stream with the name `conduit_stream_{table}` for the `table` from configurations.
+    * A tracking table with the name `conduit_tracking_{table}`, used for consuming the stream, and insuring the
+      ability to resume the CDC iterator progress after interrupting.
+
+    The tracking table has the same schema as `table`  with additional metadata columns:
+    `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID` (columns from the stream) and `METADATA$TS`.
+    `METADATA$TS` for the timestamp column, which is a special column created by the iterator to insure the ordering from the tracking table.
+    When the CDC iterator consumes data from the stream, and inserts it into the tracking table. `METADATA$TS` will have the current timestamp value.
+    So after consuming the stream, the tracking table will have a copy of the stream data with the inserted time.
+
+    Iterator run select query for getting data from consuming table using limit and offset and ordering by `METADATA$TS`.
+    Batch size is configurable, offset value is zero for first time.
+    Iterator save information from table to `currentBatch` slice variable. Iterator `HasNext` method check if next element
+    exist in `currentBatch` using variable `index` and if it is needed change offset and run select query to get new data
+    with new offset. Method `Next` gets next element converts it to `Record` checks action(can be `insert`, `delete`, `update`)
+    using metadata columns `METADATA$ACTION`, `METADATA$ISUPDATE`. Iterator increases `index` and tries to find next record.
+
+
+    For example, we have the table `CLIENTS` with fields `ID`, `NAME`. The connector creates
+    stream with name `CONDUIT_STREAM_CLIENTS` and creates a tracking table with name `CONDUIT_TRACKING_CLIENTS` with fields:
+    `ID`,`NAME`, `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID`, `METADATA$TS`. We remove row with id = 2, which
+    was inserted before stream creation we get row in `CONDUIT_STREAM_CLIENTS`.
+
+    | ID | NAME | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                          |
+    |----|------|-----------------|-------------------|------------------------------------------|
+    | 2  | Test | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e |
+
+    Then we add new client. Stream table will look like:
+
+    | ID   | NAME     | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                           |
+    |------|----------|-----------------|-------------------|-------------------------------------------|
+    | 5    | Foo      | INSERT          | FALSE             | ef465fb7a243abcb3ef019b6c5ce89d490218b11  |
+    | 2    | Test     | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e  |
+
+    Connector consumes stream running query `INSERT INTO CONDUIT_TRACKING_CLIENTS SELECT *,
+    current_timestamp() FROM CONDUIT_STREAM_CLIENTS`. The stream will be empty after this, and we will have the data on
+    the tracking table. After that, The connector will run select query:
+
+    ```sql
+    SELECT * FROM CONDUIT_TRACKING_CLIENTS ORDER BY METADATA$TS LIMIT {batchSize} OFFSET 0;
+    ```
+
+    Connectors will transform this data to records.
+
+    **NOTE:** DO NOT delete the stream and the tracking table created by the connector.
+
+    ## Destination
+
+    The Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release.
   version: v0.3.0
   author: Meroxa, Inc.
   source:
