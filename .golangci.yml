@@ -3,7 +3,8 @@ linters-settings:
     simplify: false
   govet:
     settings:
-      shadow: false
+      shadow:
+        strict: false
   nolintlint:
     allow-unused: false # report any unused nolint directives
     require-explanation: true # require an explanation for nolint directives
