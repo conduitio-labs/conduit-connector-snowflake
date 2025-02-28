@@ -14,16 +14,19 @@
 
 package source
 
-import "github.com/conduitio-labs/conduit-connector-snowflake/config"
-
-//go:generate paramgen -output=config_paramgen.go Config
+import (
+	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
+)
 
 type Config struct {
+	sdk.DefaultSourceMiddleware
+
 	config.Config
 	// Connection string connection to snowflake DB.
 	// Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
 	Connection string `json:"snowflake.url" validate:"required"`
-	// Snapshot whether or not the plugin will take a snapshot of the entire table before starting cdc.
+	// Snapshot whether the plugin will take a snapshot of the entire table before starting cdc.
 	Columns []string `json:"snowflake.columns" default:"false"`
 	// Primary keys
 	Keys []string `json:"snowflake.primaryKeys"`

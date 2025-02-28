@@ -1,0 +1,387 @@
+version: "1.0"
+specification:
+  name: snowflake
+  summary: An Snowflake source plugin for Conduit, written in Go.
+  description: |
+    The Snowflake connector is one of [Conduit](https://github.com/ConduitIO/conduit) plugins.
+    It provides the source snowflake connector.
+
+    ## Source
+
+    The source connector gets data from the given table in Snowflake, it first starts with taking a
+    [snapshot](#snapshot-iterator) of the table, then starts capturing [CDC](#cdc-iterator) actions happening on that table.
+
+    ### Snapshot Iterator
+
+    When the connector first starts, snapshot mode is enabled.
+
+    A "snapshot" is the state of a table data at a particular point in time when connector starts work. All changes after this
+    (delete, update, insert operations) will be captured by the Change Data Capture (CDC) iterator.
+
+    First time when the snapshot iterator starts work, it would get the max value from `orderingColumn` and save it to the position.
+    The snapshot iterator reads all rows, where `orderingColumn` values are less or equal to `maxValue`, in batches,
+    via `SELECT` with fetching and ordering by `orderingColumn`.
+
+    `OrderingColumn` value must be unique and suitable for sorting, otherwise, the snapshot won't work correctly.
+    The iterator saves the last processed value from `orderingColumn` to the field `SnapshotLastProcessedVal`.
+    If the snapshot stops, it will parse the position from the last record and will try and get the row
+    where `{{orderingColumn}} > {{position.SnapshotLastProcessedVal}}`.
+
+    When all records are returned, the connector switches to the CDC iterator.
+
+    This behavior is enabled by default, but can be turned off by adding `"snapshot":"false"` to the Source configuration,
+    which will result in the connector skipping the snapshot, and immediately starting with CDC instead.
+
+    ### CDC Iterator
+
+    The CDC iterator starts working if snapshot iterator method `HasNext` return false
+    (which means that the snapshot is done, or was skipped).
+    The CDC iterator uses snowflake 'stream' (more information about streams
+    https://docs.snowflake.com/en/user-guide/streams-intro.html).
+
+    The change tracking system utilized by the `stream` then records information about the
+    CDC changes after this snapshot was taken. "Change records" provide the state
+    of a row before and after the change. Change information mirrors the column structure
+    of the tracked source object and includes additional metadata columns that describe each change event.
+    `Stream` itself does not contain any table data. When we add new rows to the table after the stream creation or consuming,
+    this row will be added to the stream table. If the row is removed, then it will be removed from the stream table.
+    If row was added to the table before the stream creation or consuming, then the row will not exist in the stream table.
+    If this row will be removed, we will get record about it in stream table.
+
+    `Stream` has the columns:
+
+    * `METADATA$ACTION`: Indicates the CDC operation (INSERT, DELETE) recorded.
+    * `METADATA$ISUPDATE`: Indicates whether the operation was part of an UPDATE statement.
+      Updates to rows in the source object are represented as a pair of DELETE and
+      INSERT records in the stream with a metadata column `METADATA$ISUPDATE` value set to TRUE.
+    * `METADATA$ROW_ID`: Specifies the unique and immutable ID for the row, which can be used to track changes
+      to specific rows over time.
+
+
+    When the source starts working for the first time, the iterator creates:
+    * A stream with the name `conduit_stream_{table}` for the `table` from configurations.
+    * A tracking table with the name `conduit_tracking_{table}`, used for consuming the stream, and insuring the
+      ability to resume the CDC iterator progress after interrupting.
+
+    The tracking table has the same schema as `table`  with additional metadata columns:
+    `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID` (columns from the stream) and `METADATA$TS`.
+    `METADATA$TS` for the timestamp column, which is a special column created by the iterator to insure the ordering from the tracking table.
+    When the CDC iterator consumes data from the stream, and inserts it into the tracking table. `METADATA$TS` will have the current timestamp value.
+    So after consuming the stream, the tracking table will have a copy of the stream data with the inserted time.
+
+    Iterator run select query for getting data from consuming table using limit and offset and ordering by `METADATA$TS`.
+    Batch size is configurable, offset value is zero for first time.
+    Iterator save information from table to `currentBatch` slice variable. Iterator `HasNext` method check if next element
+    exist in `currentBatch` using variable `index` and if it is needed change offset and run select query to get new data
+    with new offset. Method `Next` gets next element converts it to `Record` checks action(can be `insert`, `delete`, `update`)
+    using metadata columns `METADATA$ACTION`, `METADATA$ISUPDATE`. Iterator increases `index` and tries to find next record.
+
+
+    For example, we have the table `CLIENTS` with fields `ID`, `NAME`. The connector creates
+    stream with name `CONDUIT_STREAM_CLIENTS` and creates a tracking table with name `CONDUIT_TRACKING_CLIENTS` with fields:
+    `ID`,`NAME`, `METADATA$ACTION`, `METADATA$ISUPDATE`, `METADATA$ROW_ID`, `METADATA$TS`. We remove row with id = 2, which
+    was inserted before stream creation we get row in `CONDUIT_STREAM_CLIENTS`.
+
+    | ID | NAME | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                          |
+    |----|------|-----------------|-------------------|------------------------------------------|
+    | 2  | Test | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e |
+
+    Then we add new client. Stream table will look like:
+
+    | ID   | NAME     | METADATA$ACTION | METADATA$ISUPDATE | METADATA$ROW_ID                           |
+    |------|----------|-----------------|-------------------|-------------------------------------------|
+    | 5    | Foo      | INSERT          | FALSE             | ef465fb7a243abcb3ef019b6c5ce89d490218b11  |
+    | 2    | Test     | DELETE          | FALSE             | fafe92c9c207a714bfbf8ef55e32c501852b5c8e  |
+
+    Connector consumes stream running query `INSERT INTO CONDUIT_TRACKING_CLIENTS SELECT *,
+    current_timestamp() FROM CONDUIT_STREAM_CLIENTS`. The stream will be empty after this, and we will have the data on
+    the tracking table. After that, The connector will run select query:
+
+    ```sql
+    SELECT * FROM CONDUIT_TRACKING_CLIENTS ORDER BY METADATA$TS LIMIT {batchSize} OFFSET 0;
+    ```
+
+    Connectors will transform this data to records.
+
+    **NOTE:** DO NOT delete the stream and the tracking table created by the connector.
+
+    ## Destination
+
+    The Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release.
+  version: v0.3.0
+  author: Meroxa, Inc.
+  source:
+    parameters:
+      - name: snowflake.table
+        description: Table name.
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.url
+        description: |-
+          Connection string connection to snowflake DB.
+          Detail information https://pkg.go.dev/github.com/snowflakedb/gosnowflake@v1.6.9#hdr-Connection_String
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.batchsize
+        description: BatchSize - size of batch.
+        type: int
+        default: "100"
+        validations: []
+      - name: snowflake.columns
+        description: Snapshot whether the plugin will take a snapshot of the entire table before starting cdc.
+        type: string
+        default: "false"
+        validations: []
+      - name: snowflake.orderingColumn
+        description: OrderingColumn is a name of a column that the connector will use for ordering rows.
+        type: string
+        default: ""
+        validations: []
+      - name: snowflake.primaryKeys
+        description: Primary keys
+        type: string
+        default: ""
+        validations: []
+      - name: snowflake.snapshot
+        description: Snapshot
+        type: bool
+        default: "false"
+        validations: []
+      - name: sdk.batch.delay
+        description: Maximum delay before an incomplete batch is read from the source.
+        type: duration
+        default: "0"
+        validations: []
+      - name: sdk.batch.size
+        description: Maximum size of batch before it gets read from the source.
+        type: int
+        default: "0"
+        validations:
+          - type: greater-than
+            value: "-1"
+      - name: sdk.schema.context.enabled
+        description: |-
+          Specifies whether to use a schema context name. If set to false, no schema context name will
+          be used, and schemas will be saved with the subject name specified in the connector
+          (not safe because of name conflicts).
+        type: bool
+        default: "true"
+        validations: []
+      - name: sdk.schema.context.name
+        description: |-
+          Schema context name to be used. Used as a prefix for all schema subject names.
+          If empty, defaults to the connector ID.
+        type: string
+        default: ""
+        validations: []
+      - name: sdk.schema.extract.key.enabled
+        description: Whether to extract and encode the record key with a schema.
+        type: bool
+        default: "true"
+        validations: []
+      - name: sdk.schema.extract.key.subject
+        description: |-
+          The subject of the key schema. If the record metadata contains the field
+          "opencdc.collection" it is prepended to the subject name and separated
+          with a dot.
+        type: string
+        default: key
+        validations: []
+      - name: sdk.schema.extract.payload.enabled
+        description: Whether to extract and encode the record payload with a schema.
+        type: bool
+        default: "true"
+        validations: []
+      - name: sdk.schema.extract.payload.subject
+        description: |-
+          The subject of the payload schema. If the record metadata contains the
+          field "opencdc.collection" it is prepended to the subject name and
+          separated with a dot.
+        type: string
+        default: payload
+        validations: []
+      - name: sdk.schema.extract.type
+        description: The type of the payload schema.
+        type: string
+        default: avro
+        validations:
+          - type: inclusion
+            value: avro
+  destination:
+    parameters:
+      - name: snowflake.compression
+        description: Compression to use when staging files in Snowflake
+        type: string
+        default: zstd
+        validations:
+          - type: required
+            value: ""
+          - type: inclusion
+            value: gzip,zstd,copy
+      - name: snowflake.database
+        description: Database for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.format
+        description: Data type of file we upload and copy data from to snowflake
+        type: string
+        default: csv
+        validations:
+          - type: required
+            value: ""
+          - type: inclusion
+            value: csv
+      - name: snowflake.host
+        description: Host for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.namingPrefix
+        description: Prefix to append to update_at , deleted_at, create_at at destination table
+        type: string
+        default: meroxa
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.password
+        description: Password for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.port
+        description: Port for the snowflake connection
+        type: int
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.primaryKey
+        description: Primary key of the source table
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.schema
+        description: Schema for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.stage
+        description: Snowflake Stage to use for uploading files before merging into destination table.
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.table
+        description: Table name.
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.username
+        description: Username for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.warehouse
+        description: Warehouse for the snowflake connection
+        type: string
+        default: ""
+        validations:
+          - type: required
+            value: ""
+      - name: snowflake.autoCleanupStage
+        description: Automatically clean uploaded files to stage after processing, except when they fail.
+        type: bool
+        default: "true"
+        validations: []
+      - name: snowflake.fileUploadThreads
+        description: Number of threads to run for PUT file uploads.
+        type: int
+        default: "30"
+        validations: []
+      - name: snowflake.keepAlive
+        description: Whether to keep the session alive even when the connection is idle.
+        type: bool
+        default: "true"
+        validations: []
+      - name: snowflake.processingWorkers
+        description: For CSV processing, the number of goroutines to concurrently process CSV rows.
+        type: int
+        default: "1"
+        validations: []
+      - name: sdk.batch.delay
+        description: Maximum delay before an incomplete batch is written to the destination.
+        type: duration
+        default: "0"
+        validations: []
+      - name: sdk.batch.size
+        description: Maximum size of batch before it gets written to the destination.
+        type: int
+        default: "0"
+        validations:
+          - type: greater-than
+            value: "-1"
+      - name: sdk.rate.burst
+        description: |-
+          Allow bursts of at most X records (0 or less means that bursts are not
+          limited). Only takes effect if a rate limit per second is set. Note that
+          if `sdk.batch.size` is bigger than `sdk.rate.burst`, the effective batch
+          size will be equal to `sdk.rate.burst`.
+        type: int
+        default: "0"
+        validations:
+          - type: greater-than
+            value: "-1"
+      - name: sdk.rate.perSecond
+        description: Maximum number of records written per second (0 means no rate limit).
+        type: float
+        default: "0"
+        validations:
+          - type: greater-than
+            value: "-1"
+      - name: sdk.record.format
+        description: |-
+          The format of the output record. See the Conduit documentation for a full
+          list of supported formats (https://conduit.io/docs/using/connectors/configuration-parameters/output-format).
+        type: string
+        default: opencdc/json
+        validations: []
+      - name: sdk.record.format.options
+        description: |-
+          Options to configure the chosen output record format. Options are normally
+          key=value pairs separated with comma (e.g. opt1=val2,opt2=val2), except
+          for the `template` record format, where options are a Go template.
+        type: string
+        default: ""
+        validations: []
+      - name: sdk.schema.extract.key.enabled
+        description: Whether to extract and decode the record key with a schema.
+        type: bool
+        default: "true"
+        validations: []
+      - name: sdk.schema.extract.payload.enabled
+        description: Whether to extract and decode the record payload with a schema.
+        type: bool
+        default: "true"
+        validations: []

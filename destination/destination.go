@@ -21,7 +21,6 @@ import (
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/format"
 	"github.com/conduitio-labs/conduit-connector-snowflake/destination/writer"
-	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/go-errors/errors"
@@ -36,62 +35,53 @@ const (
 type Destination struct {
 	sdk.UnimplementedDestination
 
-	Config Config
+	config Config
 	Writer writer.Writer
 
+	sdk.DestinationWithBatch
 	connDSN string
+}
+
+func (d *Destination) Config() sdk.DestinationConfig {
+	return &d.config
 }
 
 // NewDestination creates the Destination and wraps it in the default middleware.
 func NewDestination() sdk.Destination {
-	middlewares := sdk.DefaultDestinationMiddleware(sdk.DestinationWithBatchConfig{
-		BatchSize:  defaultBatchSize,
-		BatchDelay: defaultBatchDelay,
+	return sdk.DestinationWithMiddleware(&Destination{
+		DestinationWithBatch: sdk.DestinationWithBatch{
+			BatchSize:  defaultBatchSize,
+			BatchDelay: defaultBatchDelay,
+		},
 	})
-
-	return sdk.DestinationWithMiddleware(&Destination{}, middlewares...)
-}
-
-func (d *Destination) Parameters() config.Parameters {
-	return Config{}.Parameters()
-}
-
-func (d *Destination) Configure(ctx context.Context, cfg config.Config) error {
-	sdk.Logger(ctx).Debug().Msg("Configuring Destination Connector.")
-
-	if err := sdk.Util.ParseConfig(ctx, cfg, &d.Config, NewDestination().Parameters()); err != nil {
-		return errors.Errorf("failed to parse destination config: %w", err)
-	}
-
-	if err := d.snowflakeDSN(); err != nil {
-		return errors.Errorf("failed to validate connection DSN: %w", err)
-	}
-
-	return nil
 }
 
 // Open prepares the plugin to receive data from given position by
 // initializing the database connection and creating the file stage if it does not exist.
 func (d *Destination) Open(ctx context.Context) error {
-	switch strings.ToUpper(d.Config.Format) {
+	if err := d.snowflakeDSN(); err != nil {
+		return errors.Errorf("failed to validate connection DSN: %w", err)
+	}
+
+	switch strings.ToUpper(d.config.Format) {
 	case format.TypeCSV.String():
 		w, err := writer.NewCSV(ctx, writer.SnowflakeConfig{
-			Prefix:            d.Config.NamingPrefix,
-			PrimaryKey:        d.Config.PrimaryKey,
-			Stage:             d.Config.Stage,
-			Table:             d.Config.Table,
+			Prefix:            d.config.NamingPrefix,
+			PrimaryKey:        d.config.PrimaryKey,
+			Stage:             d.config.Stage,
+			Table:             d.config.Table,
 			DSN:               d.connDSN,
-			ProcessingWorkers: d.Config.ProcessingWorkers,
-			FileThreads:       d.Config.FileUploadThreads,
-			Compression:       d.Config.Compression,
-			CleanStageFiles:   d.Config.AutoCleanupStage,
+			ProcessingWorkers: d.config.ProcessingWorkers,
+			FileThreads:       d.config.FileUploadThreads,
+			Compression:       d.config.Compression,
+			CleanStageFiles:   d.config.AutoCleanupStage,
 		})
 		if err != nil {
 			return errors.Errorf("csv writer: failed to open connection to snowflake: %w", err)
 		}
 		d.Writer = w
 	default:
-		return errors.Errorf("unknown format %q", d.Config.Format)
+		return errors.Errorf("unknown format %q", d.config.Format)
 	}
 
 	return nil
@@ -137,20 +127,20 @@ func (d *Destination) snowflakeDSN() error {
 
 	// The DSN requires an account, unfortunately this connector
 	// does not have an explicit account config, thus it needs to be extracted from the host.
-	parts := strings.Split(d.Config.Host, ".")
+	parts := strings.Split(d.config.Host, ".")
 	if parts[0] == "" {
-		return errors.Errorf("unable to determine account from host %q", d.Config.Host)
+		return errors.Errorf("unable to determine account from host %q", d.config.Host)
 	}
 
 	config := &gosnowflake.Config{
 		Account:          parts[0],
-		User:             d.Config.Username,
-		Password:         d.Config.Password,
-		Host:             d.Config.Host,
-		Port:             d.Config.Port,
-		Database:         d.Config.Database,
-		Schema:           d.Config.Schema,
-		Warehouse:        d.Config.Warehouse,
+		User:             d.config.Username,
+		Password:         d.config.Password,
+		Host:             d.config.Host,
+		Port:             d.config.Port,
+		Database:         d.config.Database,
+		Schema:           d.config.Schema,
+		Warehouse:        d.config.Warehouse,
 		KeepSessionAlive: true,
 		Params: map[string]*string{
 			"TIMEZONE": &utcTZ,

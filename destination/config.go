@@ -16,11 +16,12 @@ package destination
 
 import (
 	"github.com/conduitio-labs/conduit-connector-snowflake/config"
+	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
-//go:generate paramgen -output=config_paramgen.go Config
-
 type Config struct {
+	sdk.DefaultDestinationMiddleware
+
 	config.Config
 	// Username for the snowflake connection
 	Username string `json:"snowflake.username" validate:"required"`

@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/conduitio-labs/conduit-connector-snowflake/source/iterator"
-	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
@@ -32,24 +31,13 @@ type Source struct {
 	iterator Iterator
 }
 
+func (s *Source) Config() sdk.SourceConfig {
+	return &s.config
+}
+
 // NewSource initialises a new source.
 func NewSource() sdk.Source {
 	return &Source{}
-}
-
-func (s *Source) Parameters() config.Parameters {
-	return Config{}.Parameters()
-}
-
-func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
-	sdk.Logger(ctx).Debug().Msg("Configuring Source Connector.")
-
-	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, NewSource().Parameters())
-	if err != nil {
-		return fmt.Errorf("failed to parse source config : %w", err)
-	}
-
-	return nil
 }
 
 // Open prepare the plugin to start sending records from the given position.
