@@ -108,7 +108,7 @@ specification:
     ## Destination
 
     The Snowflake Destination is still in early stages of development - please use with caution as we are still improving it for initial release.
-  version: v0.3.0
+  version: v0.4.0
   author: Meroxa, Inc.
   source:
     parameters:
