@@ -17,7 +17,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/klauspost/compress v1.17.11
 	github.com/matryer/is v1.4.1
-	github.com/snowflakedb/gosnowflake v1.10.0
+	github.com/snowflakedb/gosnowflake v1.13.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.5.0
@@ -34,24 +34,24 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.17.7 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.13.18 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.59 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.31 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.25 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.26 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.25 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.14.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.31.0 // indirect
-	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.26.1 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.15 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1 // indirect
+	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/danieljoos/wincred v1.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dvsekhvalnov/jose2go v1.6.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.7 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
@@ -59,9 +59,9 @@ require (
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
-	github.com/pierrec/lz4/v4 v4.1.18 // indirect
+	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
@@ -70,7 +70,7 @@ require (
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/tools v0.30.0
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
@@ -94,6 +94,7 @@ require (
 	github.com/alingse/asasalint v0.0.11 // indirect
 	github.com/alingse/nilnesserr v0.1.2 // indirect
 	github.com/apache/arrow/go/v15 v15.0.0 // indirect
+	github.com/apache/arrow/go/v16 v16.0.0 // indirect
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
