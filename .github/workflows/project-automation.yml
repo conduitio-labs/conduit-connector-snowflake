@@ -1,4 +1,4 @@
-name: project-management
+name: Add to Conduit Project
 
 on:
   issues:
