@@ -78,8 +78,8 @@ func requiredErr(name string) error {
 }
 
 // maxErr returns the formatted max error.
-func maxErr(name, max string) error {
-	return errors.Errorf("%q value must be less than or equal to %s", name, max)
+func maxErr(name, param string) error {
+	return errors.Errorf("%q value must be less than or equal to %s", name, param)
 }
 
 // containsOrDefaultErr returns the formated contains_or_default error.
