@@ -11,7 +11,7 @@ require (
 	github.com/hamba/avro/v2 v2.27.0
 	github.com/huandu/go-sqlbuilder v1.25.0
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/klauspost/compress v1.17.11
+	github.com/klauspost/compress v1.18.0
 	github.com/matryer/is v1.4.1
 	github.com/snowflakedb/gosnowflake v1.13.0
 	github.com/stretchr/testify v1.10.0
