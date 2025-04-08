@@ -1,6 +1,7 @@
 module github.com/conduitio-labs/conduit-connector-snowflake
 
 go 1.24.2
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/conduitio/conduit-commons v0.5.2
@@ -16,7 +17,7 @@ require (
 	github.com/snowflakedb/gosnowflake v1.13.2
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/goleak v1.3.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.1
 	go.uber.org/multierr v1.11.0
 )
 
