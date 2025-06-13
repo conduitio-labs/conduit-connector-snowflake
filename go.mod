@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/conduitio/conduit-commons v0.5.4
+	github.com/conduitio/conduit-commons v0.6.0
 	github.com/conduitio/conduit-connector-sdk v0.14.0
 	github.com/go-errors/errors v1.5.1
 	github.com/go-playground/validator/v10 v10.26.0
