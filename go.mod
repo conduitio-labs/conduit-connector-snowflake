@@ -7,7 +7,7 @@ require (
 	github.com/conduitio/conduit-commons v0.6.0
 	github.com/conduitio/conduit-connector-sdk v0.14.1
 	github.com/go-errors/errors v1.5.1
-	github.com/go-playground/validator/v10 v10.26.0
+	github.com/go-playground/validator/v10 v10.27.0
 	github.com/google/uuid v1.6.0
 	github.com/hamba/avro/v2 v2.29.0
 	github.com/huandu/go-sqlbuilder v1.35.1
