@@ -15,7 +15,7 @@ require (
 	github.com/klauspost/compress v1.18.0
 	github.com/matryer/is v1.4.1
 	github.com/snowflakedb/gosnowflake v1.16.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.6.0
 	go.uber.org/multierr v1.11.0
