@@ -10,7 +10,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/google/uuid v1.6.0
 	github.com/hamba/avro/v2 v2.30.0
-	github.com/huandu/go-sqlbuilder v1.37.0
+	github.com/huandu/go-sqlbuilder v1.38.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/klauspost/compress v1.18.2
 	github.com/matryer/is v1.4.1
