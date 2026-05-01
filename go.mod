@@ -12,7 +12,7 @@ require (
 	github.com/hamba/avro/v2 v2.31.0
 	github.com/huandu/go-sqlbuilder v1.40.2
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/matryer/is v1.4.1
 	github.com/snowflakedb/gosnowflake v1.19.1
 	github.com/stretchr/testify v1.11.1
