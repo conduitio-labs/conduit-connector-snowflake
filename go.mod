@@ -1,6 +1,6 @@
 module github.com/conduitio-labs/conduit-connector-snowflake
 
-go 1.24.2
+go 1.25
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
@@ -12,7 +12,7 @@ require (
 	github.com/hamba/avro/v2 v2.31.0
 	github.com/huandu/go-sqlbuilder v1.43.0
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/klauspost/compress v1.19.2
+	github.com/klauspost/compress v1.20.0
 	github.com/matryer/is v1.4.1
 	github.com/snowflakedb/gosnowflake v1.19.1
 	github.com/stretchr/testify v1.12.1
